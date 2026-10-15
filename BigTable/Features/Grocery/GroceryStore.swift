@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import OSLog
 
-/// The household's grocery list: the active snapshot from `/api/grocery/snapshots`, the last
+/// The household's grocery list: the active snapshot from `/v1/bigtable/grocery/snapshots`, the last
 /// few lists (history), and every change made in the Grocery tab.
 ///
 /// Checking items off saves a moment later (debounced, as the Expo app did), so a run through

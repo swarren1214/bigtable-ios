@@ -582,7 +582,7 @@ struct RecipeDocumentScanner: UIViewControllerRepresentable {
     }
 }
 
-/// Images for /api/ai/recipe-scan, as the Expo app sent them: each page as a JPEG no larger
+/// Images for /v1/bigtable/ai/recipe-scan, as the Expo app sent them: each page as a JPEG no larger
 /// than 1536 points, and very tall screenshots sliced into bands so the text stays legible.
 /// At most 8 images (the API's limit).
 enum RecipeScanImages {

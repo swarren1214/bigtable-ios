@@ -16,7 +16,7 @@ nonisolated struct RecipeDictationError: LocalizedError, Sendable {
 /// Turns what you say into text on the device (Apple's speech recognizer, on-device when the
 /// phone supports it), for Create with AI's description. It takes the place of the Expo app's
 /// on-device Whisper transcription: the words become a transcript that's sent to
-/// /api/ai/recipe-transcript rather than sending the audio itself.
+/// /v1/bigtable/ai/recipe-transcript rather than sending the audio itself.
 @MainActor
 @Observable
 final class RecipeDictation {

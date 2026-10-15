@@ -104,20 +104,25 @@ struct IconTile: View {
 }
 
 /// A person's circle: their photo (from the API's URL, or picked data), or their initial on a
-/// gradient of their color.
+/// gradient of their color. For people in the household (`hearthName`), someone with no photo
+/// here shows the photo another Hearth app has of them, when there is one.
 struct MemberAvatar: View {
     var name: String
     var color: Color
     var url: String?
     var photo: Data?
     var size: CGFloat = 36
+    /// A household member's name, to borrow their photo from another Hearth app (Caloma,
+    /// Suffice, Sated) when they have none here. Nil for everyone else (community, invitations).
+    var hearthName: String?
 
-    init(name: String, color: Color, url: String? = nil, photo: Data? = nil, size: CGFloat = 36) {
+    init(name: String, color: Color, url: String? = nil, photo: Data? = nil, size: CGFloat = 36, hearthName: String? = nil) {
         self.name = name
         self.color = color
         self.url = url
         self.photo = photo
         self.size = size
+        self.hearthName = hearthName
     }
 
     var body: some View {
@@ -134,6 +139,10 @@ struct MemberAvatar: View {
                         initial
                     }
                 }
+            } else if let shared = sharedImage {
+                Image(uiImage: shared)
+                    .resizable()
+                    .scaledToFill()
             } else {
                 initial
             }
@@ -141,6 +150,12 @@ struct MemberAvatar: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .accessibilityHidden(true)
+    }
+
+    /// Another Hearth app's photo of this household member (decoded once, cached by name).
+    private var sharedImage: UIImage? {
+        guard let hearthName else { return nil }
+        return HearthPhotoCache.shared.image(forName: hearthName)
     }
 
     private var initial: some View {
@@ -169,7 +184,7 @@ struct FacePile: View {
     var body: some View {
         HStack(spacing: -size * 0.24) {
             ForEach(faces) { face in
-                MemberAvatar(name: face.name, color: face.color, url: face.url, size: size)
+                MemberAvatar(name: face.name, color: face.color, url: face.url, size: size, hearthName: face.name)
                     .overlay(Circle().stroke(Color(.secondarySystemGroupedBackground), lineWidth: 2))
                     .opacity(skipped.contains(face.name) || skipped.contains(face.id) ? 0.3 : 1)
             }

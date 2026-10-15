@@ -53,6 +53,12 @@ struct AccountAppleSignInButton: View {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
         let rawNonce = nonce
+        let appleUserID = credential.user
+        let appleEmail = credential.email
+        // Apple sends the name only the first time, in whichever Hearth app asked first. That
+        // app shared it, so a later sign-in here can still use it.
+        let sharedName = ScreenshotMode.isOn ? nil : HearthAccounts.appleID()
+            .flatMap { $0.userID == appleUserID ? $0.fullName : nil }
         isSigningIn = true
         Task {
             defer { isSigningIn = false }
@@ -60,8 +66,17 @@ struct AccountAppleSignInButton: View {
                 try await AuthClient.shared.signInWithApple(
                     idToken: identityToken,
                     nonce: rawNonce,
-                    fullName: fullName.isEmpty ? nil : fullName
+                    fullName: fullName.isEmpty ? nil : fullName,
+                    fallbackName: sharedName
                 )
+                if !ScreenshotMode.isOn {
+                    HearthAccounts.saveAppleID(HearthSharedAppleID(
+                        userID: appleUserID,
+                        fullName: fullName.isEmpty ? nil : fullName,
+                        email: appleEmail,
+                        updatedBy: .bigtable
+                    ))
+                }
             } catch {
                 onError(Self.message(for: error))
             }

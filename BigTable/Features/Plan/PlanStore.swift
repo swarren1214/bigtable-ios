@@ -55,6 +55,7 @@ final class PlanStore {
             weeks[weekStart] = fetched
             loadedAt[weekStart] = .now
             loadErrors[weekStart] = nil
+            shareWithHearth()
         } catch is CancellationError {
             return
         } catch {
@@ -69,6 +70,7 @@ final class PlanStore {
         weeks[planner.weekStart] = planner
         loadedAt[planner.weekStart] = .now
         loadErrors[planner.weekStart] = nil
+        shareWithHearth()
     }
 
     /// The next `load` of this week goes to the server.
@@ -103,6 +105,12 @@ final class PlanStore {
 
     private func setLocal(_ value: PlannerSlot, _ ref: PlanSlotRef) {
         weeks[ref.weekStart]?.set(value, day: ref.day, slot: ref.slot)
+        shareWithHearth()
+    }
+
+    /// The other Hearth apps on this device (Caloma's calendar) see the plan too.
+    private func shareWithHearth() {
+        HearthPublisher.publishPlan(weeks: weeks)
     }
 
     /// The PUT response leaves out version details the GET computed; carry them over.

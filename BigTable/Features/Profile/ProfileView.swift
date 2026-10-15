@@ -131,7 +131,8 @@ struct ProfileView: View {
                     name: displayName,
                     color: PersonColor.forIndex(0).color,
                     url: ProfileAvatar.url(for: model.me?.myMember?.avatarUrl),
-                    size: 60
+                    size: 60,
+                    hearthName: model.me?.myMember?.name
                 )
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
@@ -213,7 +214,7 @@ struct ProfileView: View {
                                 ProfileJoinedMemberView(profileID: profileID, name: member.name, avatarURL: ProfileAvatar.url(for: member.avatarUrl), color: color)
                             } label: {
                                 HStack(spacing: 14) {
-                                    MemberAvatar(name: member.name, color: color, url: ProfileAvatar.url(for: member.avatarUrl), size: 34)
+                                    MemberAvatar(name: member.name, color: color, url: ProfileAvatar.url(for: member.avatarUrl), size: 34, hearthName: member.name)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(member.name).font(.body)
                                         Text("Joined · Permissions")

@@ -113,7 +113,7 @@ struct ProfileMemberRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            MemberAvatar(name: member.displayName, color: color, url: member.avatarURL, size: 44)
+            MemberAvatar(name: member.displayName, color: color, url: member.avatarURL, size: 44, hearthName: member.trimmedName)
             VStack(alignment: .leading, spacing: 3) {
                 Text(member.displayName)
                     .font(.headline)
@@ -298,7 +298,7 @@ enum ProfilePush {
     static func disableServerTokens() async {
         let api = BigTableAPI.shared
         do {
-            let response: PushTokensResponse = try await api.get("/api/push-tokens")
+            let response: PushTokensResponse = try await api.get("/v1/bigtable/push-tokens")
             for entry in response.tokens where !entry.token.isEmpty {
                 try? await api.registerPushToken(entry.token, enabled: false)
             }

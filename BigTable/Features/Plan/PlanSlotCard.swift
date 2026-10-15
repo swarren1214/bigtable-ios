@@ -483,7 +483,7 @@ struct PlanSlotCard: View {
             Task { await store.toggleExcluded(face.name, in: ref) }
         } label: {
             VStack(spacing: 4) {
-                MemberAvatar(name: face.name, color: face.color, url: face.url, size: 44)
+                MemberAvatar(name: face.name, color: face.color, url: face.url, size: 44, hearthName: face.name)
                     .opacity(isOut ? 0.35 : 1)
                     .overlay(alignment: .bottomTrailing) {
                         if !isOut {

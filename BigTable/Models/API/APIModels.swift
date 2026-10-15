@@ -188,7 +188,7 @@ nonisolated struct PlannerSlotUpdateResponse: Decodable, Sendable {
     var slotData: PlannerSlot
 }
 
-/// `PUT /api/plans/current`. Only the fields that are set are changed.
+/// `PUT /v1/bigtable/plans/current`. Only the fields that are set are changed.
 nonisolated struct PlanSlotUpdate: Encodable, Sendable {
     var weekStart: String?
     var day: DayOfWeek
@@ -329,7 +329,7 @@ nonisolated struct CreateRecipeResponse: Decodable, Sendable {
     var id: String
 }
 
-/// `POST /api/recipes` and `PATCH /api/recipes/{id}`.
+/// `POST /v1/bigtable/recipes` and `PATCH /v1/bigtable/recipes/{id}`.
 nonisolated struct RecipePayload: Encodable, Sendable {
     var title: String
     var imageUrl: String
@@ -516,7 +516,7 @@ nonisolated struct MeResponse: Decodable, Sendable {
     }
 }
 
-/// `PUT /api/me`: the household's name, people and dietary restrictions.
+/// `PUT /v1/bigtable/me`: the household's name, people and dietary restrictions.
 nonisolated struct SaveHouseholdPayload: Encodable, Sendable {
     var householdName: String
     var avatarUrl: String?
@@ -744,7 +744,7 @@ nonisolated struct RecipeMix: Codable, Hashable, Sendable {
     static let balanced = RecipeMix(mine: 34, favorites: 33, other: 33)
 }
 
-/// `POST /api/ai/meal-plan`.
+/// `POST /v1/bigtable/ai/meal-plan`.
 nonisolated struct MealPlanRequest: Encodable, Sendable {
     var prompt: String
     var mealStyle: MealStyle
@@ -826,7 +826,7 @@ nonisolated struct GrocerySnapshotsResponse: Decodable, Sendable {
     var activeSnapshotId: String?
 }
 
-/// `PUT /api/grocery/snapshots`. Household members may only send `id` and `checks`.
+/// `PUT /v1/bigtable/grocery/snapshots`. Household members may only send `id` and `checks`.
 nonisolated struct SaveGrocerySnapshotPayload: Encodable, Sendable {
     var id: String?
     var sections: [GrocerySection]?
@@ -838,7 +838,7 @@ nonisolated struct SaveGrocerySnapshotPayload: Encodable, Sendable {
 
 nonisolated struct SaveGrocerySnapshotResponse: Decodable, Sendable { var snapshot: GrocerySnapshot }
 
-/// `POST /api/ai/grocery-list`.
+/// `POST /v1/bigtable/ai/grocery-list`.
 nonisolated struct GroceryListRequest: Encodable, Sendable {
     var costcoMode: Bool?
     var weekStart: String?
@@ -858,7 +858,7 @@ nonisolated struct GroceryListResponse: Decodable, Sendable {
 
 // MARK: - Places
 
-/// `GET /api/places/search`: restaurants for Dine Out.
+/// `GET /v1/bigtable/places/search`: restaurants for Dine Out.
 nonisolated struct PlaceResult: Decodable, Hashable, Sendable, Identifiable {
     var key: String
     var name: String

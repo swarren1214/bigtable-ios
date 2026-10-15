@@ -106,6 +106,53 @@ docs/             PORTING_GUIDE.md (how the port is organized)
 - **Photos**: uploaded to Supabase Storage (`member-avatars`, `recipe-images`) under the user's
   id; member photos are saved as storage paths, as the Expo app saved them.
 
+## Hearth
+
+BigTable is one of the Hearth apps. They share data on the device through the app group
+`group.com.stephenwarren.hearth`, using `Services/Hearth/HearthShared.swift` (synced from
+`~/Developer/hearthkit`; edit it there, not here). Each app writes only its own files.
+
+- **Shares the meal plan** (`bigtable.meal-plan.json`): each day's breakfast, lunch and dinner
+  from yesterday through three weeks ahead, with titles, recipe ids, photos, Dine Out places,
+  who isn't eating and a link back into BigTable. Meals from yesterday through three days ahead
+  also carry their recipes (servings and ingredients) so Sated can estimate nutrition. Those
+  load in the background after the plan is shared, four at a time, and are kept in memory so
+  edits don't fetch them again (`HearthPublisher`, `HearthRecipeCache`).
+- **Shares the household** (`bigtable.family.json`): its name, people with birthdays, likes
+  and dislikes, dietary restrictions, who "me" is (the member linked to the signed-in account,
+  or the organizer's own row), and people's photos. Photos download in the background after
+  the household is shared, are scaled to 512 px JPEGs in the shared `photos/` folder
+  (`bigtable-<member id>.jpg`), and the household is shared again with them. Each photo's
+  source URL is remembered, so unchanged photos aren't downloaded again; photos no longer used
+  are deleted (`HearthPublisher`, `HearthPhotoDownloader`).
+- **Borrows photos**: a household member with no photo in BigTable shows the photo another
+  Hearth app has of someone with the same name (`MemberAvatar(hearthName:)`, in the face
+  piles, who's-eating faces, household rows and the profile button). Decoded images are cached
+  by name and dropped only when another app's family or photos change (`HearthPhotoCache`).
+- **Reads Caloma's family**: while setting up or editing the household, the organizer is
+  offered "Add your family from Caloma?" for anyone Caloma knows who isn't in the household yet.
+  It adds names only (their Caloma photos show through the borrowed-photo fallback until a
+  photo is added in BigTable); "Not now" isn't offered again for those people.
+- **One sign-in** (`AuthClient`, `HearthAccounts`): BigTable, Suffice and Sated use the same
+  Supabase project, and share the session in the Keychain under the app group.
+  - At launch BigTable adopts the shared session when it has none (or its own is for a
+    different person: the latest sign-in on the device wins), then loads the user's name.
+    With its own session and none shared, it shares its own. For the same person, the session
+    with the later expiry wins.
+  - Before refreshing, it re-reads the shared session: if another app already refreshed it,
+    BigTable uses that and skips its refresh while the token is good for another minute. A
+    rejected refresh token also checks there before signing out.
+  - Every sign-in and refresh is shared (never an anonymous session).
+  - Signing out signs out of every Hearth app (`signOutEverywhere`); deleting the account
+    does too. On `Hearth.didChange` and when the app becomes active, BigTable follows the
+    shared sign-in: signed out elsewhere (only once it has seen its session shared) signs out
+    here; a different person signs out and back in as them; newer tokens are picked up.
+  - Sign in with Apple saves the Apple ID with the name and email Apple gave
+    (`HearthAccounts.saveAppleID`). When Apple gives no name (it only does the first time)
+    and the account has none, the name another Hearth app saved for the same Apple ID is used.
+- Signing out removes BigTable's files and photos. Nothing is shared or read in screenshot
+  mode.
+
 ## Before shipping
 
 - **Push notifications need a server change.** The API sends through Expo's push service, which

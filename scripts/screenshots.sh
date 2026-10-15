@@ -19,6 +19,11 @@
 #   APPEARANCES="light"               "light", "dark" or "light dark" (default).
 #   SKIP_BUILD=1                      Reuse the last build.
 #   WEB_WIDTH=720                     Width of the website copies, in pixels.
+#   TEXT_SIZE=accessibility-extra-extra-extra-large
+#                                     Capture at another text size, to check large-text layouts. Any
+#                                     size the Simulator knows (extra-small … extra-extra-extra-large,
+#                                     accessibility-medium … accessibility-extra-extra-extra-large).
+#                                     Saved in a folder of its own; no website copies.
 #
 # Needs Xcode and its command line tools. Uses its own Simulator ("BigTable Screenshots"), so
 # your other simulators and their data are untouched.
@@ -59,6 +64,7 @@ APP="$DERIVED/Build/Products/Debug-iphonesimulator/$PRODUCT"
 OUT="$ROOT/screenshots"
 SIM_NAME="$APP_NAME Screenshots"
 APPEARANCES="${APPEARANCES:-light dark}"
+TEXT_SIZE="${TEXT_SIZE:-}"
 WEB_WIDTH="${WEB_WIDTH:-720}"
 
 if [[ $# -gt 0 ]]; then SCREENS=("$@"); else SCREENS=("${ALL_SCREENS[@]}"); fi
@@ -221,6 +227,9 @@ xcrun simctl status_bar "$UDID" override \
   --cellularMode active --cellularBars 4 --operatorName "" \
   --batteryState charged --batteryLevel 100
 
+# The text size: the one asked for, or the standard one (in case an earlier run changed it).
+xcrun simctl ui "$UDID" content_size "${TEXT_SIZE:-large}"
+
 # MARK: Capture
 
 device_dir="$(echo "$DEVICE_NAME" | tr ' ' '-')"
@@ -229,7 +238,7 @@ if [[ -n "$WEB" ]]; then WEB="$(mkdir -p "$WEB" && cd "$WEB" && pwd)"; fi
 for appearance in $APPEARANCES; do
   log "Capturing ($appearance)"
   xcrun simctl ui "$UDID" appearance "$appearance"
-  dir="$OUT/$device_dir/$appearance"
+  dir="$OUT/$device_dir/$appearance${TEXT_SIZE:+-$TEXT_SIZE}"
   mkdir -p "$dir"
 
   for screen in "${SCREENS[@]}"; do
@@ -243,7 +252,9 @@ for appearance in $APPEARANCES; do
     xcrun simctl io "$UDID" screenshot --type=png "$file" >/dev/null 2>&1
     echo "  $screen  →  ${file#$ROOT/}"
 
-    if [[ -n "$WEB" && "$appearance" == "light" ]]; then
+    if [[ -n "$TEXT_SIZE" ]]; then
+      :
+    elif [[ -n "$WEB" && "$appearance" == "light" ]]; then
       sips --resampleWidth "$WEB_WIDTH" "$file" --out "$WEB/$screen.png" >/dev/null
     elif [[ -n "$WEB" && -n "$WEB_DARK" && "$appearance" == "dark" ]]; then
       sips --resampleWidth "$WEB_WIDTH" "$file" --out "$WEB/$screen-dark.png" >/dev/null
@@ -253,6 +264,7 @@ done
 
 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
 xcrun simctl status_bar "$UDID" clear || true
+xcrun simctl ui "$UDID" content_size large || true
 
 log "Done"
 echo "Full size:  ${OUT#$ROOT/}/$device_dir/"

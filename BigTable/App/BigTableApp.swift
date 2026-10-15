@@ -191,6 +191,11 @@ struct AppRoot: View {
         .animation(.smooth, value: model.phase)
         .sheet(isPresented: $model.needsNewPassword) { NewPasswordView().tint(accent) }
         .onChange(of: scenePhase) { _, phase in
+            // Another Hearth app may have signed in, out, or as someone else meanwhile.
+            if phase == .active {
+                Task { await AuthClient.shared.followSharedSession() }
+                HearthPhotoCache.shared.refreshIfChanged()
+            }
             guard phase == .active, model.phase == .ready else { return }
             Task {
                 await model.refreshUnreadCount()

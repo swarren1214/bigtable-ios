@@ -5,7 +5,7 @@ import OSLog
 /// Builds the AI grocery list on the device: the planned meals and their recipes come from
 /// the API as usual, the ingredient totals are added up here (a port of the API's
 /// buildIngredientNeeds, scaled to who's eating), and Apple's on-device model sorts each item
-/// into a store section and says how many to buy. A port of /api/ai/grocery-list.
+/// into a store section and says how many to buy. A port of /v1/bigtable/ai/grocery-list.
 ///
 /// Returns nil when the phone can't (no Apple Intelligence) or the plan has no recipes with
 /// ingredients, and the caller asks the API instead.

@@ -18,6 +18,7 @@ struct HouseholdSetupView: View {
     @State private var confirmSignOut = false
     @State private var invitations: HouseholdInvitationsResponse?
     @State private var isCheckingInvitations = false
+    @State private var calomaFamily: HearthFamily?
 
     var body: some View {
         Group {
@@ -167,6 +168,14 @@ struct HouseholdSetupView: View {
             OnboardingSymbolIcon(symbol: "person.2.fill", size: isShort ? 64 : 80)
         } content: { _ in
             VStack(spacing: 12) {
+                if !isJoining, !calomaNames.isEmpty {
+                    CalomaFamilyCard(
+                        names: calomaNames,
+                        background: Color(.secondarySystemBackground),
+                        onAdd: { addFromCaloma() },
+                        onDismiss: { dismissCaloma() }
+                    )
+                }
                 CardList(items: draft.members, inset: 74) { member in
                     Button {
                         isNewMember = false
@@ -211,7 +220,7 @@ struct HouseholdSetupView: View {
                     if !member.trimmedName.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
                             HStack(spacing: 10) {
-                                MemberAvatar(name: member.displayName, color: color(for: member), url: member.avatarURL, size: 30)
+                                MemberAvatar(name: member.displayName, color: color(for: member), url: member.avatarURL, size: 30, hearthName: member.trimmedName)
                                 Text(member.displayName).font(.headline)
                             }
                             FlowLayout(spacing: 8) {
@@ -263,6 +272,11 @@ struct HouseholdSetupView: View {
         return !name.isEmpty && name.count <= HouseholdDraft.maxNameLength
     }
 
+    /// People Caloma knows who aren't here yet.
+    private var calomaNames: [String] {
+        calomaFamily.map { draft.newPeople(from: $0) } ?? []
+    }
+
     private var pendingReceived: [HouseholdInvitation] {
         (invitations?.received ?? []).filter { $0.status == .pending }
     }
@@ -287,6 +301,17 @@ struct HouseholdSetupView: View {
         if (model.me?.membership?.pendingInvitationCount ?? 0) > 0 {
             Task { await loadInvitations() }
         }
+        calomaFamily = CalomaFamilyOffer.load()
+    }
+
+    private func addFromCaloma() {
+        draft.addPeople(named: calomaNames)
+        calomaFamily = nil
+    }
+
+    private func dismissCaloma() {
+        CalomaFamilyOffer.dismiss(calomaNames)
+        calomaFamily = nil
     }
 
     /// Anyone but the first person (you) can be taken out again.

@@ -5,7 +5,7 @@ import UIKit
 import UserNotifications
 
 /// Who's signed in and their household, shared by every screen: the session from
-/// `AuthClient`, `/api/me` (the household, its people and restrictions, and the membership),
+/// `AuthClient`, `/v1/bigtable/me` (the household, its people and restrictions, and the membership),
 /// this person's permissions, and AI usage.
 ///
 /// The organizer owns the household; members who joined see the organizer's plan and grocery
@@ -19,7 +19,7 @@ final class AppModel {
         /// Reading the saved session.
         case launching
         case signedOut
-        /// Signed in; `/api/me` is loading.
+        /// Signed in; `/v1/bigtable/me` is loading.
         case loading
         /// Signed in with no household set up yet.
         case needsHousehold
@@ -70,6 +70,7 @@ final class AppModel {
         session = new
         guard let new else {
             me = nil
+            HearthPublisher.clear()
             usage = nil
             permissions = .organizer
             phase = .signedOut
@@ -85,11 +86,12 @@ final class AppModel {
         }
     }
 
-    /// Loads `/api/me`, then permissions and usage.
+    /// Loads `/v1/bigtable/me`, then permissions and usage.
     func reload() async {
         do {
             let me = try await api.me()
             self.me = me
+            HearthPublisher.publishFamily(me, householdName: householdName.isEmpty ? nil : householdName, userID: userID)
             loadError = nil
             if let membership = me.membership, membership.role == .member, let id = userID {
                 permissions = (try? await api.memberPermissions(id)) ?? .none
@@ -146,7 +148,7 @@ final class AppModel {
         usage = new
     }
 
-    /// Saves the household, then reloads `/api/me`: the PUT's reply leaves out the membership
+    /// Saves the household, then reloads `/v1/bigtable/me`: the PUT's reply leaves out the membership
     /// (and, for someone who joined, is just `{ ok: true }`).
     func saveHousehold(_ payload: SaveHouseholdPayload) async throws {
         _ = try await api.saveHousehold(payload)
@@ -163,7 +165,8 @@ final class AppModel {
 
     func deleteAccount() async throws {
         try await api.deleteAccount()
-        await AuthClient.shared.clear()
+        // The account is gone, so the other Hearth apps signed in with it are signed out too.
+        await AuthClient.shared.clear(everywhere: true)
     }
 
     /// bigtable://auth links from the confirmation and password-reset emails.

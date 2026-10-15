@@ -19,6 +19,9 @@ nonisolated enum SettingsKey {
     /// The accent color as "#RRGGBB".
     static let accentHex = "appearance.accent"
     static let appearance = "appearance.mode"
+    /// Names from Caloma's family that "Add your family from Caloma?" was dismissed for, one
+    /// per line, so it isn't offered for them again.
+    static let calomaFamilyDismissed = "hearth.calomaFamilyDismissed"
 }
 
 /// BigTable's colors, from the BigTable designs on the Claude Design canvas.

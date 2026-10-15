@@ -211,7 +211,7 @@ nonisolated final class ScreenshotBackend: @unchecked Sendable {
         let ok: [String: Any] = ["ok": true]
         let isGet = method == "GET"
         var parts = path.split(separator: "/").map(String.init)
-        if parts.first == "api" { parts.removeFirst() }
+        if parts.starts(with: ["v1", "bigtable"]) { parts.removeFirst(2) }
         let first = parts.first ?? ""
         let second = parts.count > 1 ? parts[1] : ""
 
@@ -301,7 +301,7 @@ nonisolated final class ScreenshotBackend: @unchecked Sendable {
         return made
     }
 
-    /// `PUT /api/plans/current`: the fields sent replace the slot's (null clears one).
+    /// `PUT /v1/bigtable/plans/current`: the fields sent replace the slot's (null clears one).
     private func updateSlot(_ input: [String: Any]) throws -> [String: Any] {
         guard let day = input["day"] as? String, let slotName = input["slot"] as? String else {
             throw APIError(kind: .rejected, status: 400, code: nil, message: "Missing day or slot.")
@@ -322,7 +322,7 @@ nonisolated final class ScreenshotBackend: @unchecked Sendable {
         return ["day": day, "slot": slotName, "weekStart": weekStart, "planId": planID, "slotData": slot]
     }
 
-    /// `POST /api/ai/meal-plan`: fills the chosen meals from the demo recipes (keeping what's
+    /// `POST /v1/bigtable/ai/meal-plan`: fills the chosen meals from the demo recipes (keeping what's
     /// planned unless asked to replace it), as a preview or saved.
     private func mealPlan(_ input: [String: Any]) -> [String: Any] {
         let weekStart = input["weekStart"] as? String ?? ScreenshotDemo.currentWeekStart
@@ -418,7 +418,7 @@ nonisolated final class ScreenshotBackend: @unchecked Sendable {
         }
     }
 
-    /// `GET /api/recipes`: search, quick filter, collection and paging.
+    /// `GET /v1/bigtable/recipes`: search, quick filter, collection and paging.
     private func list(_ params: [String: String]) -> [String: Any] {
         let query = (params["q"] ?? "").lowercased()
         let filter = (params["quickFilter"] ?? "").lowercased()
@@ -468,7 +468,7 @@ nonisolated final class ScreenshotBackend: @unchecked Sendable {
         return ["snapshot": snapshot]
     }
 
-    /// `POST /api/ai/grocery-list`: the demo week's list again.
+    /// `POST /v1/bigtable/ai/grocery-list`: the demo week's list again.
     private func groceryList() -> [String: Any] {
         let current = grocery.first(where: { ($0["id"] as? String) == activeSnapshotID })
         let active: [String: Any] = current ?? grocery.first ?? [:]

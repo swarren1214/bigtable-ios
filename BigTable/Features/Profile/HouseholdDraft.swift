@@ -107,7 +107,7 @@ nonisolated struct HouseholdDraft: Hashable, Sendable {
         members = [first]
     }
 
-    /// The household from `/api/me`, as the Expo app read it.
+    /// The household from `/v1/bigtable/me`, as the Expo app read it.
     init(me: MeResponse, householdName: String, organizerProfileID: String?) {
         name = householdName
         let all = me.householdMembers
@@ -142,6 +142,51 @@ nonisolated struct HouseholdDraft: Hashable, Sendable {
         return isOrganizer
     }
 
+    // MARK: People from Caloma
+
+    /// The people in Caloma's family who aren't here yet, parents first (BigTable counts the
+    /// first two people as the adults until there are birthdays), up to the household's limit.
+    func newPeople(from family: HearthFamily) -> [String] {
+        var names: [String] = []
+        let ordered = family.members.enumerated()
+            .sorted { lhs, rhs in
+                let left = lhs.element.role == "kid" ? 1 : 0
+                let right = rhs.element.role == "kid" ? 1 : 0
+                return left == right ? lhs.offset < rhs.offset : left < right
+            }
+            .map { $0.element }
+        for member in ordered {
+            let name = member.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            let known = members.contains { Self.sameName($0.name, name) } || names.contains { Self.sameName($0, name) }
+            if !known { names.append(name) }
+        }
+        let room = max(0, Self.maxMembers - members.count)
+        return Array(names.prefix(room))
+    }
+
+    /// Adds people by name only; their ages, likes and restrictions are filled in here later.
+    mutating func addPeople(named names: [String]) {
+        for name in names where members.count < Self.maxMembers {
+            var member = ProfileMemberDraft()
+            member.name = String(name.prefix(Self.maxNameLength))
+            members.append(member)
+        }
+    }
+
+    /// The same person, ignoring case and spacing. A first name alone matches a full name
+    /// ("Steve" and "Steve Warren").
+    static func sameName(_ lhs: String, _ rhs: String) -> Bool {
+        func words(_ name: String) -> [String] {
+            name.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
+        }
+        let left = words(lhs)
+        let right = words(rhs)
+        guard let leftFirst = left.first, let rightFirst = right.first else { return false }
+        if left == right { return true }
+        return (left.count == 1 || right.count == 1) && leftFirst == rightFirst
+    }
+
     // MARK: Saving
 
     nonisolated enum ValidationError: LocalizedError {
@@ -162,7 +207,7 @@ nonisolated struct HouseholdDraft: Hashable, Sendable {
         }
     }
 
-    /// `PUT /api/me` for this household. The organizer sends everyone they manage; someone
+    /// `PUT /v1/bigtable/me` for this household. The organizer sends everyone they manage; someone
     /// who joined sends only their own row and its restrictions.
     func payload(isOrganizer: Bool, userID: String?, organizerProfileID: String?, householdName fixedName: String? = nil) throws -> SaveHouseholdPayload {
         let householdName = (fixedName ?? name).trimmingCharacters(in: .whitespacesAndNewlines)

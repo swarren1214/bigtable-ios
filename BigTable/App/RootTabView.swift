@@ -89,7 +89,7 @@ private struct BigTableToolbar: ViewModifier {
                 Button {
                     router.present(.profile)
                 } label: {
-                    MemberAvatar(name: model.me?.myMember?.name ?? model.householdName, color: PersonColor.forIndex(0).color, url: ProfileAvatar.url(for: model.me?.myMember?.avatarUrl), size: 30)
+                    MemberAvatar(name: model.me?.myMember?.name ?? model.householdName, color: PersonColor.forIndex(0).color, url: ProfileAvatar.url(for: model.me?.myMember?.avatarUrl), size: 30, hearthName: model.me?.myMember?.name)
                 }
                 .accessibilityLabel("Profile and household")
             }

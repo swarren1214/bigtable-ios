@@ -7,10 +7,9 @@ nonisolated enum AppConfig {
     static let appName = "BigTable"
     static let appGroupID = "group.com.stephenwarren.bigtable"
 
-    // Production backend for every build: the staging Supabase project was retired.
-    // Debug builds sign in to real accounts, so test with your own account and household.
-    nonisolated static let apiBaseURL = URL(string: "https://api.bigtableapp.com")!
-    nonisolated static let apiFallbackURL = URL(string: "https://bigtable-api.vercel.app")!
+    // Production backend for every build: the shared Hearth API (BigTable's routes live under
+    // /v1/bigtable). Debug builds sign in to real accounts, so test with your own household.
+    nonisolated static let apiBaseURL = URL(string: "https://api.hearthapps.com")!
     nonisolated static let supabaseURL = URL(string: "https://kvhvsztvfpydhfpzicyy.supabase.co")!
     nonisolated static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2aHZzenR2ZnB5ZGhmcHppY3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1ODI2ODIsImV4cCI6MjA5NTE1ODY4Mn0.403bjxC9vkgMJ_ytARSd3DvTnJix2jDbS8rJtd1BpPE"
 

@@ -14,6 +14,7 @@ struct HouseholdEditorView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var savedMessage: String?
+    @State private var calomaFamily: HearthFamily?
     @FocusState private var nameFocused: Bool
 
     private var isOrganizer: Bool { model.isOrganizer }
@@ -28,6 +29,14 @@ struct HouseholdEditorView: View {
                     Button("Add Person", systemImage: "plus") { addPerson() }
                         .disabled(isSaving)
                 }
+            }
+            if isOrganizer, !calomaNames.isEmpty {
+                CalomaFamilyCard(
+                    names: calomaNames,
+                    onAdd: { addFromCaloma() },
+                    onDismiss: { dismissCaloma() }
+                )
+                .disabled(isSaving)
             }
             if draft.members.isEmpty {
                 EmptyCard(symbol: "person.2", title: "No one yet", message: "Add the people you cook for.")
@@ -147,6 +156,11 @@ struct HouseholdEditorView: View {
         return PersonColor.forIndex(member.originalIndex ?? position).color
     }
 
+    /// People Caloma knows who aren't here yet.
+    private var calomaNames: [String] {
+        calomaFamily.map { draft.newPeople(from: $0) } ?? []
+    }
+
     private func removable(_ member: ProfileMemberDraft) -> Bool {
         isOrganizer && !member.isJoined && draft.members.first?.id != member.id
             && draft.members.contains { $0.id == member.id }
@@ -158,6 +172,7 @@ struct HouseholdEditorView: View {
         guard !hasLoaded else { return }
         hasLoaded = true
         load()
+        calomaFamily = CalomaFamilyOffer.load()
     }
 
     private func load() {
@@ -186,6 +201,18 @@ struct HouseholdEditorView: View {
             return
         }
         Task { await save() }
+    }
+
+    /// Adds Caloma's people by name and saves, like adding someone by hand.
+    private func addFromCaloma() {
+        draft.addPeople(named: calomaNames)
+        calomaFamily = nil
+        Task { await save() }
+    }
+
+    private func dismissCaloma() {
+        CalomaFamilyOffer.dismiss(calomaNames)
+        calomaFamily = nil
     }
 
     private func remove(_ member: ProfileMemberDraft) {

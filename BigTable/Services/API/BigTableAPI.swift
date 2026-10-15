@@ -33,14 +33,12 @@ nonisolated struct APIError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Talks to the BigTable API (the Next.js app on Vercel), the same endpoints the Expo app
-/// used. Every call carries the Supabase access token from `AuthClient`; a 401 refreshes the
-/// token once and retries. Like the Expo app, it tries the custom domain first and the Vercel
-/// URL when that can't be reached or answers with a 5xx.
+/// Talks to BigTable's routes on the shared Hearth API (`/v1/bigtable/…`). Every call carries
+/// the Supabase access token from `AuthClient`; a 401 refreshes the token once and retries.
 nonisolated struct BigTableAPI: Sendable {
     static let shared = BigTableAPI()
 
-    var baseURLs: [URL] = [AppConfig.apiBaseURL, AppConfig.apiFallbackURL]
+    var baseURLs: [URL] = [AppConfig.apiBaseURL]
     var auth: AuthClient = .shared
     var urlSession: URLSession = {
         let configuration = URLSessionConfiguration.default
@@ -57,67 +55,67 @@ nonisolated struct BigTableAPI: Sendable {
     // MARK: - Me and the household
 
     func me() async throws -> MeResponse {
-        try await get("/api/me", query: [URLQueryItem(name: "ts", value: String(Int(Date.now.timeIntervalSince1970 * 1000)))])
+        try await get("/v1/bigtable/me", query: [URLQueryItem(name: "ts", value: String(Int(Date.now.timeIntervalSince1970 * 1000)))])
     }
 
     func saveHousehold(_ payload: SaveHouseholdPayload) async throws -> MeResponse {
-        try await send("PUT", "/api/me", body: payload)
+        try await send("PUT", "/v1/bigtable/me", body: payload)
     }
 
     func markTutorialComplete() async throws {
-        let _: OKResponse = try await send("PATCH", "/api/me", body: ["tutorialComplete": true])
+        let _: OKResponse = try await send("PATCH", "/v1/bigtable/me", body: ["tutorialComplete": true])
     }
 
     func deleteAccount() async throws {
-        let _: OKResponse = try await send("DELETE", "/api/me")
+        let _: OKResponse = try await send("DELETE", "/v1/bigtable/me")
     }
 
     func householdInvitations() async throws -> HouseholdInvitationsResponse {
-        try await get("/api/household/invitations")
+        try await get("/v1/bigtable/household/invitations")
     }
 
     func sendHouseholdInvitation(to profileId: String) async throws -> HouseholdInvitation {
-        let response: SendInvitationResponse = try await send("POST", "/api/household/invitations", body: ["inviteeProfileId": profileId])
+        let response: SendInvitationResponse = try await send("POST", "/v1/bigtable/household/invitations", body: ["inviteeProfileId": profileId])
         return response.invitation
     }
 
     func respondToInvitation(_ id: String, accept: Bool) async throws -> InvitationActionResponse {
-        try await send("PUT", "/api/household/invitations/\(id.pathEscaped)", body: ["action": accept ? "accept" : "decline"])
+        try await send("PUT", "/v1/bigtable/household/invitations/\(id.pathEscaped)", body: ["action": accept ? "accept" : "decline"])
     }
 
     func cancelInvitation(_ id: String) async throws -> InvitationActionResponse {
-        try await send("PUT", "/api/household/invitations/\(id.pathEscaped)", body: ["action": "cancel"])
+        try await send("PUT", "/v1/bigtable/household/invitations/\(id.pathEscaped)", body: ["action": "cancel"])
     }
 
     func memberPermissions(_ memberId: String) async throws -> HouseholdMemberPermissions {
-        try await get("/api/household/members/\(memberId.pathEscaped)/permissions")
+        try await get("/v1/bigtable/household/members/\(memberId.pathEscaped)/permissions")
     }
 
     func saveMemberPermissions(_ memberId: String, _ permissions: HouseholdMemberPermissions) async throws {
-        let _: OKResponse = try await send("PATCH", "/api/household/members/\(memberId.pathEscaped)/permissions", body: permissions)
+        let _: OKResponse = try await send("PATCH", "/v1/bigtable/household/members/\(memberId.pathEscaped)/permissions", body: permissions)
     }
 
     /// The organizer removing someone, or someone leaving (their own id).
     func removeHouseholdMember(_ memberId: String) async throws -> RemoveMemberResponse {
-        try await send("DELETE", "/api/household/members/\(memberId.pathEscaped)")
+        try await send("DELETE", "/v1/bigtable/household/members/\(memberId.pathEscaped)")
     }
 
     func sendAppInvitation(email: String) async throws {
-        let _: OKResponse = try await send("POST", "/api/invite", body: ["email": email])
+        let _: OKResponse = try await send("POST", "/v1/bigtable/invite", body: ["email": email])
     }
 
     // MARK: - Plan
 
     func currentPlan(weekStart: String?) async throws -> PlannerResponse {
-        try await get("/api/plans/current", query: weekStart.map { [URLQueryItem(name: "weekStart", value: $0)] } ?? [])
+        try await get("/v1/bigtable/plans/current", query: weekStart.map { [URLQueryItem(name: "weekStart", value: $0)] } ?? [])
     }
 
     func updateSlot(_ update: PlanSlotUpdate) async throws -> PlannerSlotUpdateResponse {
-        try await send("PUT", "/api/plans/current", body: update)
+        try await send("PUT", "/v1/bigtable/plans/current", body: update)
     }
 
     func searchPlaces(_ query: String, latitude: Double, longitude: Double, radiusMiles: Double = 5) async throws -> [PlaceResult] {
-        let response: PlacesResponse = try await get("/api/places/search", query: [
+        let response: PlacesResponse = try await get("/v1/bigtable/places/search", query: [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "latitude", value: String(latitude)),
             URLQueryItem(name: "longitude", value: String(longitude)),
@@ -134,19 +132,19 @@ nonisolated struct BigTableAPI: Sendable {
         if let query, !query.trimmingCharacters(in: .whitespaces).isEmpty { items.append(URLQueryItem(name: "q", value: query.trimmingCharacters(in: .whitespaces))) }
         if let quickFilter, quickFilter != "All", !quickFilter.isEmpty { items.append(URLQueryItem(name: "quickFilter", value: quickFilter)) }
         if let collection { items.append(URLQueryItem(name: "collection", value: collection)) }
-        return try await get("/api/recipes", query: items)
+        return try await get("/v1/bigtable/recipes", query: items)
     }
 
     func favoriteRecipes() async throws -> RecipeListResponse {
-        try await get("/api/recipes/favorites")
+        try await get("/v1/bigtable/recipes/favorites")
     }
 
     func setFavorite(_ recipeId: String, saved: Bool) async throws {
-        let _: OKResponse = try await send("PUT", "/api/recipes/favorites", body: FavoriteBody(recipeId: recipeId, saved: saved))
+        let _: OKResponse = try await send("PUT", "/v1/bigtable/recipes/favorites", body: FavoriteBody(recipeId: recipeId, saved: saved))
     }
 
     func recipe(_ id: String, versionId: String? = nil) async throws -> RecipeDetail {
-        let response: RecipeDetailResponse = try await get("/api/recipes/\(id.pathEscaped)", query: versionId.map { [URLQueryItem(name: "versionId", value: $0)] } ?? [])
+        let response: RecipeDetailResponse = try await get("/v1/bigtable/recipes/\(id.pathEscaped)", query: versionId.map { [URLQueryItem(name: "versionId", value: $0)] } ?? [])
         return response.recipe
     }
 
@@ -157,113 +155,113 @@ nonisolated struct BigTableAPI: Sendable {
             let stripped = step.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
             return "\(index + 1). \(stripped)"
         }
-        let response: CreateRecipeResponse = try await send("POST", "/api/recipes", body: numbered)
+        let response: CreateRecipeResponse = try await send("POST", "/v1/bigtable/recipes", body: numbered)
         return response.id
     }
 
     func updateRecipe(_ id: String, _ payload: RecipePayload) async throws {
-        let _: OKResponse = try await send("PATCH", "/api/recipes/\(id.pathEscaped)", body: payload)
+        let _: OKResponse = try await send("PATCH", "/v1/bigtable/recipes/\(id.pathEscaped)", body: payload)
     }
 
     func deleteRecipe(_ id: String) async throws {
-        let _: OKResponse = try await send("DELETE", "/api/recipes/\(id.pathEscaped)")
+        let _: OKResponse = try await send("DELETE", "/v1/bigtable/recipes/\(id.pathEscaped)")
     }
 
     func deletedRecipes() async throws -> RecipeListResponse {
-        try await get("/api/recipes", query: [URLQueryItem(name: "collection", value: "removed")])
+        try await get("/v1/bigtable/recipes", query: [URLQueryItem(name: "collection", value: "removed")])
     }
 
     func restoreRecipe(_ id: String) async throws {
-        let _: OKResponse = try await send("POST", "/api/recipes/\(id.pathEscaped)/restore")
+        let _: OKResponse = try await send("POST", "/v1/bigtable/recipes/\(id.pathEscaped)/restore")
     }
 
     func publishRecipe(_ id: String) async throws -> PublishRecipeResponse {
-        try await send("POST", "/api/recipes/\(id.pathEscaped)/publish")
+        try await send("POST", "/v1/bigtable/recipes/\(id.pathEscaped)/publish")
     }
 
     func unpublishRecipe(_ id: String) async throws -> PublishRecipeResponse {
-        try await send("POST", "/api/recipes/\(id.pathEscaped)/unpublish")
+        try await send("POST", "/v1/bigtable/recipes/\(id.pathEscaped)/unpublish")
     }
 
     func likeState(_ id: String) async throws -> Bool {
-        let response: RecipeLikeStateResponse = try await get("/api/recipes/\(id.pathEscaped)/like")
+        let response: RecipeLikeStateResponse = try await get("/v1/bigtable/recipes/\(id.pathEscaped)/like")
         return response.liked
     }
 
     func setLike(_ id: String, liked: Bool) async throws {
-        let _: OKResponse = try await send("PUT", "/api/recipes/\(id.pathEscaped)/like", body: ["liked": liked])
+        let _: OKResponse = try await send("PUT", "/v1/bigtable/recipes/\(id.pathEscaped)/like", body: ["liked": liked])
     }
 
     func customTags() async throws -> [CustomTag] {
-        let response: CustomTagsResponse = try await get("/api/recipes/tags")
+        let response: CustomTagsResponse = try await get("/v1/bigtable/recipes/tags")
         return response.tags
     }
 
     func createTag(_ label: String) async throws -> CustomTag {
-        let response: CustomTagResponse = try await send("POST", "/api/recipes/tags", body: ["label": label])
+        let response: CustomTagResponse = try await send("POST", "/v1/bigtable/recipes/tags", body: ["label": label])
         return response.tag
     }
 
     func renameTag(_ id: String, to label: String) async throws -> CustomTag {
-        let response: CustomTagResponse = try await send("PATCH", "/api/recipes/tags/\(id.pathEscaped)", body: ["label": label])
+        let response: CustomTagResponse = try await send("PATCH", "/v1/bigtable/recipes/tags/\(id.pathEscaped)", body: ["label": label])
         return response.tag
     }
 
     func deleteTag(_ id: String) async throws {
-        let _: OKResponse = try await send("DELETE", "/api/recipes/tags/\(id.pathEscaped)")
+        let _: OKResponse = try await send("DELETE", "/v1/bigtable/recipes/tags/\(id.pathEscaped)")
     }
 
     // MARK: - Recipe AI
 
     func generateRecipeImage(title: String, description: String?, tags: [String], ingredients: [String], instructions: [String]) async throws -> GenerateRecipeImageResponse {
-        try await send("POST", "/api/ai/recipe-image", body: RecipeImageBody(title: title, description: description, tags: tags, ingredients: ingredients, instructions: instructions))
+        try await send("POST", "/v1/bigtable/ai/recipe-image", body: RecipeImageBody(title: title, description: description, tags: tags, ingredients: ingredients, instructions: instructions))
     }
 
     /// Photos of a cookbook page or recipe card, as JPEG.
     func scanRecipe(images: [Data]) async throws -> ScanRecipeDocumentResponse {
         let body = ScanBody(images: images.map { ScanBody.Image(dataBase64: $0.base64EncodedString(), mimeType: "image/jpeg") })
-        return try await send("POST", "/api/ai/recipe-scan", body: body)
+        return try await send("POST", "/v1/bigtable/ai/recipe-scan", body: body)
     }
 
     func recipeFromAudio(_ data: Data, mimeType: String = "audio/m4a") async throws -> GeneratedRecipeResponse {
-        try await send("POST", "/api/ai/recipe-audio", body: ["dataBase64": data.base64EncodedString(), "mimeType": mimeType])
+        try await send("POST", "/v1/bigtable/ai/recipe-audio", body: ["dataBase64": data.base64EncodedString(), "mimeType": mimeType])
     }
 
     func recipeFromTranscript(_ transcript: String) async throws -> GeneratedRecipeResponse {
-        try await send("POST", "/api/ai/recipe-transcript", body: ["transcript": transcript])
+        try await send("POST", "/v1/bigtable/ai/recipe-transcript", body: ["transcript": transcript])
     }
 
     func recipeFromURL(_ url: String) async throws -> GeneratedRecipeResponse {
-        try await send("POST", "/api/ai/recipe-url", body: ["url": url])
+        try await send("POST", "/v1/bigtable/ai/recipe-url", body: ["url": url])
     }
 
     // MARK: - Plan and grocery AI
 
     func usage() async throws -> UsageCheckResponse {
-        try await get("/api/usage/check")
+        try await get("/v1/bigtable/usage/check")
     }
 
     func generateMealPlan(_ request: MealPlanRequest) async throws -> MealPlanResponse {
-        try await send("POST", "/api/ai/meal-plan", body: request)
+        try await send("POST", "/v1/bigtable/ai/meal-plan", body: request)
     }
 
     func generateGroceryList(_ request: GroceryListRequest) async throws -> GroceryListResponse {
-        try await send("POST", "/api/ai/grocery-list", body: request)
+        try await send("POST", "/v1/bigtable/ai/grocery-list", body: request)
     }
 
     func grocerySnapshots() async throws -> GrocerySnapshotsResponse {
-        try await get("/api/grocery/snapshots")
+        try await get("/v1/bigtable/grocery/snapshots")
     }
 
     func saveGrocerySnapshot(_ payload: SaveGrocerySnapshotPayload) async throws -> GrocerySnapshot {
-        let response: SaveGrocerySnapshotResponse = try await send("PUT", "/api/grocery/snapshots", body: payload)
+        let response: SaveGrocerySnapshotResponse = try await send("PUT", "/v1/bigtable/grocery/snapshots", body: payload)
         return response.snapshot
     }
 
     // MARK: - Social
 
     func follows(_ mode: FollowMode, limit: Int = 30, offset: Int = 0) async throws -> FollowsResponse {
-        try await get("/api/follows", query: [
+        try await get("/v1/bigtable/follows", query: [
             URLQueryItem(name: "mode", value: mode.rawValue),
             URLQueryItem(name: "limit", value: String(limit)),
             URLQueryItem(name: "offset", value: String(offset)),
@@ -271,32 +269,32 @@ nonisolated struct BigTableAPI: Sendable {
     }
 
     func setFollowing(_ profileId: String, following: Bool) async throws {
-        let _: OKResponse = try await send("PUT", "/api/follows", body: FollowBody(followeeProfileId: profileId, following: following))
+        let _: OKResponse = try await send("PUT", "/v1/bigtable/follows", body: FollowBody(followeeProfileId: profileId, following: following))
     }
 
     func publicProfile(_ profileId: String) async throws -> SocialProfileDetailResponse {
-        try await get("/api/profiles/\(profileId.pathEscaped)/public")
+        try await get("/v1/bigtable/profiles/\(profileId.pathEscaped)/public")
     }
 
     func blockedProfiles() async throws -> [String] {
-        let response: BlockedProfilesResponse = try await get("/api/blocks")
+        let response: BlockedProfilesResponse = try await get("/v1/bigtable/blocks")
         return response.blockedProfileIds
     }
 
     func block(_ profileId: String) async throws {
-        let _: OKResponse = try await send("POST", "/api/blocks", body: ["blockedProfileId": profileId])
+        let _: OKResponse = try await send("POST", "/v1/bigtable/blocks", body: ["blockedProfileId": profileId])
     }
 
     func unblock(_ profileId: String) async throws {
-        let _: OKResponse = try await send("DELETE", "/api/blocks/\(profileId.pathEscaped)")
+        let _: OKResponse = try await send("DELETE", "/v1/bigtable/blocks/\(profileId.pathEscaped)")
     }
 
     func socialVisibility() async throws -> SocialVisibilityResponse {
-        try await get("/api/me/social-visibility")
+        try await get("/v1/bigtable/me/social-visibility")
     }
 
     func setSocialVisibility(_ visible: Bool) async throws -> SocialVisibilityResponse {
-        try await send("PUT", "/api/me/social-visibility", body: ["socialProfileVisible": visible])
+        try await send("PUT", "/v1/bigtable/me/social-visibility", body: ["socialProfileVisible": visible])
     }
 
     // MARK: - Notifications
@@ -304,41 +302,41 @@ nonisolated struct BigTableAPI: Sendable {
     func notifications(limit: Int = 30, offset: Int = 0, unreadOnly: Bool = false) async throws -> NotificationsResponse {
         var items = [URLQueryItem(name: "limit", value: String(limit)), URLQueryItem(name: "offset", value: String(offset))]
         if unreadOnly { items.append(URLQueryItem(name: "unreadOnly", value: "true")) }
-        return try await get("/api/notifications", query: items)
+        return try await get("/v1/bigtable/notifications", query: items)
     }
 
     func markNotificationsRead(ids: [String]? = nil, all: Bool = false) async throws {
-        let _: OKResponse = try await send("PATCH", "/api/notifications", body: MarkReadBody(markAllRead: all ? true : nil, ids: ids, markUnread: nil))
+        let _: OKResponse = try await send("PATCH", "/v1/bigtable/notifications", body: MarkReadBody(markAllRead: all ? true : nil, ids: ids, markUnread: nil))
     }
 
     func markNotificationsUnread(ids: [String]) async throws {
-        let _: OKResponse = try await send("PATCH", "/api/notifications", body: MarkReadBody(markAllRead: nil, ids: ids, markUnread: true))
+        let _: OKResponse = try await send("PATCH", "/v1/bigtable/notifications", body: MarkReadBody(markAllRead: nil, ids: ids, markUnread: true))
     }
 
     func unreadNotificationCount() async throws -> Int {
-        let response: UnreadCountResponse = try await get("/api/notifications/unread-count")
+        let response: UnreadCountResponse = try await get("/v1/bigtable/notifications/unread-count")
         return response.unreadCount
     }
 
     func notificationPrefs() async throws -> [String: Bool] {
-        let response: NotificationPrefsResponse = try await get("/api/me/notification-prefs")
+        let response: NotificationPrefsResponse = try await get("/v1/bigtable/me/notification-prefs")
         return response.notificationPrefs
     }
 
     func setNotificationPrefs(_ prefs: [String: Bool]) async throws -> [String: Bool] {
-        let response: NotificationPrefsResponse = try await send("PUT", "/api/me/notification-prefs", body: NotificationPrefsResponse(notificationPrefs: prefs))
+        let response: NotificationPrefsResponse = try await send("PUT", "/v1/bigtable/me/notification-prefs", body: NotificationPrefsResponse(notificationPrefs: prefs))
         return response.notificationPrefs
     }
 
     func pushTokens() async throws -> PushTokensResponse {
-        try await get("/api/push-tokens")
+        try await get("/v1/bigtable/push-tokens")
     }
 
     /// Registers this device's APNs token. The server sends through Expo's push service today,
     /// which only takes Expo tokens; native tokens are stored with platform "ios-apns" so the
     /// server can send to them once it talks to APNs directly (see the README).
     func registerPushToken(_ token: String, enabled: Bool) async throws {
-        let _: OKResponse = try await send("PUT", "/api/push-tokens", body: PushBody(token: token, enabled: enabled, platform: "ios-apns"))
+        let _: OKResponse = try await send("PUT", "/v1/bigtable/push-tokens", body: PushBody(token: token, enabled: enabled, platform: "ios-apns"))
     }
 
     // MARK: - Request bodies
@@ -447,7 +445,10 @@ nonisolated struct BigTableAPI: Sendable {
             }
 
             let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            let message = (payload?["error"] as? String) ?? (payload?["message"] as? String)
+            // Hearth API errors: { "error": { "code", "message", "requestId" } }, with any extra
+            // details (such as a top-level "code" like LIMIT_REACHED) alongside.
+            let errorObject = payload?["error"] as? [String: Any]
+            let message = (errorObject?["message"] as? String) ?? (payload?["error"] as? String) ?? (payload?["message"] as? String)
             let code = payload?["code"] as? String
             Self.log.notice("\(method, privacy: .public) \(path, privacy: .public) → \(http.statusCode) \(code ?? "", privacy: .public)")
             if http.statusCode == 401 { throw APIError.signedOut }
