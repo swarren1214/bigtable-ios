@@ -86,6 +86,8 @@ enum AppSheet: Identifiable, Hashable {
     case aiPlan
     case recipe(id: String, versionID: String?)
     case publicProfile(id: String)
+    /// Ask BigTable (the ✨ button).
+    case ask
 
     var id: String {
         switch self {
@@ -96,6 +98,7 @@ enum AppSheet: Identifiable, Hashable {
         case .aiPlan: "aiPlan"
         case .recipe(let id, let version): "recipe-\(id)-\(version ?? "")"
         case .publicProfile(let id): "profile-\(id)"
+        case .ask: "ask"
         }
     }
 }
@@ -214,6 +217,7 @@ struct AppRoot: View {
         case .aiPlan: AIPlanView()
         case .recipe(let id, let version): NavigationStack { RecipeDetailView(recipeID: id, versionID: version) }
         case .publicProfile(let id): NavigationStack { PublicProfileView(profileID: id, showsCloseButton: true) }
+        case .ask: AskView()
         }
     }
 }

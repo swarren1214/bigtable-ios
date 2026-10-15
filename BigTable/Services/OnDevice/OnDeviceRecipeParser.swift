@@ -63,6 +63,7 @@ nonisolated enum OnDeviceRecipeParser {
             "Instructions are ordered steps, each one action, without numbers in front.",
             "The summary is one or two short sentences about the dish.",
             "baseServings is a whole number from 1 to 50 when known.",
+            "prepMinutes and cookMinutes are whole minutes when known or easy to estimate; difficulty is easy, medium or hard.",
             "Tags may only come from this list: \(supportedTags.joined(separator: ", ")).",
         ]
         switch source {
@@ -112,7 +113,10 @@ nonisolated enum OnDeviceRecipeParser {
             tags: isRecipe ? Array(tags.prefix(10)) : [],
             ingredients: isRecipe ? ingredients : [],
             instructions: isRecipe ? instructions : [],
-            failureReason: isRecipe ? nil : clean(recipe.failureReason, limit: 220)
+            failureReason: isRecipe ? nil : clean(recipe.failureReason, limit: 220),
+            prepMinutes: isRecipe ? recipe.prepMinutes.flatMap { (1...1_440).contains($0) ? $0 : nil } : nil,
+            cookMinutes: isRecipe ? recipe.cookMinutes.flatMap { (1...1_440).contains($0) ? $0 : nil } : nil,
+            difficulty: isRecipe ? recipe.difficulty.map { $0.lowercased() }.flatMap { ["easy", "medium", "hard"].contains($0) ? $0 : nil } : nil
         )
     }
 }
@@ -134,6 +138,12 @@ nonisolated struct OnDeviceRecipe {
     var ingredients: [String]
     @Guide(description: "Steps in order, without numbers")
     var instructions: [String]
+    @Guide(description: "Hands-on prep time in minutes, when known")
+    var prepMinutes: Int?
+    @Guide(description: "Cooking time in minutes, when known")
+    var cookMinutes: Int?
+    @Guide(description: "easy, medium or hard")
+    var difficulty: String?
     @Guide(description: "Why this isn't a recipe, when isRecipe is false")
     var failureReason: String?
 }

@@ -12,7 +12,7 @@ struct GroceryView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accent) private var accent
 
-    @State private var store = GroceryStore()
+    @State private var store = GroceryStore.shared
     @State private var hideChecked = false
     @State private var showGenerate = false
     @State private var showHistory = false

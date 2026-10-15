@@ -371,3 +371,27 @@ final class PlanStore {
         }
     }
 }
+
+// MARK: - Ask BigTable
+
+extension PlanStore {
+    /// Puts a meal in a slot exactly as given (its recipes, custom meal or Dine Out), keeping
+    /// who's eating and the snacks as they are now. Ask BigTable plans meals, and undoes and
+    /// redoes them, with this. Returns whether it saved.
+    @discardableResult
+    func restoreMeal(_ meal: PlannerSlot, in ref: PlanSlotRef) async -> Bool {
+        let current = slot(ref)
+        var next = current
+        next.customMeal = meal.customMeal
+        next.recipeItems = meal.recipeItems
+        next.dineOut = meal.dineOut
+        next.completed = meal.completed
+        return await save(ref, showing: next) { update in
+            update.customMeal = .some(meal.customMeal)
+            update.dineOut = .some(meal.dineOut)
+            update.recipeItems = meal.recipeItems
+            update.excludedMembers = current.excludedMembers
+            update.completed = meal.completed
+        }
+    }
+}

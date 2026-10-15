@@ -374,6 +374,12 @@ nonisolated struct GeneratedRecipeResponse: Decodable, Sendable {
     var ingredients: [String]
     var instructions: [String]
     var failureReason: String?
+    /// Filled in on the device (a recipe site's data or the on-device model); the API
+    /// doesn't send these.
+    var prepMinutes: Int?
+    var cookMinutes: Int?
+    /// "easy", "medium" or "hard".
+    var difficulty: String?
 }
 
 nonisolated struct PublishRecipeResponse: Decodable, Sendable {

@@ -61,8 +61,8 @@ struct RootTabView: View {
 }
 
 extension View {
-    /// The toolbar every tab shares: the notifications bell (with the unread count) and the
-    /// profile avatar.
+    /// The toolbar every tab shares: Ask BigTable (✨), the notifications bell (with the unread
+    /// count) and the profile avatar.
     func bigTableToolbar() -> some View {
         modifier(BigTableToolbar())
     }
@@ -74,6 +74,17 @@ private struct BigTableToolbar: ViewModifier {
 
     func body(content: Content) -> some View {
         content.toolbar {
+            // Ask BigTable runs on the device's built-in AI, so it only shows where that's on.
+            if AskEngine.isAvailable {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        router.present(.ask)
+                    } label: {
+                        Image(systemName: "sparkles")
+                    }
+                    .accessibilityLabel("Ask BigTable")
+                }
+            }
             if AppConfig.socialEnabled {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {

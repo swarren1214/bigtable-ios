@@ -68,7 +68,11 @@ nonisolated enum RecipeLinkImporter {
                 tags: tags,
                 ingredients: Array(ingredients),
                 instructions: Array(instructions),
-                failureReason: nil
+                failureReason: nil,
+                prepMinutes: minutes(recipe["prepTime"]),
+                cookMinutes: minutes(recipe["cookTime"]) ?? minutes(recipe["totalTime"]).map { total in
+                    max(0, total - (minutes(recipe["prepTime"]) ?? 0))
+                }.flatMap { $0 > 0 ? $0 : nil }
             )
         }
         return nil
@@ -121,6 +125,26 @@ nonisolated enum RecipeLinkImporter {
             }
         }
         return result
+    }
+
+    /// An ISO 8601 duration ("PT1H15M", "P0DT45M") in whole minutes.
+    static func minutes(_ value: Any?) -> Int? {
+        guard let text = (value as? String)?.uppercased(), text.hasPrefix("P") else { return nil }
+        var total = 0.0
+        for match in text.matches(of: #/(\d+(?:\.\d+)?)([DHMS])/#) {
+            guard let number = Double(match.output.1) else { continue }
+            switch match.output.2 {
+            case "D": total += number * 1_440
+            case "H": total += number * 60
+            case "M":
+                // In "P1M" (no T) M means months, which no recipe takes.
+                guard text.contains("T") else { continue }
+                total += number
+            default: total += number / 60
+            }
+        }
+        let rounded = Int(total.rounded())
+        return (1...2_880).contains(rounded) ? rounded : nil
     }
 
     private static func servings(_ value: Any?) -> Double? {

@@ -12,6 +12,9 @@ import OSLog
 @MainActor
 @Observable
 final class GroceryStore {
+    /// The one list the Grocery tab and Ask BigTable share, so a change in either shows in both.
+    static let shared = GroceryStore()
+
     /// The aisles every list is organized by, in store order (the Expo app's
     /// DEFAULT_GROCERY_SECTIONS). Other sections the AI or the organizer adds sort after these.
     static let defaultSections = ["Produce", "Meat", "Dairy", "Pantry", "Bakery", "Frozen", "Beverages", "Snacks", "Household", "Other"]

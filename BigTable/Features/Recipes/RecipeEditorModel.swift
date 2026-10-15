@@ -104,8 +104,8 @@ final class RecipeEditorModel {
     var difficulty = ""
     /// Selected tags, lowercased, in the order they were picked.
     var tags: [String] = []
-    var ingredients: [RecipeIngredientDraft] = [RecipeIngredientDraft()]
-    var steps: [RecipeStepDraft] = [RecipeStepDraft()]
+    var ingredients: [RecipeIngredientDraft] = []
+    var steps: [RecipeStepDraft] = []
 
     /// The saved photo's URL (editing, or after an upload).
     var imageURL: String?
@@ -120,6 +120,12 @@ final class RecipeEditorModel {
     private(set) var isScanning = false
     private(set) var isImportingLink = false
     private(set) var isCreatingWithAI = false
+    /// Talking to AI to change the recipe (see RecipeRefine.swift).
+    var isRefining = false
+    /// Each change asked for by talking, oldest first, with the recipe from before it.
+    var refineTurns: [RecipeRefineTurn] = []
+    /// AI wrote or read in this recipe (from a description, a link or a scan).
+    var madeWithAI = false
     /// Shown for a few seconds when Generate with AI is tapped too early.
     private(set) var showsImageHint = false
 
@@ -143,9 +149,9 @@ final class RecipeEditorModel {
             difficulty = Self.difficulties.contains(level) ? level : ""
             tags = Self.unique(recipe.tags.map { $0.recipeTrimmed.lowercased() })
             let rows = recipe.ingredients.map { RecipeIngredientDraft($0.input) }
-            ingredients = rows.isEmpty ? [RecipeIngredientDraft()] : rows
+            ingredients = rows
             let stepRows = recipe.instructions.map(RecipeFormat.stripStepNumber).filter { !$0.isEmpty }.map { RecipeStepDraft(text: $0) }
-            steps = stepRows.isEmpty ? [RecipeStepDraft()] : stepRows
+            steps = stepRows
             imageURL = recipe.imageUrl
         }
         initial = snapshot()
@@ -165,7 +171,7 @@ final class RecipeEditorModel {
     var validIngredients: [RecipeIngredientInput] { ingredients.compactMap(\.input) }
     var validSteps: [String] { steps.map { $0.text.recipeTrimmed }.filter { !$0.isEmpty } }
     var hasInvalidAmount: Bool { ingredients.contains { !$0.amountIsValid } }
-    var isBusy: Bool { isSaving || isGeneratingImage || isScanning || isImportingLink || isCreatingWithAI }
+    var isBusy: Bool { isSaving || isGeneratingImage || isScanning || isImportingLink || isCreatingWithAI || isRefining }
 
     var canGenerateImage: Bool {
         !title.recipeTrimmed.isEmpty && !validIngredients.isEmpty && !validSteps.isEmpty
@@ -298,20 +304,15 @@ final class RecipeEditorModel {
         steps.append(contentsOf: parsed)
     }
 
-    func ensureRows() {
-        if ingredients.isEmpty { ingredients = [RecipeIngredientDraft()] }
-        if steps.isEmpty { steps = [RecipeStepDraft()] }
-    }
-
     private static func lines(_ text: String) -> [String] {
         text.split(whereSeparator: \.isNewline).map { String($0).recipeTrimmed }.filter { !$0.isEmpty }
     }
 
-    private static func stripBullet(_ line: String) -> String {
+    static func stripBullet(_ line: String) -> String {
         line.replacingOccurrences(of: #"^[\-\*•·▢□◦‣]+\s*"#, with: "", options: .regularExpression).recipeTrimmed
     }
 
-    private static func unique(_ values: [String]) -> [String] {
+    static func unique(_ values: [String]) -> [String] {
         var seen = Set<String>()
         return values.filter { !$0.isEmpty && seen.insert($0).inserted }
     }
@@ -369,7 +370,7 @@ final class RecipeEditorModel {
     }
 
     /// After AI fills in a recipe with no photo yet, make one (as the Expo app did).
-    private func generatePhotoIfMissing() {
+    func generatePhotoIfMissing() {
         guard !hasPhoto, canGenerateImage, !isGeneratingImage else { return }
         Task { try? await generateImage() }
     }
@@ -382,21 +383,6 @@ final class RecipeEditorModel {
         let text = String(transcript.recipeTrimmed.prefix(12_000))
         let response = try await recipe(fromSpoken: text)
         let outcome = apply(response, notRecipeFallback: "That didn't look like a recipe. Try describing the ingredients and cooking steps.")
-        if case .filled = outcome { generatePhotoIfMissing() }
-        return outcome
-    }
-
-    func createFromAudio(_ data: Data) async throws -> RecipeImportOutcome {
-        isCreatingWithAI = true
-        defer { isCreatingWithAI = false }
-        // Transcribe on the device when it can; otherwise upload the recording as before.
-        let response: GeneratedRecipeResponse
-        if let transcript = await OnDeviceTranscriber.transcribe(data) {
-            response = try await recipe(fromSpoken: String(transcript.prefix(12_000)))
-        } else {
-            response = try await api.recipeFromAudio(data, mimeType: "audio/m4a")
-        }
-        let outcome = apply(response, notRecipeFallback: "That didn't sound like a recipe. Try describing the ingredients and cooking steps.")
         if case .filled = outcome { generatePhotoIfMissing() }
         return outcome
     }
@@ -453,11 +439,12 @@ final class RecipeEditorModel {
             steps = stepRows.map { RecipeStepDraft(text: $0) }
             filled.append("steps")
         }
+        if !filled.isEmpty { madeWithAI = true }
         return filled.isEmpty ? .nothingFound : .filled(filled)
     }
 
     /// Puts an AI-made recipe into the form, as the Expo app's applyGeneratedRecipeFields did.
-    private func apply(_ generated: GeneratedRecipeResponse, notRecipeFallback: String) -> RecipeImportOutcome {
+    func apply(_ generated: GeneratedRecipeResponse, notRecipeFallback: String) -> RecipeImportOutcome {
         guard generated.isRecipe else {
             let reason = generated.failureReason?.recipeTrimmed ?? ""
             return .notRecipe(reason.isEmpty ? notRecipeFallback : reason)
@@ -490,6 +477,10 @@ final class RecipeEditorModel {
             steps = stepRows.map { RecipeStepDraft(text: $0) }
             filled.append("steps")
         }
+        if let minutes = generated.prepMinutes, minutes > 0 { prepText = String(minutes) }
+        if let minutes = generated.cookMinutes, minutes > 0 { cookText = String(minutes) }
+        if let level = generated.difficulty?.lowercased(), Self.difficulties.contains(level) { difficulty = level }
+        if !filled.isEmpty { madeWithAI = true }
         return filled.isEmpty ? .nothingFound : .filled(filled)
     }
 
