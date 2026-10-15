@@ -34,6 +34,8 @@ nonisolated enum OnDeviceRecipeParser {
         case spoken
         /// A web page's readable text, with menus, ads and comments around the recipe.
         case webPage
+        /// Text read from photos of a cookbook page, a recipe card or a screenshot.
+        case scan
     }
 
     /// Nil when the model isn't available or couldn't handle it; then use the API.
@@ -70,6 +72,9 @@ nonisolated enum OnDeviceRecipeParser {
         case .webPage:
             lines.append("The text comes from a recipe web page. Use only the page's main recipe: ignore menus, ads, comments, ratings, nutrition facts and other suggested recipes. Don't invent ingredients or steps that aren't on the page.")
             lines.append("If the page has no recipe, set isRecipe to false and give a short failureReason.")
+        case .scan:
+            lines.append("The text was read from photos of a cookbook page, a recipe card or a screenshot, so it may have reading mistakes, broken lines, and an ingredient or step repeated where two photos overlap. Use only the main recipe: ignore ads, navigation, suggested recipes, comments, ratings and nutrition facts. Fix obvious reading mistakes, join broken lines, and drop repeats. Don't invent ingredients or steps.")
+            lines.append("If there's no recipe, set isRecipe to false and give a short failureReason.")
         }
         return lines.joined(separator: "\n")
     }
@@ -78,6 +83,7 @@ nonisolated enum OnDeviceRecipeParser {
         switch source {
         case .spoken: "What the person said:\n\(text)"
         case .webPage: "The page's text:\n\(text)"
+        case .scan: "The text read from the photos:\n\(text)"
         }
     }
 

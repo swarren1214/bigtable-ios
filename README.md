@@ -72,7 +72,8 @@ BigTable/
   Services/       AuthClient (Supabase Auth over REST, Keychain), BigTableAPI (every endpoint,
                   fallback URL, token refresh), StorageClient (photo uploads), Subscriptions
                   (RevenueCat), OnDevice (Apple Maps search, recipe parsing, link import,
-                  transcription, grocery lists)
+                  transcription, grocery lists,
+                  scanning, meal planning)
   Features/       Account, Profile, Paywall, Tutorial, Plan, AIPlan, Recipes, Grocery,
                   Community, Notifications (each with its own @Observable store)
 BigTableTests/    Swift Testing: ingredient parsing, dates, API decoding
@@ -94,7 +95,11 @@ docs/             PORTING_GUIDE.md (how the port is organized)
   you say, type or record are understood by Apple's on-device model (Foundation Models), and
   recordings are transcribed on the phone (SpeechAnalyzer). AI grocery lists (Pro) add up the
   planned recipes' ingredients on the phone and let the on-device model choose store sections
-  and how many to buy. Each falls back to the API when
+  and how many to buy. Scans of cookbook pages and screenshots are read with Vision and the
+  on-device model. Plan My Week (Pro, organizers) narrows the household's recipes in code
+  (restrictions, recipe mix, meal type, quick tags, dislikes) to a short list the on-device
+  model places; the plan is sent back to the API, which builds the preview and saves it
+  without calling Claude. Each falls back to the API when
   the phone can't (no Apple Intelligence, a page the phone can't load, very long text), so
   `/api/places/search` is no longer used and the AI recipe endpoints only see those fallbacks.
   `Services/OnDevice/`.

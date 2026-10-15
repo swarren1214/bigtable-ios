@@ -226,7 +226,7 @@ final class AIPlanStore {
         await loadBaselines()
         try? await Task.sleep(for: .milliseconds(250))
 
-        let request = makeRequest()
+        var request = makeRequest()
         phase = .requesting
         // The request takes a while; move the progress along so it doesn't look stuck.
         let stepper = Task { @MainActor [weak self] in
@@ -237,6 +237,12 @@ final class AIPlanStore {
         defer { stepper.cancel() }
 
         do {
+            // Plan on the device when it can; the API then only builds the preview (no
+            // Claude call). Otherwise the API plans it, as before.
+            if let onDevice = await OnDeviceMealPlanner.plan(for: request) {
+                request.generatedPlan = onDevice.plan
+                request.generatedBy = "anthropic"
+            }
             let response = try await api.generateMealPlan(request)
             phase = .drafting
             model.updateUsage(response.usage)

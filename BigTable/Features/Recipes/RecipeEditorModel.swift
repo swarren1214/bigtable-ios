@@ -430,7 +430,14 @@ final class RecipeEditorModel {
         guard !images.isEmpty else { return .nothingFound }
         isScanning = true
         defer { isScanning = false }
-        let response = try await api.scanRecipe(images: Array(images.prefix(8)))
+        // Read on the device when it can; the API reads the images otherwise.
+        let pages = Array(images.prefix(8))
+        let response: ScanRecipeDocumentResponse
+        if let onDevice = await OnDeviceRecipeScanner.scan(pages) {
+            response = onDevice
+        } else {
+            response = try await api.scanRecipe(images: pages)
+        }
         var filled: [String] = []
         if let scannedTitle = response.title?.recipeTrimmed, !scannedTitle.isEmpty {
             title = scannedTitle
