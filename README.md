@@ -42,9 +42,14 @@ Requires Xcode 26 and iOS 26. iPhone and iPad.
 - **Recipes**: All / Mine / Favorites, search, quick filters, infinite scroll. Recipe detail with
   servings scaling, attribution, creator, like, favorite, share, Add to Plan, edit, publish /
   unpublish, duplicate, delete, version updates.
-- **New / Edit Recipe**: photo (camera, library, or generated with AI), ingredients with amounts and
-  measurements, steps, tags (including custom tags), and imports: say or type it (recording or
-  on-device dictation), and with Pro scan a page, read a photo or screenshot, or a link.
+- **New / Edit Recipe**: a new recipe starts on "What are we making?": one box to describe a
+  recipe, ask for one, or paste a link (the mic listens the moment it's tapped), idea chips, Scan
+  a Page and Photo or Screenshot (Pro), or Write It Myself. The editor has a photo hero (camera,
+  library, or made with AI), the name and a line about it, Serves / Prep / Cook tiles,
+  difficulty, ingredients typed however you like ("2 cups beef broth" is split up on the phone),
+  numbered steps and tags. **Change It with AI**: say or type what to change ("dairy-free and
+  enough for 12"); the recipe shows what's new, changed or removed, with Undo, and the mic sends
+  when you pause. AI's recipes open there.
 - **Grocery**: the active list by section with checks (saved as you shop), stats and the estimate,
   add/edit/remove items, share; generate with AI for a date range (warehouse sizes, a note,
   replace or merge) with a review step; history and restore (Pro).
@@ -91,9 +96,10 @@ docs/             PORTING_GUIDE.md (how the port is organized)
   ("BigTable Pro") and products. RevenueCat's webhook keeps the server's tier current, and the
   server's tier (`/api/usage/check`) is what gates AI.
 - **On the device**: Dine Out searches Apple Maps (MapKit). Recipes from a link are read on the
-  phone (schema.org recipe data, or the page's text through Apple's on-device model). Recipes
-  you say, type or record are understood by Apple's on-device model (Foundation Models), and
-  recordings are transcribed on the phone (SpeechAnalyzer). AI grocery lists (Pro) add up the
+  phone (schema.org recipe data, including prep and cook times, or the page's text through
+  Apple's on-device model). Recipes you say or type are heard (on-device speech recognition) and
+  written by Apple's on-device model (Foundation Models), and changing a recipe by talking runs
+  on the on-device model too. Ask BigTable answers and acts with on-device tools. AI grocery lists (Pro) add up the
   planned recipes' ingredients on the phone and let the on-device model choose store sections
   and how many to buy. Scans of cookbook pages and screenshots are read with Vision and the
   on-device model. Plan My Week (Pro, organizers) narrows the household's recipes in code

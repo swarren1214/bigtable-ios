@@ -94,14 +94,19 @@ nonisolated final class AskPCMConverter: @unchecked Sendable {
         let ratio = target.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 64
         guard let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return nil }
-        var fed = false
+        // The input block is @Sendable, so "fed" lives in a lock rather than a captured var.
+        let fed = OSAllocatedUnfairLock(initialState: false)
         var error: NSError?
         let status = converter.convert(to: output, error: &error) { _, inputStatus in
-            if fed {
+            let alreadyFed = fed.withLock { value -> Bool in
+                let was = value
+                value = true
+                return was
+            }
+            if alreadyFed {
                 inputStatus.pointee = .noDataNow
                 return nil
             }
-            fed = true
             inputStatus.pointee = .haveData
             return buffer
         }
