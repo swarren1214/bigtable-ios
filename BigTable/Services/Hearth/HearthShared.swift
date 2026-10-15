@@ -261,7 +261,10 @@ nonisolated struct HearthMealPlan: HearthPublication, Hashable {
         /// "recipe", "custom" or "dineOut".
         var kind: String
         var recipeIDs: [String]?
+        /// The recipe's photo (the main dish's, when there are several), as an https URL.
         var imageURL: String?
+        /// The restaurant's logo when eating out (img.logo.dev), as an https URL.
+        var logoURL: String?
         /// Where, when eating out.
         var placeName: String?
         /// Names of the people not eating this meal.

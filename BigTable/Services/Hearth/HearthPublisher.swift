@@ -223,12 +223,19 @@ enum HearthPublisher {
             title: slot.title,
             kind: kind,
             recipeIDs: recipeIDs.isEmpty ? nil : recipeIDs,
-            imageURL: slot.recipeItems.first?.imageUrl,
+            imageURL: Self.photo(of: slot),
+            logoURL: slot.dineOut?.logoUrl.flatMap { $0.isEmpty ? nil : $0 },
             placeName: slot.dineOut?.name,
             notEating: slot.excludedMembers.isEmpty ? nil : slot.excludedMembers,
             link: link,
             recipes: nil
         )
+    }
+
+    /// The meal's photo: the main dish's, or the first dish with one.
+    private static func photo(of slot: PlannerSlot) -> String? {
+        let withPhotos = slot.recipeItems.filter { !($0.imageUrl ?? "").isEmpty }
+        return (withPhotos.first { $0.role == .entree } ?? withPhotos.first)?.imageUrl
     }
 
     // MARK: Recipes
