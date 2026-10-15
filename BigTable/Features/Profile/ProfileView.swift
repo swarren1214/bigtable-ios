@@ -16,6 +16,7 @@ struct ProfileView: View {
 
     @State private var invitations: HouseholdInvitationsResponse?
     @State private var showPaywall = false
+    @State private var mealTimesSummary = HearthMealTimes.current.summary
     @State private var showTutorial = false
     @State private var joinedHouseholdName: String?
     @State private var showMembershipInfo = false
@@ -358,6 +359,14 @@ struct ProfileView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                ProfileDivider()
+                NavigationLink {
+                    MealTimesView(app: .bigtable)
+                } label: {
+                    ProfileRow(symbol: "clock.fill", color: PersonColor.orange.color, title: "Meal Times", detail: mealTimesSummary)
+                }
+                .buttonStyle(.plain)
+                .onAppear { mealTimesSummary = HearthMealTimes.current.summary }
                 ProfileDivider()
                 HStack(spacing: 14) {
                     IconTile(symbol: "circle.lefthalf.filled", color: PersonColor.indigo.color)
