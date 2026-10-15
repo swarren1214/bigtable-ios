@@ -1,0 +1,44 @@
+import Foundation
+
+/// App-wide settings. The keys here are publishable client keys (Supabase anon key,
+/// RevenueCat public SDK key), the same ones the Expo app shipped with; they're meant to be in
+/// the app. Every build talks to the production backend.
+nonisolated enum AppConfig {
+    static let appName = "BigTable"
+    static let appGroupID = "group.com.stephenwarren.bigtable"
+
+    // Production backend for every build: the staging Supabase project was retired.
+    // Debug builds sign in to real accounts, so test with your own account and household.
+    nonisolated static let apiBaseURL = URL(string: "https://api.bigtableapp.com")!
+    nonisolated static let apiFallbackURL = URL(string: "https://bigtable-api.vercel.app")!
+    nonisolated static let supabaseURL = URL(string: "https://kvhvsztvfpydhfpzicyy.supabase.co")!
+    nonisolated static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2aHZzenR2ZnB5ZGhmcHppY3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1ODI2ODIsImV4cCI6MjA5NTE1ODY4Mn0.403bjxC9vkgMJ_ytARSd3DvTnJix2jDbS8rJtd1BpPE"
+
+    /// RevenueCat's Test Store in Debug (no real charges), the App Store in Release.
+    #if DEBUG
+    nonisolated static let revenueCatAPIKey = "test_VWlSzocJhmnUcnzNbLGZvtLEPZY"
+    #else
+    nonisolated static let revenueCatAPIKey = "appl_uPeHmxuOBQOlDJCVmEfAoiywHgI"
+    #endif
+
+    /// img.logo.dev publishable key for restaurant logos (the Expo app shipped the same one).
+    static let logoDevPublishableKey = "pk_M7uaQUcjQq6Zni3X4QMHSA"
+
+    /// The RevenueCat entitlement that means Pro, and the App Store products behind it,
+    /// unchanged from the Expo app so current subscribers stay subscribed.
+    static let proEntitlement = "BigTable Pro"
+    static let proMonthlyProductID = "com.stephenwarren.bigtable.pro.monthly"
+    static let proAnnualProductID = "com.stephenwarren.bigtable.pro.annual"
+
+    /// Feature switches the Expo app read from EXPO_PUBLIC_FEATURE_* (all on in production).
+    static let socialEnabled = true
+    static let publishingEnabled = true
+    static let pushEnabled = true
+
+    /// Where sign-up confirmation and password-reset emails send people (as in the Expo app).
+    static let authRedirect = "bigtable://auth"
+
+    static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "2.0"
+    }
+}

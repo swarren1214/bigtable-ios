@@ -1,0 +1,179 @@
+import Foundation
+import Observation
+import OSLog
+import UIKit
+import UserNotifications
+
+/// Who's signed in and their household, shared by every screen: the session from
+/// `AuthClient`, `/api/me` (the household, its people and restrictions, and the membership),
+/// this person's permissions, and AI usage.
+///
+/// The organizer owns the household; members who joined see the organizer's plan and grocery
+/// list and can do what the organizer allowed (`permissions`).
+@MainActor
+@Observable
+final class AppModel {
+    static let shared = AppModel()
+
+    enum Phase: Equatable {
+        /// Reading the saved session.
+        case launching
+        case signedOut
+        /// Signed in; `/api/me` is loading.
+        case loading
+        /// Signed in with no household set up yet.
+        case needsHousehold
+        case ready
+    }
+
+    private(set) var phase: Phase = .launching
+    private(set) var session: AuthSession?
+    private(set) var me: MeResponse?
+    private(set) var permissions: HouseholdMemberPermissions = .organizer
+    private(set) var usage: UsageCheckResponse?
+    /// The last thing that went wrong loading the household, shown with Try Again.
+    private(set) var loadError: String?
+    /// A password-reset link was opened: ask for the new password.
+    var needsNewPassword = false
+    /// Unread notifications, for the bell's badge.
+    private(set) var unreadCount = 0
+
+    let api = BigTableAPI.shared
+    private static let log = Logger(subsystem: "com.stephenwarren.bigtable", category: "app")
+
+    // MARK: Who and what
+
+    var userID: String? { session?.user.id }
+    var membership: MembershipInfo? { me?.membership }
+    var isOrganizer: Bool { (membership?.role ?? .organizer) == .organizer }
+    var members: [HouseholdMember] { me?.householdMembers ?? [] }
+    var householdName: String {
+        if !isOrganizer, let name = membership?.organizerHouseholdName, !name.isEmpty { return name }
+        return me?.profile?.householdName ?? ""
+    }
+
+    var canManagePlan: Bool { isOrganizer || permissions.canManageMealPlan }
+    var canUseAIPlan: Bool { isOrganizer || permissions.canUseAiMealPlan }
+    var canUseAIGrocery: Bool { isOrganizer || permissions.canUseAiGrocery }
+    var canEditMembers: Bool { isOrganizer || permissions.canEditMembers }
+
+    // MARK: Starting up
+
+    func start() async {
+        await AuthClient.shared.observe { session in
+            Task { @MainActor in AppModel.shared.sessionChanged(session) }
+        }
+    }
+
+    private func sessionChanged(_ new: AuthSession?) {
+        let previous = session?.user.id
+        session = new
+        guard let new else {
+            me = nil
+            usage = nil
+            permissions = .organizer
+            phase = .signedOut
+            Task { await Subscriptions.shared.signedOut() }
+            return
+        }
+        // A token refresh for the same person changes nothing on screen.
+        guard previous != new.user.id || phase == .launching || phase == .signedOut else { return }
+        phase = .loading
+        Task {
+            await Subscriptions.shared.signedIn(userID: new.user.id)
+            await reload()
+        }
+    }
+
+    /// Loads `/api/me`, then permissions and usage.
+    func reload() async {
+        do {
+            let me = try await api.me()
+            self.me = me
+            loadError = nil
+            if let membership = me.membership, membership.role == .member, let id = userID {
+                permissions = (try? await api.memberPermissions(id)) ?? .none
+            } else {
+                permissions = .organizer
+            }
+            phase = me.isOnboarded || me.membership?.role == .member ? .ready : .needsHousehold
+            await refreshUsage()
+            if phase == .ready { await requestPushIfNeeded() }
+        } catch let error as APIError where error.kind == .signedOut {
+            await AuthClient.shared.clear()
+        } catch {
+            Self.log.error("Couldn't load the household: \(error.localizedDescription, privacy: .public)")
+            loadError = error.localizedDescription
+            if phase == .loading { phase = me == nil ? .loading : .ready }
+        }
+    }
+
+    func refreshUnreadCount() async {
+        guard AppConfig.socialEnabled, session != nil else { return }
+        if let count = try? await api.unreadNotificationCount() {
+            unreadCount = count
+            try? await UNUserNotificationCenter.current().setBadgeCount(count)
+        }
+    }
+
+    func setUnreadCount(_ count: Int) {
+        unreadCount = count
+    }
+
+    /// Asks for notification permission once (after the household is set up) and registers.
+    func requestPushIfNeeded() async {
+        // Screenshot mode (Debug) never asks.
+        guard AppConfig.pushEnabled, !ScreenshotMode.isOn, !UserDefaults.standard.bool(forKey: SettingsKey.pushDisabled) else { return }
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .notDetermined:
+            guard (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) == true else { return }
+        case .denied:
+            return
+        default:
+            break
+        }
+        UIApplication.shared.registerForRemoteNotifications()
+    }
+
+    func refreshUsage() async {
+        usage = try? await api.usage()
+    }
+
+    /// After an AI call: the response carries the new usage.
+    func updateUsage(_ new: UsageCheckResponse) {
+        usage = new
+    }
+
+    /// Saves the household, then reloads `/api/me`: the PUT's reply leaves out the membership
+    /// (and, for someone who joined, is just `{ ok: true }`).
+    func saveHousehold(_ payload: SaveHouseholdPayload) async throws {
+        _ = try await api.saveHousehold(payload)
+        await reload()
+    }
+
+    func markTutorialComplete() {
+        Task { try? await api.markTutorialComplete() }
+    }
+
+    func signOut() async {
+        await AuthClient.shared.signOut()
+    }
+
+    func deleteAccount() async throws {
+        try await api.deleteAccount()
+        await AuthClient.shared.clear()
+    }
+
+    /// bigtable://auth links from the confirmation and password-reset emails.
+    func handleAuthRedirect(_ url: URL) async {
+        do {
+            if try await AuthClient.shared.handleRedirect(url) == "recovery" {
+                needsNewPassword = true
+            }
+        } catch {
+            loadError = error.localizedDescription
+        }
+    }
+}
