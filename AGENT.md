@@ -41,6 +41,15 @@ screen and in Split View, Slide Over and Stage Manager windows, and portrait and
   `ToolbarItem(placement: .confirmationAction) { SheetDoneButton("Save") { save() } }`.
   Keep the title (it's read by VoiceOver); only the icon shows.
 
+## iPad sidebar
+
+- When the tab bar opens into the left sidebar on iPad (`.sidebarAdaptable`), every tab's icon
+  is the same color as its name: black in Light Mode, white in Dark Mode, never the app's tint.
+  The sidebar tints icons with the app's color, so on iPad (regular width) build each tab's
+  label as `Label { Text(title) } icon: { Image.menuIcon(symbol) }` (from
+  `DesignSystem/MenuIcon.swift`). The iPhone tab bar keeps plain symbols, so the selected tab
+  still shows in the app's color.
+
 ## Prefer native
 
 Prefer native iOS capabilities and components over custom ones: system controls, `List`/`Form`,

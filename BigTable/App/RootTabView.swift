@@ -52,7 +52,9 @@ struct RootTabView: View {
     @ViewBuilder
     private func tabLabel(_ title: String, _ systemImage: String) -> some View {
         if sizeClass == .regular {
-            Label(title, systemImage: systemImage)
+            // The sidebar tints tab icons with the app's color; keep each icon the color of its
+            // name instead (black in Light Mode, white in Dark Mode). See AGENT.md.
+            Label { Text(title) } icon: { Image.menuIcon(systemImage) }
         } else {
             Image(systemName: systemImage)
                 .accessibilityLabel(title)
