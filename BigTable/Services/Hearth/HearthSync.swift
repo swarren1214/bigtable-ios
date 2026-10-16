@@ -72,10 +72,12 @@ final class HearthNetworkStatus {
     @ObservationIgnored private let monitor = NWPathMonitor()
 
     private init() {
-        monitor.pathUpdateHandler = { [weak self] path in
+        // Runs on the monitor's queue. It sets the shared instance rather than capturing self,
+        // which Swift 6 won't allow across threads.
+        monitor.pathUpdateHandler = { path in
             let online = path.status == .satisfied
             Task { @MainActor in
-                self?.isOnline = online
+                HearthNetworkStatus.shared.isOnline = online
             }
         }
         monitor.start(queue: DispatchQueue(label: "com.stephenwarren.hearth.network"))
