@@ -24,9 +24,12 @@ Requires Xcode 26 and iOS 26. iPhone and iPad.
 
 ## Screens
 
-- **Sign in**: Sign in with Apple, email and password, create an account (with the strength
-  gauge), forgot password. Links in the confirmation and reset emails (`bigtable://auth`) sign
-  the person in, or ask for a new password.
+- **Sign in**: Sign in with Apple, as in every Hearth app (one sign-in for BigTable, Sated and
+  Suffice). New accounts can't be made with an email. Accounts made with an email before can
+  still sign in (and reset a password) from "Signed up with an email? Sign in", and are then
+  asked to add Sign in with Apple (`AppleLinkView`, Supabase manual identity linking with the
+  Apple ID token), which keeps the same account. "Not Now" asks again in three days. Email
+  sign-in goes away once those accounts have moved over.
 - **Household setup** (first sign-in): set up a household (name, people with birthdays, likes,
   dislikes and photos, dietary restrictions) or join one (accept a pending invitation).
 - **Plan**: the week (Sunday start; swipe or arrows), Tonight, and each day's breakfast, lunch and

@@ -155,6 +155,7 @@ struct AppRoot: View {
     @AppStorage(SettingsKey.appearance) private var appearance = AppearanceOption.system.rawValue
     @Environment(\.scenePhase) private var scenePhase
     @State private var showTutorial = false
+    @State private var showAppleLink = false
 
     private var accent: Color { Color(hexString: accentHex) ?? Brand.defaultAccent }
 
@@ -193,6 +194,16 @@ struct AppRoot: View {
         .preferredColorScheme(AppearanceOption(rawValue: appearance)?.colorScheme)
         .animation(.smooth, value: model.phase)
         .sheet(isPresented: $model.needsNewPassword) { NewPasswordView().tint(accent) }
+        // Accounts made with an email are asked to add Sign in with Apple (email sign-in is
+        // going away), once the app is ready and not over the tutorial or a password reset.
+        .sheet(isPresented: $showAppleLink) { AppleLinkView().tint(accent).environment(\.accent, accent) }
+        .task(id: AppleLinkCheck(phase: model.phase, needsLink: model.session?.user.needsAppleLink == true)) {
+            guard model.phase == .ready, model.session?.user.needsAppleLink == true,
+                  !AppleLinkPrompt.isSnoozed, !model.needsNewPassword, !ScreenshotMode.isOn else { return }
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, !showTutorial else { return }
+            showAppleLink = true
+        }
         .onChange(of: scenePhase) { _, phase in
             // Another Hearth app may have signed in, out, or as someone else meanwhile.
             if phase == .active {
@@ -247,4 +258,10 @@ struct LaunchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
     }
+}
+
+/// What decides whether to ask an email account to add Sign in with Apple.
+private struct AppleLinkCheck: Equatable {
+    var phase: AppModel.Phase
+    var needsLink: Bool
 }

@@ -3,8 +3,10 @@ import Foundation
 import SwiftUI
 import UIKit
 
-/// Signing in: the welcome screen, then sign in, create an account, or reset a password, with
-/// Sign in with Apple throughout. Uses the same accounts as the Expo app.
+/// Signing in. Sign in with Apple is the way in, as in every Hearth app (one sign-in for
+/// BigTable, Sated and Suffice). Accounts made with an email and password before that can still
+/// sign in (and reset a password) from a small link, and are then asked to add Apple
+/// (`AppleLinkView`); new accounts can't be made with an email.
 struct AuthView: View {
     @State private var path: [AccountAuthRoute] = []
     @State private var email = ""
@@ -17,8 +19,6 @@ struct AuthView: View {
                     switch route {
                     case .signIn:
                         AccountSignInPage(email: $email, path: $path)
-                    case .signUp:
-                        AccountSignUpPage(email: $email, path: $path)
                     case .forgotPassword:
                         AccountForgotPasswordPage(email: $email, path: $path)
                     }
@@ -29,12 +29,12 @@ struct AuthView: View {
 
 /// The screens after Welcome.
 nonisolated enum AccountAuthRoute: Hashable, Sendable {
-    case signIn, signUp, forgotPassword
+    case signIn, forgotPassword
 }
 
 // MARK: - Welcome
 
-/// The first screen: the app, what it does, and the ways in.
+/// The first screen: the app, what it does, and Sign in with Apple.
 private struct AccountWelcomePage: View {
     @Binding var path: [AccountAuthRoute]
     @State private var errorMessage: String?
@@ -52,16 +52,15 @@ private struct AccountWelcomePage: View {
                 OnboardingFeatureRow(symbol: "person.2", title: "Made for big families", detail: "Ages, likes and allergies shape every suggestion.")
             }
         } controls: { _ in
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 AccountAppleSignInButton(label: .continue) { errorMessage = $0 }
-                OnboardingPrimaryButton(title: "Create Account") { path.append(.signUp) }
-                Button {
-                    path.append(.signIn)
-                } label: {
-                    Text("I Have an Account").frame(maxWidth: .infinity, minHeight: 36)
-                }
-                .buttonStyle(.glass)
-                .controlSize(.large)
+                Text("One sign-in for BigTable, Sated and Suffice.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button("Signed up with an email? Sign in") { path.append(.signIn) }
+                    .font(.footnote.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
         }
         .errorAlert($errorMessage, title: "Couldn't sign in")
@@ -70,7 +69,8 @@ private struct AccountWelcomePage: View {
 
 // MARK: - Sign in
 
-/// Email and password sign in.
+/// Email and password sign in, for accounts made that way before Sign in with Apple was the
+/// only way in.
 private struct AccountSignInPage: View {
     @Binding var email: String
     @Binding var path: [AccountAuthRoute]
@@ -84,7 +84,7 @@ private struct AccountSignInPage: View {
     var body: some View {
         OnboardingPage(
             title: "Welcome back",
-            subtitle: "Sign in to your BigTable account."
+            subtitle: "Sign in to the BigTable account you made with your email. Next, you'll add Sign in with Apple to it."
         ) { isShort in
             OnboardingSymbolIcon(symbol: "person.crop.circle", size: isShort ? 64 : 80)
         } content: { _ in
@@ -107,7 +107,6 @@ private struct AccountSignInPage: View {
                 AccountBusyButton(title: "Sign In", busyTitle: "Signing In…", isBusy: isSigningIn) {
                     Task { await signIn() }
                 }
-                AccountAppleSignInButton(label: .signIn) { message = $0 }
             }
         }
         .onChange(of: email) { _, _ in emailError = nil }
@@ -125,101 +124,6 @@ private struct AccountSignInPage: View {
         defer { isSigningIn = false }
         do {
             try await AuthClient.shared.signIn(email: trimmed, password: password)
-        } catch {
-            message = error.localizedDescription
-        }
-    }
-}
-
-// MARK: - Create account
-
-/// Creating an account: name, email and a strong enough password.
-private struct AccountSignUpPage: View {
-    @Binding var email: String
-    @Binding var path: [AccountAuthRoute]
-    @State private var name = ""
-    @State private var password = ""
-    @State private var nameError: String?
-    @State private var emailError: String?
-    @State private var message: String?
-    @State private var isCreating = false
-    @State private var confirmationEmail: String?
-    @State private var showAccountExists = false
-    @FocusState private var focus: AccountAuthField?
-
-    private var canSubmit: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty
-            && !email.trimmingCharacters(in: .whitespaces).isEmpty
-            && AccountPasswordStrength.score(password) >= AccountPasswordStrength.minimumToSubmit
-    }
-
-    var body: some View {
-        OnboardingPage(
-            title: "Create your account",
-            subtitle: "We'll email you a link to confirm it."
-        ) { isShort in
-            OnboardingSymbolIcon(symbol: "person.badge.plus", size: isShort ? 64 : 80)
-        } content: { _ in
-            VStack(alignment: .leading, spacing: 14) {
-                AccountTextField(title: "Your name", text: $name, error: nameError, kind: .name, focus: $focus, field: .name)
-                    .submitLabel(.next)
-                    .onSubmit { focus = .email }
-                AccountTextField(title: "Email", text: $email, error: emailError, kind: .email, focus: $focus, field: .email)
-                    .submitLabel(.next)
-                    .onSubmit { focus = .password }
-                AccountTextField(title: "Password", text: $password, error: nil, kind: .newPassword, focus: $focus, field: .password)
-                    .submitLabel(.go)
-                    .onSubmit { Task { await signUp() } }
-                if !password.isEmpty {
-                    AccountPasswordGauge(password: password)
-                        .padding(.horizontal, 4)
-                }
-                if let message {
-                    AccountMessage(text: message, isError: true)
-                }
-            }
-        } controls: { _ in
-            VStack(spacing: 12) {
-                AccountBusyButton(title: "Create Account", busyTitle: "Creating Account…", isBusy: isCreating) {
-                    Task { await signUp() }
-                }
-                .disabled(!canSubmit)
-                AccountAppleSignInButton(label: .signUp) { message = $0 }
-            }
-        }
-        .onChange(of: name) { _, _ in nameError = nil }
-        .onChange(of: email) { _, _ in emailError = nil }
-        .alert("Check your email", isPresented: Binding(get: { confirmationEmail != nil }, set: { if !$0 { confirmationEmail = nil } })) {
-            Button("Go to Sign In") { path = [.signIn] }
-        } message: {
-            Text("We sent a link to \(confirmationEmail ?? "your email"). Tap it to confirm your account, then sign in here.")
-        }
-        .alert("There's already an account", isPresented: $showAccountExists) {
-            Button("Sign In") { path = [.signIn] }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("An account already uses \(email.trimmingCharacters(in: .whitespaces)). Would you like to sign in instead?")
-        }
-    }
-
-    private func signUp() async {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        nameError = trimmedName.isEmpty ? "Enter your name." : nil
-        emailError = AccountValidation.emailError(trimmedEmail)
-        guard nameError == nil, emailError == nil, canSubmit, !isCreating else { return }
-        focus = nil
-        message = nil
-        isCreating = true
-        defer { isCreating = false }
-        do {
-            let signedIn = try await AuthClient.shared.signUp(email: trimmedEmail, password: password, fullName: trimmedName)
-            if !signedIn {
-                password = ""
-                confirmationEmail = trimmedEmail
-            }
-        } catch AuthError.userExists {
-            showAccountExists = true
         } catch {
             message = error.localizedDescription
         }

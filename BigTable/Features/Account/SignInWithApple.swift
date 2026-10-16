@@ -9,7 +9,10 @@ import SwiftUI
 /// identity token, along with the name Apple shares the first time.
 struct AccountAppleSignInButton: View {
     var label: SignInWithAppleButton.Label = .continue
+    /// Adds Apple to the signed-in account (one made with an email) instead of signing in.
+    var linksCurrentAccount = false
     var onError: (String) -> Void
+    var onSuccess: () -> Void = {}
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var nonce = ""
@@ -63,12 +66,16 @@ struct AccountAppleSignInButton: View {
         Task {
             defer { isSigningIn = false }
             do {
-                try await AuthClient.shared.signInWithApple(
-                    idToken: identityToken,
-                    nonce: rawNonce,
-                    fullName: fullName.isEmpty ? nil : fullName,
-                    fallbackName: sharedName
-                )
+                if linksCurrentAccount {
+                    try await AuthClient.shared.linkApple(idToken: identityToken, nonce: rawNonce)
+                } else {
+                    try await AuthClient.shared.signInWithApple(
+                        idToken: identityToken,
+                        nonce: rawNonce,
+                        fullName: fullName.isEmpty ? nil : fullName,
+                        fallbackName: sharedName
+                    )
+                }
                 if !ScreenshotMode.isOn {
                     HearthAccounts.saveAppleID(HearthSharedAppleID(
                         userID: appleUserID,
@@ -77,6 +84,7 @@ struct AccountAppleSignInButton: View {
                         updatedBy: .bigtable
                     ))
                 }
+                onSuccess()
             } catch {
                 onError(Self.message(for: error))
             }

@@ -21,6 +21,16 @@ nonisolated struct AuthUser: Codable, Sendable, Equatable {
     /// Supabase's anonymous users. BigTable never signs in anonymously, but such a session is
     /// never shared with the other Hearth apps.
     var isAnonymous: Bool? = nil
+    /// How the account signs in ("email", "apple"). Nil for a session saved before BigTable
+    /// kept this; it's loaded at launch.
+    var providers: [String]? = nil
+
+    /// An account made with an email and password that hasn't added Sign in with Apple yet.
+    /// Email sign-in is going away, so these are asked to add Apple (keeping the account).
+    var needsAppleLink: Bool {
+        guard let providers, isAnonymous != true else { return false }
+        return !providers.contains("apple")
+    }
 }
 
 nonisolated enum AuthError: Error, LocalizedError, Equatable, Sendable {
@@ -100,7 +110,7 @@ actor AuthClient {
         session = resolved
         if let resolved {
             if resolved != local { store.save(resolved) }
-            if resolved.user.id != local?.user.id { needsUserDetails = true }
+            if resolved.user.id != local?.user.id || resolved.user.providers == nil { needsUserDetails = true }
             // Shares BigTable's session when there's none yet (or this one is newer).
             Self.share(resolved)
             if HearthAccounts.session()?.userID == resolved.user.id { sharedUserID = resolved.user.id }
@@ -169,18 +179,19 @@ actor AuthClient {
         set(session)
     }
 
-    /// Creates an account. Returns true when signed in right away, false when Supabase wants
-    /// the email confirmed first.
-    func signUp(email: String, password: String, fullName: String) async throws -> Bool {
-        var components = URLComponents(url: baseURL.appending(path: "signup"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "redirect_to", value: AppConfig.authRedirect)]
-        let body: [String: Any] = ["email": email, "password": password, "data": ["full_name": fullName]]
-        let data = try await send(url: components.url!, method: "POST", json: body)
-        if let session = try? Self.decodeSession(data) {
-            set(session)
-            return true
-        }
-        return false
+    /// Adds Sign in with Apple to the signed-in account (one made with an email and password),
+    /// so it keeps its recipes, household and plan and can sign in with Apple from now on, in
+    /// every Hearth app. Needs manual identity linking turned on in Supabase.
+    func linkApple(idToken: String, nonce: String?) async throws {
+        let token = try await accessToken()
+        var components = URLComponents(url: baseURL.appending(path: "token"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "grant_type", value: "id_token")]
+        var body: [String: Any] = ["provider": "apple", "id_token": idToken, "link_identity": true]
+        if let nonce { body["nonce"] = nonce }
+        let data = try await send(url: components.url!, method: "POST", json: body, bearer: token)
+        var linked = try Self.decodeSession(data)
+        if linked.user.fullName == nil { linked.user.fullName = session?.user.fullName }
+        set(linked)
     }
 
     /// Sign in with Apple: the identity token from AuthenticationServices, and the raw nonce
@@ -451,6 +462,10 @@ actor AuthClient {
         case (_, "email_not_confirmed"): return .emailNotConfirmed
         case (_, "user_already_exists"), (_, "email_exists"): return .userExists
         case (_, "weak_password"): return .weakPassword(message)
+        case (_, "identity_already_exists"):
+            return .rejected("This Apple ID already has its own BigTable account. To use that one instead, sign out and choose Continue with Apple.")
+        case (_, "manual_linking_disabled"):
+            return .rejected("Adding Sign in with Apple isn't turned on yet. Try again a little later.")
         default:
             if message.lowercased().contains("invalid login") { return .invalidCredentials }
             return .rejected(message)
@@ -470,9 +485,14 @@ actor AuthClient {
         var email: String?
         var user_metadata: [String: JSONValue]?
         var is_anonymous: Bool?
+        var app_metadata: AppMetadata?
+
+        nonisolated struct AppMetadata: Decodable {
+            var providers: [String]?
+        }
 
         var user: AuthUser {
-            AuthUser(id: id, email: email, fullName: user_metadata?["full_name"]?.string, isAnonymous: is_anonymous)
+            AuthUser(id: id, email: email, fullName: user_metadata?["full_name"]?.string, isAnonymous: is_anonymous, providers: app_metadata?.providers)
         }
     }
 
