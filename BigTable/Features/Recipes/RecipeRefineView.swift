@@ -118,7 +118,7 @@ struct RecipeRefineView: View {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(accent)
                                 .padding(.horizontal, 8)
-                                .frame(height: 22)
+                                .frame(minHeight: 22)
                                 .background(accent.opacity(0.12), in: Capsule())
                                 .lineLimit(1)
                         }
@@ -316,7 +316,7 @@ struct RecipeRefineView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(accent)
                             .padding(.horizontal, 14)
-                            .frame(height: 34)
+                            .frame(minHeight: 34)
                             .background(accent.opacity(0.12), in: Capsule())
                             .buttonStyle(.plain)
                     }

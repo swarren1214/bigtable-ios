@@ -72,7 +72,7 @@ struct PlanView: View {
             sheetContent(sheet)
                 .tint(accent)
         }
-        .confirmationDialog(switchTitle, isPresented: Binding(get: { pendingSwitch != nil }, set: { if !$0 { pendingSwitch = nil } }), titleVisibility: .visible) {
+        .alert(switchTitle, isPresented: Binding(get: { pendingSwitch != nil }, set: { if !$0 { pendingSwitch = nil } })) {
             Button("Switch", role: .destructive) {
                 sheet = pendingSwitch
                 pendingSwitch = nil
@@ -85,12 +85,16 @@ struct PlanView: View {
         .toolbar {
             if canManage, model.canUseAIPlan {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        router.present(.aiPlan)
-                    } label: {
-                        Image(systemName: "sparkles")
+                    Group {
+                        Button {
+                            router.present(.aiPlan)
+                        } label: {
+                            Image(systemName: "sparkles")
+                        }
+                        .accessibilityLabel("Plan with AI")
                     }
-                    .accessibilityLabel("Plan with AI")
+                    // White over the color header.
+                    .tint(.white)
                 }
             }
         }
@@ -420,10 +424,10 @@ struct PlanCustomMealView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", systemImage: "checkmark", action: save)
+                    SheetDoneButton("Save", action: save)
                         .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }

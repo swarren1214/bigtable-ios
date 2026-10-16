@@ -107,30 +107,30 @@ struct PlanSlotCard: View {
                     Button(role.label) { onRequest(.recipePicker(ref, role)) }
                 }
             } label: {
-                Label("Add Recipe", systemImage: "fork.knife")
+                Label { Text("Add Recipe") } icon: { Image.menuIcon("fork.knife") }
             }
             Button {
                 onRequest(.customMeal(ref))
             } label: {
-                Label("Custom Meal", systemImage: "pencil")
+                Label { Text("Custom Meal") } icon: { Image.menuIcon("pencil") }
             }
             Button {
                 onRequest(.dineOut(ref))
             } label: {
-                Label("Dine Out", systemImage: "storefront")
+                Label { Text("Dine Out") } icon: { Image.menuIcon("storefront") }
             }
             .disabled(slotData.dineOut != nil)
             Button {
                 onRequest(.snacks(ref))
             } label: {
-                Label("Snacks", systemImage: SnackStyle.symbol)
+                Label { Text("Snacks") } icon: { Image.menuIcon(SnackStyle.symbol) }
             }
             if hasMeal || !slotData.snackItems.isEmpty {
                 Divider()
                 Button(role: .destructive) {
                     Task { await store.clearSlot(ref) }
                 } label: {
-                    Label("Clear \(ref.slot.label)", systemImage: "trash")
+                    Label { Text("Clear \(ref.slot.label)") } icon: { Image.menuIcon("trash", role: .destructive) }
                 }
             }
         } label: {
@@ -205,7 +205,7 @@ struct PlanSlotCard: View {
                 Button {
                     open(item)
                 } label: {
-                    Label("View Recipe", systemImage: "book")
+                    Label { Text("View Recipe") } icon: { Image.menuIcon("book") }
                 }
             }
             if canManage {
@@ -217,7 +217,7 @@ struct PlanSlotCard: View {
                         Text(role.label).tag(role)
                     }
                 } label: {
-                    Label("Role", systemImage: "tag")
+                    Label { Text("Role") } icon: { Image.menuIcon("tag") }
                 }
                 .pickerStyle(.menu)
 
@@ -226,14 +226,14 @@ struct PlanSlotCard: View {
                         Button {
                             Task { await store.moveRecipe(at: index, by: -1, in: ref) }
                         } label: {
-                            Label("Move Up", systemImage: "arrow.up")
+                            Label { Text("Move Up") } icon: { Image.menuIcon("arrow.up") }
                         }
                     }
                     if index < slotData.recipeItems.count - 1 {
                         Button {
                             Task { await store.moveRecipe(at: index, by: 1, in: ref) }
                         } label: {
-                            Label("Move Down", systemImage: "arrow.down")
+                            Label { Text("Move Down") } icon: { Image.menuIcon("arrow.down") }
                         }
                     }
                 }
@@ -241,14 +241,14 @@ struct PlanSlotCard: View {
                     Button {
                         Task { await store.useLatestVersion(at: index, in: ref) }
                     } label: {
-                        Label("Use Latest Version", systemImage: "arrow.triangle.2.circlepath")
+                        Label { Text("Use Latest Version") } icon: { Image.menuIcon("arrow.triangle.2.circlepath") }
                     }
                 }
                 Divider()
                 Button(role: .destructive) {
                     Task { await store.removeRecipe(at: index, in: ref) }
                 } label: {
-                    Label("Remove from \(ref.slot.label)", systemImage: "trash")
+                    Label { Text("Remove from \(ref.slot.label)") } icon: { Image.menuIcon("trash", role: .destructive) }
                 }
             }
         }
@@ -292,19 +292,19 @@ struct PlanSlotCard: View {
             Button {
                 onRequest(.dineOutDetail(ref))
             } label: {
-                Label("Details", systemImage: "info.circle")
+                Label { Text("Details") } icon: { Image.menuIcon("info.circle") }
             }
             if canManage {
                 Button {
                     onRequest(.dineOut(ref))
                 } label: {
-                    Label("Change Restaurant", systemImage: "storefront")
+                    Label { Text("Change Restaurant") } icon: { Image.menuIcon("storefront") }
                 }
                 Divider()
                 Button(role: .destructive) {
                     Task { await store.removeDineOut(in: ref) }
                 } label: {
-                    Label("Remove Dine Out", systemImage: "trash")
+                    Label { Text("Remove Dine Out") } icon: { Image.menuIcon("trash", role: .destructive) }
                 }
             }
         }
@@ -335,12 +335,12 @@ struct PlanSlotCard: View {
                 Button {
                     onRequest(.customMeal(ref))
                 } label: {
-                    Label("Edit", systemImage: "pencil")
+                    Label { Text("Edit") } icon: { Image.menuIcon("pencil") }
                 }
                 Button(role: .destructive) {
                     Task { await store.clearMeal(in: ref) }
                 } label: {
-                    Label("Remove", systemImage: "trash")
+                    Label { Text("Remove") } icon: { Image.menuIcon("trash", role: .destructive) }
                 }
             }
         }
@@ -415,7 +415,7 @@ struct PlanSlotCard: View {
                         Button(role: .destructive) {
                             Task { await store.removeSnack(at: index, in: ref) }
                         } label: {
-                            Label("Remove Snack", systemImage: "trash")
+                            Label { Text("Remove Snack") } icon: { Image.menuIcon("trash", role: .destructive) }
                         }
                     }
                 }

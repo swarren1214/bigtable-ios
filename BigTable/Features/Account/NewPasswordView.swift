@@ -49,14 +49,14 @@ struct NewPasswordView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { close() }
+                    SheetCancelButton { close() }
                         .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
                         ProgressView()
                     } else {
-                        Button("Save", systemImage: "checkmark") { Task { await save() } }
+                        SheetDoneButton("Save") { Task { await save() } }
                             .disabled(!strongEnough || !matches)
                     }
                 }

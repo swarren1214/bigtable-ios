@@ -74,6 +74,7 @@ struct ProfileJoinedMemberView: View {
             }
         }
         .task { await load() }
+        .refreshable { await load() }
         .alert("Remove household member?", isPresented: $confirmRemove) {
             Button("Remove", role: .destructive) { Task { await remove() } }
             Button("Cancel", role: .cancel) {}

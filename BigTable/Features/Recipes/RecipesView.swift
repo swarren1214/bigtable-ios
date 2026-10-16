@@ -32,9 +32,13 @@ struct RecipesView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button("New Recipe", systemImage: "plus") {
-                    router.present(.newRecipe)
+                Group {
+                    Button("New Recipe", systemImage: "plus") {
+                        router.present(.newRecipe)
+                    }
                 }
+                // White over the color header.
+                .tint(.white)
             }
         }
         .bigTableToolbar()

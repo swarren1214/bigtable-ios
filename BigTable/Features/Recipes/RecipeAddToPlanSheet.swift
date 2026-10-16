@@ -104,13 +104,13 @@ struct RecipeAddToPlanSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
                         ProgressView()
                     } else {
-                        Button("Add", systemImage: "checkmark") { requestAdd() }
+                        SheetDoneButton("Add") { requestAdd() }
                             .disabled(isLoadingPlan || isPast(day))
                     }
                 }

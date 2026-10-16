@@ -98,11 +98,11 @@ struct MemberEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton { dismiss() }
                 }
                 if canEdit {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done", systemImage: "checkmark") {
+                        SheetDoneButton {
                             var finished = member
                             finished.name = member.trimmedName
                             onSave(finished)
@@ -123,7 +123,7 @@ struct MemberEditorView: View {
                 }
                 .ignoresSafeArea()
             }
-            .confirmationDialog("Remove \(member.displayName)?", isPresented: $confirmRemove, titleVisibility: .visible) {
+            .alert("Remove \(member.displayName)?", isPresented: $confirmRemove) {
                 Button("Remove", role: .destructive) {
                     onRemove?()
                     dismiss()

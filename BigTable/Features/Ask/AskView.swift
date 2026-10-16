@@ -166,7 +166,7 @@ struct AskView: View {
                                 Text(suggestion)
                                     .font(.subheadline.weight(.semibold))
                                     .padding(.horizontal, 14)
-                                    .frame(height: 34)
+                                    .frame(minHeight: 34)
                                     .contentShape(.capsule)
                             }
                             .buttonStyle(.plain)

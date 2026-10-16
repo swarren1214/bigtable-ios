@@ -80,13 +80,13 @@ struct ManageTagsView: View {
         } message: { tag in
             Text("“\(tag.label)” will be renamed everywhere it's used, including recipes already tagged with it.")
         }
-        .confirmationDialog(
+        .alert(
             "Delete “\(deleting?.label ?? "")”?",
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
-            titleVisibility: .visible,
             presenting: deleting
         ) { tag in
             Button("Delete Tag", role: .destructive) { Task { await delete(tag) } }
+            Button("Cancel", role: .cancel) {}
         } message: { _ in
             Text("It's removed from your saved tags. Recipes already tagged with it keep the tag.")
         }
@@ -125,11 +125,11 @@ struct ManageTagsView: View {
             .tint(.orange)
         }
         .contextMenu {
-            Button("Rename", systemImage: "pencil") {
+            Button("Rename", menuIcon: "pencil") {
                 renameText = tag.label
                 renaming = tag
             }
-            Button("Delete", systemImage: "trash", role: .destructive) { deleting = tag }
+            Button("Delete", menuIcon: "trash", role: .destructive) { deleting = tag }
         }
     }
 

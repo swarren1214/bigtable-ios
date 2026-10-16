@@ -74,21 +74,22 @@ struct GroceryItemEditor: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", systemImage: "checkmark") {
+                    SheetDoneButton("Save") {
                         onSave(name, quantity, bulk, section)
                         dismiss()
                     }
                     .disabled(!canSave)
                 }
             }
-            .confirmationDialog("Delete \(target.item.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            .alert("Delete \(target.item.name)?", isPresented: $confirmDelete) {
                 Button("Delete", role: .destructive) {
                     onDelete()
                     dismiss()
                 }
+                Button("Cancel", role: .cancel) {}
             }
         }
         .presentationDetents([.medium, .large])
@@ -129,10 +130,10 @@ struct GroceryNewSectionSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add", systemImage: "checkmark", action: add)
+                    SheetDoneButton("Add", action: add)
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }

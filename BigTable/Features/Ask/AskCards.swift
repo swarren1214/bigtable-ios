@@ -54,7 +54,7 @@ struct AskUndoButton: View {
             Text(undone ? "Redo" : "Undo")
                 .font(.footnote.weight(.semibold))
                 .padding(.horizontal, 12)
-                .frame(height: 30)
+                .frame(minHeight: 30)
                 .contentShape(.capsule)
         }
         .buttonStyle(.plain)

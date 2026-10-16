@@ -82,9 +82,9 @@ struct GrocerySectionHeader: View {
             Spacer()
             if !section.items.isEmpty {
                 Menu {
-                    Button("Check Off All", systemImage: "checkmark.circle") { onSetChecked(true) }
+                    Button("Check Off All", menuIcon: "checkmark.circle") { onSetChecked(true) }
                         .disabled(remaining == 0)
-                    Button("Uncheck All", systemImage: "circle") { onSetChecked(false) }
+                    Button("Uncheck All", menuIcon: "circle") { onSetChecked(false) }
                         .disabled(remaining == section.items.count)
                 } label: {
                     Image(systemName: "ellipsis")

@@ -80,6 +80,10 @@ struct PrivacyView: View {
             await loadVisibility()
             await loadBlocked()
         }
+        .refreshable {
+            await loadVisibility()
+            await loadBlocked()
+        }
         .alert("Hide profile and unpublish recipes?", isPresented: Binding(get: { confirmHideCount != nil }, set: { if !$0 { confirmHideCount = nil } }), presenting: confirmHideCount) { _ in
             Button("Hide and Unpublish", role: .destructive) { Task { await applyVisible(false) } }
             Button("Cancel", role: .cancel) {}

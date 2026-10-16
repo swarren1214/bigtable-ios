@@ -195,25 +195,25 @@ struct PublicProfileView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if isJoinedMember {
-                        Label("In your household", systemImage: "house")
+                        Label { Text("In your household") } icon: { Image.menuIcon("house") }
                     } else if let pendingInvitation {
-                        Label("Invite Pending", systemImage: "clock")
-                        Button("Cancel Invitation", systemImage: "xmark.circle", role: .destructive) {
+                        Label { Text("Invite Pending") } icon: { Image.menuIcon("clock") }
+                        Button("Cancel Invitation", menuIcon: "xmark.circle", role: .destructive) {
                             confirming = .cancelInvitation(pendingInvitation)
                         }
                     } else if model.isOrganizer {
-                        Button("Invite to Household", systemImage: "person.badge.plus") {
+                        Button("Invite to Household", menuIcon: "person.badge.plus") {
                             confirming = .invite
                         }
                         .disabled(!canInvite)
                     }
                     Divider()
                     if isBlocked {
-                        Button("Unblock \(name)", systemImage: "nosign") {
+                        Button("Unblock \(name)", menuIcon: "person.crop.circle.badge.checkmark") {
                             confirming = .unblock
                         }
                     } else {
-                        Button("Block \(name)", systemImage: "nosign", role: .destructive) {
+                        Button("Block \(name)", menuIcon: "nosign", role: .destructive) {
                             if hasHouseholdRelationship {
                                 notice = PublicProfileNotice(
                                     title: "Can't block a household member",

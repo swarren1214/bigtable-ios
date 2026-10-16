@@ -40,12 +40,12 @@ struct PlanDineOutDetailView: View {
                             Button {
                                 onChange()
                             } label: {
-                                Label("Change Restaurant", systemImage: "storefront")
+                                Label { Text("Change Restaurant") } icon: { Image.menuIcon("storefront") }
                             }
                             Button(role: .destructive) {
                                 confirmsRemove = true
                             } label: {
-                                Label("Remove Dine Out", systemImage: "trash")
+                                Label { Text("Remove Dine Out") } icon: { Image.menuIcon("trash", role: .destructive) }
                             }
                         } label: {
                             Image(systemName: "ellipsis")
@@ -54,11 +54,12 @@ struct PlanDineOutDetailView: View {
                     }
                 }
             }
-            .confirmationDialog("Remove this Dine Out plan?", isPresented: $confirmsRemove, titleVisibility: .visible) {
+            .alert("Remove this Dine Out plan?", isPresented: $confirmsRemove) {
                 Button("Remove", role: .destructive) {
                     onRemove()
                     dismiss()
                 }
+                Button("Cancel", role: .cancel) {}
             }
         }
     }

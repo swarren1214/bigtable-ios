@@ -151,13 +151,12 @@ final class AppRouter {
 struct AppRoot: View {
     @Environment(AppRouter.self) private var router
     @Environment(AppModel.self) private var model
-    @AppStorage(SettingsKey.accentHex) private var accentHex = hexString(Brand.defaultAccentHex)
     @AppStorage(SettingsKey.appearance) private var appearance = AppearanceOption.system.rawValue
     @Environment(\.scenePhase) private var scenePhase
     @State private var showTutorial = false
     @State private var showAppleLink = false
 
-    private var accent: Color { Color(hexString: accentHex) ?? Brand.defaultAccent }
+    private var accent: Color { Brand.defaultAccent }
 
     var body: some View {
         @Bindable var router = router

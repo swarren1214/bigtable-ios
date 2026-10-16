@@ -36,7 +36,7 @@ struct GroceryView: View {
             .navigationTitle("Grocery")
             .navigationBarTitleDisplayMode(.large)
             .toolbar { toolbarContent }
-            .bigTableToolbar()
+            .bigTableToolbar(overHeader: false)
             .task(id: householdKey) { await store.load() }
             .refreshable { await store.load() }
             .onDisappear { Task { await store.flush() } }
@@ -178,14 +178,14 @@ struct GroceryView: View {
                     .tint(color)
                 }
                 .contextMenu {
-                    Button(store.isChecked(item) ? "Mark as Needed" : "Check Off", systemImage: store.isChecked(item) ? "circle" : "checkmark.circle") {
+                    Button(store.isChecked(item) ? "Mark as Needed" : "Check Off", menuIcon: store.isChecked(item) ? "circle" : "checkmark.circle") {
                         store.toggle(item)
                     }
                     if canEdit {
-                        Button("Edit…", systemImage: "pencil") {
+                        Button("Edit…", menuIcon: "pencil") {
                             editing = GroceryItemEditTarget(item: item, sectionName: section.name)
                         }
-                        Button("Delete", systemImage: "trash", role: .destructive) {
+                        Button("Delete", menuIcon: "trash", role: .destructive) {
                             store.deleteItem(item.id)
                         }
                     }
@@ -223,11 +223,11 @@ struct GroceryView: View {
             Menu {
                 Picker("Section", selection: $newItemSection) {
                     ForEach(store.sectionChoices, id: \.self) { name in
-                        Label(name, systemImage: GroceryAisleStyle.symbol(name)).tag(name)
+                        Label { Text(name) } icon: { Image.menuIcon(GroceryAisleStyle.symbol(name)) }.tag(name)
                     }
                 }
                 Divider()
-                Button("New Section…", systemImage: "folder.badge.plus") { showNewSection = true }
+                Button("New Section…", menuIcon: "folder.badge.plus") { showNewSection = true }
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: GroceryAisleStyle.symbol(newItemSection))
@@ -314,30 +314,30 @@ struct GroceryView: View {
         ToolbarItem(placement: .topBarLeading) {
             Menu {
                 if canGenerate {
-                    Button("Generate List…", systemImage: "sparkles") { openGenerate() }
+                    Button("Generate List…", menuIcon: "sparkles") { openGenerate() }
                 }
                 Button {
                     if isPro { showHistory = true } else { router.present(.paywall) }
                 } label: {
-                    Label(isPro ? "History…" : "History (Pro)…", systemImage: "clock.arrow.circlepath")
+                    Label { Text(isPro ? "History…" : "History (Pro)…") } icon: { Image.menuIcon("clock.arrow.circlepath") }
                 }
                 if !store.isEmpty {
                     ShareLink(item: store.shareText(includeCost: isPro), subject: Text("Grocery list")) {
-                        Label("Share List", systemImage: "square.and.arrow.up")
+                        Label { Text("Share List") } icon: { Image.menuIcon("square.and.arrow.up") }
                     }
                 }
                 Divider()
                 Toggle(isOn: $hideChecked) {
-                    Label("Hide Checked Items", systemImage: "eye.slash")
+                    Label { Text("Hide Checked Items") } icon: { Image.menuIcon("eye.slash") }
                 }
                 .disabled(store.isEmpty)
-                Button("Uncheck All", systemImage: "arrow.uturn.backward.circle") {
+                Button("Uncheck All", menuIcon: "arrow.uturn.backward.circle") {
                     withAnimation { store.uncheckAll() }
                 }
                 .disabled(store.checkedCount == 0)
                 if canEdit {
                     Divider()
-                    Button("New Section…", systemImage: "folder.badge.plus") { showNewSection = true }
+                    Button("New Section…", menuIcon: "folder.badge.plus") { showNewSection = true }
                 }
             } label: {
                 Image(systemName: "ellipsis")

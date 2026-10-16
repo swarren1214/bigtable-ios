@@ -16,8 +16,6 @@ nonisolated enum SettingsKey {
     static let pushDisabled = "push.disabled"
     /// The date range each grocery list covers, by snapshot id (the API doesn't store it).
     static let grocerySnapshotRanges = "grocery.snapshotRanges"
-    /// The accent color as "#RRGGBB".
-    static let accentHex = "appearance.accent"
     static let appearance = "appearance.mode"
     /// Names from Caloma's family that "Add your family from Caloma?" was dismissed for, one
     /// per line, so it isn't offered for them again.
@@ -31,16 +29,6 @@ nonisolated enum Brand {
     static let defaultAccentHex: UInt32 = 0xD9472B
     static var defaultAccent: Color { Color(hex: defaultAccentHex) }
 
-    /// The accent choices in Household, in order.
-    static let accents: [AccentChoice] = [
-        AccentChoice(name: "Tomato", hex: 0xD9472B),
-        AccentChoice(name: "Orange", hex: 0xE8621A),
-        AccentChoice(name: "Herb", hex: 0x2D7A4F),
-        AccentChoice(name: "Teal", hex: 0x0E8A8A),
-        AccentChoice(name: "Blue", hex: 0x0A7AFF),
-        AccentChoice(name: "Indigo", hex: 0x5E5CE6),
-    ]
-
     /// The placeholder behind a recipe without a photo.
     static let recipeTile = Color(hex: 0xB4532A)
     /// Allergies and things someone must not eat.
@@ -49,13 +37,8 @@ nonisolated enum Brand {
     static let preference = Color(hex: 0xC46A00)
 }
 
-nonisolated struct AccentChoice: Hashable, Sendable {
-    var name: String
-    var hex: UInt32
-}
-
 extension EnvironmentValues {
-    /// The household's accent color (Household › Accent Color).
+    /// BigTable's tint (the tomato of its icon). It used to be a setting, Accent Color.
     @Entry var accent: Color = Brand.defaultAccent
 }
 
@@ -195,11 +178,6 @@ extension Color {
         guard hexString.hasPrefix("#"), hexString.count == 7, let value = UInt32(hexString.dropFirst(), radix: 16) else { return nil }
         self.init(hex: value)
     }
-}
-
-/// "#D9472B" for a hex value, for storing the accent.
-nonisolated func hexString(_ value: UInt32) -> String {
-    String(format: "#%06X", value & 0xFFFFFF)
 }
 
 /// "35 min", "1 hr 30 min", "8 hr".

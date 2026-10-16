@@ -62,15 +62,17 @@ struct RootTabView: View {
 
 extension View {
     /// The toolbar every tab shares: Ask BigTable (✨), the notifications bell (with the unread
-    /// count) and the profile avatar.
-    func bigTableToolbar() -> some View {
-        modifier(BigTableToolbar())
+    /// count) and the profile avatar. White over the color header; pass `overHeader: false` on
+    /// a screen without one.
+    func bigTableToolbar(overHeader: Bool = true) -> some View {
+        modifier(BigTableToolbar(overHeader: overHeader))
     }
 }
 
 private struct BigTableToolbar: ViewModifier {
     @Environment(AppRouter.self) private var router
     @Environment(AppModel.self) private var model
+    var overHeader = true
 
     func body(content: Content) -> some View {
         content.toolbar {
@@ -83,6 +85,7 @@ private struct BigTableToolbar: ViewModifier {
                         Image(systemName: "sparkles")
                     }
                     .accessibilityLabel("Ask BigTable")
+                    .tint(overHeader ? .white : nil)
                 }
             }
             if AppConfig.socialEnabled {
@@ -94,6 +97,7 @@ private struct BigTableToolbar: ViewModifier {
                     }
                     .badge(model.unreadCount)
                     .accessibilityLabel(model.unreadCount > 0 ? "Notifications, \(model.unreadCount) unread" : "Notifications")
+                    .tint(overHeader ? .white : nil)
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {

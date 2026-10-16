@@ -30,6 +30,7 @@ struct GroceryHistoryView: View {
                     }
                 }
             }
+            .refreshable { await store.load() }
             .navigationTitle("List History")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -44,10 +45,9 @@ struct GroceryHistoryView: View {
                         .glassEffect(in: .rect(cornerRadius: 22))
                 }
             }
-            .confirmationDialog(
+            .alert(
                 "Restore this list?",
                 isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
-                titleVisibility: .visible,
                 presenting: confirming
             ) { snapshot in
                 Button("Restore List") {
@@ -56,6 +56,7 @@ struct GroceryHistoryView: View {
                         dismiss()
                     }
                 }
+                Button("Cancel", role: .cancel) {}
             } message: { _ in
                 Text("It replaces your current list. The current list stays in History.")
             }

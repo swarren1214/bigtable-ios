@@ -82,10 +82,10 @@ struct PlanSnackPickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add", systemImage: "checkmark") {
+                    SheetDoneButton("Add") {
                         onAdd(selected)
                         dismiss()
                     }

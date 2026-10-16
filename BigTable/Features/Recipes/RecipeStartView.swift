@@ -119,7 +119,7 @@ struct RecipeStartView: View {
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
-                    .frame(height: 40)
+                    .frame(minHeight: 40)
                     .background(accent.opacity(canSend ? 1 : 0.45), in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -148,7 +148,7 @@ struct RecipeStartView: View {
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                             .padding(.horizontal, 14)
-                            .frame(height: 34)
+                            .frame(minHeight: 34)
                             .background(Color(.secondarySystemGroupedBackground), in: Capsule())
                     }
                     .buttonStyle(.plain)

@@ -132,8 +132,9 @@ struct RecipeDetailView: View {
         } message: {
             Text("Only published recipes can be shared. Publish this recipe and share it?")
         }
-        .confirmationDialog("Delete “\(detail?.title ?? "this recipe")”?", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .alert("Delete “\(detail?.title ?? "this recipe")”?", isPresented: $confirmDelete) {
             Button("Delete Recipe", role: .destructive) { Task { await deleteRecipe() } }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("If it's in a meal plan or someone saved it, it's kept in Deleted Recipes (in Profile) so you can restore it.")
         }
@@ -489,19 +490,19 @@ struct RecipeDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if detail.status != .removed {
-                        Button("Edit", systemImage: "pencil") { editing = detail }
+                        Button("Edit", menuIcon: "pencil") { editing = detail }
                     }
                     if AppConfig.publishingEnabled {
                         if detail.status == .published {
-                            Button("Unpublish", systemImage: "arrow.down.circle") { confirmLifecycle = .unpublish }
+                            Button("Unpublish", menuIcon: "arrow.down.circle") { confirmLifecycle = .unpublish }
                         } else {
-                            Button("Publish", systemImage: "arrow.up.circle") { confirmLifecycle = .publish }
+                            Button("Publish", menuIcon: "arrow.up.circle") { confirmLifecycle = .publish }
                         }
                     }
-                    Button("Duplicate as Draft", systemImage: "plus.square.on.square") { Task { await duplicate(detail) } }
+                    Button("Duplicate as Draft", menuIcon: "plus.square.on.square") { Task { await duplicate(detail) } }
                     if detail.status != .removed {
                         Divider()
-                        Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                        Button("Delete", menuIcon: "trash", role: .destructive) { confirmDelete = true }
                     }
                 } label: {
                     if isWorking {

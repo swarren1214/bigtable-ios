@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import StoreKit
 import SwiftUI
@@ -12,7 +13,6 @@ struct ProfileView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.requestReview) private var requestReview
     @AppStorage(SettingsKey.appearance) private var appearance = AppearanceOption.system.rawValue
-    @AppStorage(SettingsKey.accentHex) private var accentHex = hexString(Brand.defaultAccentHex)
 
     @State private var invitations: HouseholdInvitationsResponse?
     @State private var showPaywall = false
@@ -31,7 +31,7 @@ struct ProfileView: View {
 
     var body: some View {
         BigTableScreen(title: "Profile") {
-            accountCard
+            accountSection
             membershipCard
 
             householdSection
@@ -49,7 +49,6 @@ struct ProfileView: View {
             ProfileInviteFriendCard()
             hearthSection
             helpSection
-            accountActions
 
             Text("BigTable \(AppConfig.version)")
                 .font(.footnote)
@@ -58,7 +57,11 @@ struct ProfileView: View {
         }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Close", systemImage: "xmark") { dismiss() }
+                Group {
+                    Button("Close", systemImage: "xmark") { dismiss() }
+                }
+                // White over the color header.
+                .tint(.white)
             }
         }
         .refreshable {
@@ -126,34 +129,27 @@ struct ProfileView: View {
 
     private var isPro: Bool { subscriptions.isPro || model.usage?.isPro == true }
 
-    private var accountCard: some View {
-        Card {
-            HStack(spacing: 14) {
-                MemberAvatar(
-                    name: displayName,
-                    color: PersonColor.forIndex(0).color,
-                    url: ProfileAvatar.url(for: model.me?.myMember?.avatarUrl),
-                    size: 60,
-                    hearthName: model.me?.myMember?.name
-                )
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 8) {
-                        Text(displayName).font(.title3.bold())
-                        if isPro { ProBadge() }
-                    }
-                    if let email = model.session?.user.email, !email.isEmpty {
-                        Text(email)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    if !model.householdName.isEmpty {
-                        Label(model.householdName, systemImage: "house")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
+    /// The shared Hearth account section (HearthAccount.swift). BigTable always has someone
+    /// signed in, so it never shows the Sign in with Apple pitch.
+    private var accountSection: some View {
+        let user = model.session?.user
+        let signedInWithApple = user?.providers?.contains("apple") ?? true
+        return HearthAccountSection(
+            app: .bigtable,
+            profile: HearthAccountProfile(
+                name: displayName,
+                email: user?.email,
+                detail: model.householdName.isEmpty ? nil : model.householdName,
+                photoURL: ProfileAvatar.url(for: model.me?.myMember?.avatarUrl).flatMap { URL(string: $0) },
+                method: isPro ? (signedInWithApple ? "BigTable Pro · Signed in with Apple" : "BigTable Pro") : (signedInWithApple ? "Signed in with Apple" : "Signed in with email")
+            )
+        ) {
+            AccountAppleSignInButton(label: .signIn) { message in errorMessage = message }
+        } onSignOut: {
+            confirmSignOut = true
+        } onDeleteAccount: {
+            deleteConfirmation = ""
+            showDeleteAccount = true
         }
     }
 
@@ -384,46 +380,8 @@ struct ProfileView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .frame(minHeight: 56)
-                ProfileDivider()
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 14) {
-                        IconTile(symbol: "paintpalette.fill", color: Color(hexString: accentHex) ?? Brand.defaultAccent)
-                        Text("Accent Color")
-                    }
-                    HStack(spacing: 10) {
-                        ForEach(Brand.accents, id: \.hex) { choice in
-                            accentSwatch(choice)
-                        }
-                    }
-                    .padding(.leading, 48)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
             }
         }
-    }
-
-    private func accentSwatch(_ choice: AccentChoice) -> some View {
-        let selected = accentHex.uppercased() == hexString(choice.hex).uppercased()
-        return Button {
-            accentHex = hexString(choice.hex)
-        } label: {
-            Circle()
-                .fill(Color(hex: choice.hex))
-                .frame(width: 32, height: 32)
-                .overlay {
-                    if selected {
-                        Image(systemName: "checkmark")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .overlay(Circle().strokeBorder(Color.primary.opacity(selected ? 0.25 : 0), lineWidth: 2).padding(-4))
-                .frame(minWidth: 40, minHeight: 44)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(choice.name)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: Hearth
@@ -527,25 +485,6 @@ struct ProfileView: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint("Opens in Safari")
-    }
-
-    private var accountActions: some View {
-        ProfileCard {
-            Button {
-                confirmSignOut = true
-            } label: {
-                ProfileRow(symbol: "rectangle.portrait.and.arrow.right", color: Color(hex: 0x6C6C70), title: "Sign Out", showsChevron: false)
-            }
-            .buttonStyle(.plain)
-            ProfileDivider()
-            Button {
-                deleteConfirmation = ""
-                showDeleteAccount = true
-            } label: {
-                ProfileRow(symbol: "trash", color: Brand.allergy, title: "Delete Account", showsChevron: false, isDestructive: true)
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     // MARK: Actions

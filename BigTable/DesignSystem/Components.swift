@@ -61,7 +61,7 @@ struct SectionTitle<Trailing: View>: View {
     }
 }
 
-/// A tab's screen: a large title, then cards in a readable column (wider on iPad).
+/// A tab's screen: the color header with a large white title, then cards in a readable column (wider on iPad).
 struct BigTableScreen<Content: View>: View {
     static var readableWidth: CGFloat { 860 }
 
@@ -72,17 +72,16 @@ struct BigTableScreen<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                HeaderTitle(title)
                 content()
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.top, 4)
             .padding(.bottom, 40)
             .frame(maxWidth: maxWidth)
             .frame(maxWidth: .infinity)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.large)
+        .colorHeader(title)
     }
 }
 

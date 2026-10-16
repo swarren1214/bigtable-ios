@@ -61,7 +61,7 @@ struct AskVoiceView: View {
                         Label("Try Again", systemImage: "mic.fill")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16)
-                            .frame(height: 40)
+                            .frame(minHeight: 40)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.white)
@@ -139,7 +139,7 @@ struct AskVoiceView: View {
                 Text("Type")
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 14)
-                    .frame(height: 40)
+                    .frame(minHeight: 40)
                     .contentShape(.capsule)
             }
             .buttonStyle(.plain)

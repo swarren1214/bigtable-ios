@@ -95,7 +95,7 @@ struct RecipeEditorView: View {
                 }
                 .ignoresSafeArea()
             }
-            .confirmationDialog("Discard this recipe?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            .alert("Discard this recipe?", isPresented: $confirmDiscard) {
                 Button("Discard Changes", role: .destructive) { dismiss() }
                 Button("Keep Editing", role: .cancel) {}
             } message: {
@@ -229,7 +229,7 @@ struct RecipeEditorView: View {
                         Label("Add Photo", systemImage: "camera")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 14)
-                            .frame(height: 40)
+                            .frame(minHeight: 40)
                     }
                     .glassEffect(.regular.interactive(), in: .capsule)
                     Button {
@@ -238,7 +238,7 @@ struct RecipeEditorView: View {
                         Label("Make One", systemImage: "sparkles")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 14)
-                            .frame(height: 40)
+                            .frame(minHeight: 40)
                     }
                     .glassEffect(.regular.interactive(), in: .capsule)
                     .disabled(model.isGeneratingImage)
@@ -252,9 +252,9 @@ struct RecipeEditorView: View {
 
     private func photoMenu<MenuLabel: View>(@ViewBuilder label: () -> MenuLabel) -> some View {
         Menu {
-            Button("Take Photo", systemImage: "camera") { showCamera = true }
-            Button("Choose from Library", systemImage: "photo.on.rectangle") { showPhotoPicker = true }
-            Button("Make One with AI", systemImage: "sparkles") { generatePhoto() }
+            Button("Take Photo", menuIcon: "camera") { showCamera = true }
+            Button("Choose from Library", menuIcon: "photo.on.rectangle") { showPhotoPicker = true }
+            Button("Make One with AI", menuIcon: "sparkles") { generatePhoto() }
         } label: {
             label()
         }
@@ -299,7 +299,7 @@ struct RecipeEditorView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(isOn ? Color.white : Color.primary)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 38)
+                            .frame(minHeight: 38)
                             .background(isOn ? accent : Color(.secondarySystemGroupedBackground), in: Capsule())
                     }
                     .buttonStyle(.borderless)
@@ -411,7 +411,7 @@ struct RecipeEditorView: View {
             Label(model.isEditing || model.madeWithAI ? "Change It with AI" : "Finish It with AI", systemImage: "sparkles")
                 .font(.body.weight(.semibold))
                 .padding(.horizontal, 22)
-                .frame(height: 50)
+                .frame(minHeight: 50)
         }
         .buttonStyle(.glassProminent)
         .tint(accent)
@@ -422,7 +422,7 @@ struct RecipeEditorView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel", systemImage: "xmark") {
+            SheetCancelButton {
                 if model.hasChanges {
                     confirmDiscard = true
                 } else {
@@ -436,7 +436,7 @@ struct RecipeEditorView: View {
                 if model.isSaving {
                     ProgressView()
                 } else {
-                    Button("Save", systemImage: "checkmark") { Task { await save() } }
+                    SheetDoneButton("Save") { Task { await save() } }
                         .disabled(!model.canSave)
                 }
             }

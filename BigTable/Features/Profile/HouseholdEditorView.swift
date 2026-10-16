@@ -63,15 +63,19 @@ struct HouseholdEditorView: View {
         .toolbar {
             if isOrganizer {
                 ToolbarItem(placement: .confirmationAction) {
-                    if isSaving {
-                        ProgressView()
-                    } else {
-                        Button("Save", systemImage: "checkmark") {
-                            nameFocused = false
-                            Task { await save() }
+                    Group {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Button("Save", systemImage: "checkmark") {
+                                nameFocused = false
+                                Task { await save() }
+                            }
+                            .disabled(!nameChanged && draft == saved)
                         }
-                        .disabled(!nameChanged && draft == saved)
                     }
+                    // White over the color header.
+                    .tint(.white)
                 }
             }
         }
