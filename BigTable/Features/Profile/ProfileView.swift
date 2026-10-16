@@ -47,6 +47,7 @@ struct ProfileView: View {
             settingsSection
             recipesSection
             ProfileInviteFriendCard()
+            hearthSection
             helpSection
             accountActions
 
@@ -423,6 +424,33 @@ struct ProfileView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(choice.name)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    // MARK: Hearth
+
+    private var hearthSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionTitle("Hearth")
+            ProfileCard {
+                NavigationLink {
+                    HearthAppsView(current: .bigtable)
+                } label: {
+                    HStack(spacing: 14) {
+                        HearthAppsRowLabel(current: .bigtable)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .frame(minHeight: 56)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     // MARK: Recipes, help

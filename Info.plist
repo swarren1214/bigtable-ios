@@ -13,6 +13,13 @@
 			</array>
 		</dict>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>suffice</string>
+		<string>sated</string>
+		<string>caloma</string>
+		<string>hearken</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
