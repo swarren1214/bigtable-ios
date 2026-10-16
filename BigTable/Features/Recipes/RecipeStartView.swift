@@ -6,8 +6,8 @@ import VisionKit
 
 /// The first page of New Recipe: describe a recipe, ask for one or paste a link in one box
 /// (the mic starts listening the moment it's tapped), or bring one in from a scanned page or
-/// a photo, or start from a blank recipe. Words are heard and understood on the device when
-/// it can; a link is read on the device too.
+/// a photo, or start from a blank recipe. Words are heard on the device and a link is read on
+/// the device; the recipe itself is written by Claude through the API.
 struct RecipeStartView: View {
     var model: RecipeEditorModel
     @Bindable var flow: RecipeImportFlow
@@ -52,7 +52,7 @@ struct RecipeStartView: View {
                 ideas
                 bringIn
 
-                Label("Written on your \(DeviceName.current) · nothing is saved until you tap Save", systemImage: "iphone")
+                Label("Nothing is saved until you tap Save", systemImage: "checkmark.circle")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)

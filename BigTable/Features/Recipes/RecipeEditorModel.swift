@@ -387,11 +387,12 @@ final class RecipeEditorModel {
         return outcome
     }
 
-    /// A recipe from what someone said or typed: Apple's on-device model when this phone has
-    /// Apple Intelligence, the API otherwise.
+    /// A recipe from what someone said or typed. Always the API: writing a whole recipe from
+    /// a short ask ("a casserole with chicken, broccoli and cheese") needs a bigger model than
+    /// the one on the phone, which tends to use only the ingredients named. (The words are
+    /// still heard on the phone.)
     private func recipe(fromSpoken text: String) async throws -> GeneratedRecipeResponse {
-        if let onDevice = await OnDeviceRecipeParser.parse(text, from: .spoken) { return onDevice }
-        return try await api.recipeFromTranscript(text)
+        try await api.recipeFromTranscript(text)
     }
 
     /// From a web page. Links pasted without https:// get it.

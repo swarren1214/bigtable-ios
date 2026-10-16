@@ -2,8 +2,9 @@ import Foundation
 import FoundationModels
 import OSLog
 
-/// Turns what someone said or typed (or a web page's text) into a recipe with Apple's
-/// on-device model, instead of sending it to the API. It returns the API's shape
+/// Reads a recipe out of a web page's text or a scan with Apple's on-device model, instead of
+/// sending it to the API. (It copies out a recipe that's there; writing one from a short ask
+/// goes to the API, since the small model leaves out what wasn't named.) It returns the API's shape
 /// (`GeneratedRecipeResponse`), so the editor fills in the same way either path.
 ///
 /// The model needs Apple Intelligence (iPhone 15 Pro or later, turned on in Settings). When
@@ -30,8 +31,6 @@ nonisolated enum OnDeviceRecipeParser {
     }
 
     enum Source {
-        /// A voice note or typed description: describe a recipe, or ask for one.
-        case spoken
         /// A web page's readable text, with menus, ads and comments around the recipe.
         case webPage
         /// Text read from photos of a cookbook page, a recipe card or a screenshot.
@@ -67,9 +66,6 @@ nonisolated enum OnDeviceRecipeParser {
             "Tags may only come from this list: \(supportedTags.joined(separator: ", ")).",
         ]
         switch source {
-        case .spoken:
-            lines.append("The person is either describing a recipe or asking for one to be made. Either way, write a complete recipe that fits what they asked for, including any dietary or style requests.")
-            lines.append("If it has nothing to do with food or cooking, set isRecipe to false, give a short failureReason, and leave the recipe fields empty.")
         case .webPage:
             lines.append("The text comes from a recipe web page. Use only the page's main recipe: ignore menus, ads, comments, ratings, nutrition facts and other suggested recipes. Don't invent ingredients or steps that aren't on the page.")
             lines.append("If the page has no recipe, set isRecipe to false and give a short failureReason.")
@@ -82,7 +78,6 @@ nonisolated enum OnDeviceRecipeParser {
 
     private static func prompt(for source: Source, text: String) -> String {
         switch source {
-        case .spoken: "What the person said:\n\(text)"
         case .webPage: "The page's text:\n\(text)"
         case .scan: "The text read from the photos:\n\(text)"
         }

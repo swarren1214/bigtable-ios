@@ -380,6 +380,8 @@ nonisolated struct GeneratedRecipeResponse: Decodable, Sendable {
     var cookMinutes: Int?
     /// "easy", "medium" or "hard".
     var difficulty: String?
+    /// From recipe-refine: what AI changed, in a sentence or two.
+    var reply: String?
 }
 
 nonisolated struct PublishRecipeResponse: Decodable, Sendable {

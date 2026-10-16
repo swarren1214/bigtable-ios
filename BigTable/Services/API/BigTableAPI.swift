@@ -231,6 +231,12 @@ nonisolated struct BigTableAPI: Sendable {
         try await send("POST", "/v1/bigtable/ai/recipe-transcript", body: ["transcript": transcript])
     }
 
+    /// Changes a recipe (written out as text) the way the cook asked, or writes one from the
+    /// request when `recipe` is empty. The response carries a short `reply`.
+    func refineRecipe(_ recipe: String, request: String) async throws -> GeneratedRecipeResponse {
+        try await send("POST", "/v1/bigtable/ai/recipe-refine", body: ["recipe": recipe, "request": request])
+    }
+
     func recipeFromURL(_ url: String) async throws -> GeneratedRecipeResponse {
         try await send("POST", "/v1/bigtable/ai/recipe-url", body: ["url": url])
     }

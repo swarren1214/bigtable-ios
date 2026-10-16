@@ -2,9 +2,9 @@ import Foundation
 import SwiftUI
 
 /// Change the recipe by talking: say or type what to change ("make it dairy-free and enough
-/// for 12"), and the recipe above shows what's new, changed or removed, with Undo. Apple's
-/// on-device model makes the change when this phone has Apple Intelligence. The mic starts
-/// listening the moment it's tapped, and sends when you stop talking.
+/// for 12"), and the recipe above shows what's new, changed or removed, with Undo. Claude makes
+/// the change (through the API); your words are heard on the phone. The mic starts listening
+/// the moment it's tapped, and sends when you stop talking.
 struct RecipeRefineView: View {
     @Bindable var model: RecipeEditorModel
     var onSave: () -> Void

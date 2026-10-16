@@ -73,8 +73,8 @@ extension RecipeEditorModel {
     /// The recipe before the last change, to compare with.
     var refineBaseline: RecipeDraft? { refineTurns.last?.before }
 
-    /// Changes the recipe the way the cook asked, with Apple's on-device model when this phone
-    /// has Apple Intelligence and the API otherwise. Returns AI's reply.
+    /// Changes the recipe the way the cook asked (or writes one from the ask when there's
+    /// nothing yet), with Claude through the API. Returns AI's reply.
     @discardableResult
     func refine(_ request: String) async throws -> String {
         let ask = request.recipeTrimmed
@@ -84,26 +84,29 @@ extension RecipeEditorModel {
 
         let before = draft
         let text = before.hasContent ? Self.recipeText(before) : ""
-        let reply: String
-        if let output = await RecipeRefiner.refine(recipe: text, request: ask) {
-            applyRefined(output)
-            reply = output.reply
-        } else {
+        let response: GeneratedRecipeResponse
+        do {
+            response = try await BigTableAPI.shared.refineRecipe(text, request: String(ask.prefix(1_000)))
+        } catch let error as APIError where error.status == 404 {
+            // An API that doesn't have recipe-refine yet: ask for the whole recipe again.
             let prompt = text.isEmpty ? ask : "Here is a recipe:\n\(text)\n\nWrite out the whole recipe again with this change: \(ask)"
-            let response = try await BigTableAPI.shared.recipeFromTranscript(String(prompt.prefix(12_000)))
-            switch apply(response, notRecipeFallback: "AI couldn't make that change. Try saying it another way.") {
-            case .filled:
-                reply = "Done. Here's the updated recipe."
-            case .notRecipe(let reason):
-                throw RecipeEditorError(message: reason)
-            case .nothingFound:
-                throw RecipeEditorError(message: "AI couldn't make that change. Try saying it another way.")
-            }
+            response = try await BigTableAPI.shared.recipeFromTranscript(String(prompt.prefix(12_000)))
         }
+        switch apply(response, notRecipeFallback: "AI couldn't make that change. Try saying it another way.") {
+        case .filled:
+            break
+        case .notRecipe(let reason):
+            throw RecipeEditorError(message: reason)
+        case .nothingFound:
+            throw RecipeEditorError(message: "AI couldn't make that change. Try saying it another way.")
+        }
+        keepIdentity(from: before)
+        let reply = response.reply?.recipeTrimmed ?? ""
+        let answer = reply.isEmpty ? "Done. Here's the updated recipe." : reply
         madeWithAI = true
-        refineTurns.append(RecipeRefineTurn(request: ask, reply: reply, before: before))
+        refineTurns.append(RecipeRefineTurn(request: ask, reply: answer, before: before))
         generatePhotoIfMissing()
-        return reply
+        return answer
     }
 
     /// Puts the recipe back the way it was before the last change.
@@ -112,33 +115,17 @@ extension RecipeEditorModel {
         restore(last.before)
     }
 
-    private func applyRefined(_ output: RecipeRefiner.Output) {
-        if !output.title.isEmpty { title = output.title }
-        if !output.summary.isEmpty { details = output.summary }
-        if Self.servingsRange.contains(output.servings) { servings = output.servings }
-        if output.prepMinutes > 0 { prepText = String(output.prepMinutes) }
-        if output.cookMinutes > 0 { cookText = String(output.cookMinutes) }
-        if Self.difficulties.contains(output.difficulty) { difficulty = output.difficulty }
-        let newTags = Self.unique(output.tags)
-        if !newTags.isEmpty { tags = Array(newTags.prefix(10)) }
+    /// After AI rewrites the recipe: your own tags stay (AI only knows the preset ones), and
+    /// rows that didn't change keep their identity so the list doesn't redraw them.
+    private func keepIdentity(from before: RecipeDraft) {
+        let presets = RecipeQuickFilters.normalizedTags
+        let custom = before.tags.filter { !presets.contains($0) }
+        if !custom.isEmpty { tags = Self.unique(tags + custom) }
 
-        // Rows that didn't change keep their identity, so the list doesn't redraw them.
-        var oldRows = Dictionary(ingredients.map { (Self.ingredientLine($0), $0) }, uniquingKeysWith: { first, _ in first })
-        let rows = output.ingredients
-            .map { Ingredients.parseLine(Self.stripBullet($0)) }
-            .filter { !$0.name.recipeTrimmed.isEmpty }
-            .map { input -> RecipeIngredientDraft in
-                let fresh = RecipeIngredientDraft(input)
-                return oldRows.removeValue(forKey: Self.ingredientLine(fresh)) ?? fresh
-            }
-        if !rows.isEmpty { ingredients = rows }
-
-        var oldSteps = Dictionary(steps.map { ($0.text.recipeTrimmed, $0) }, uniquingKeysWith: { first, _ in first })
-        let stepRows = output.steps
-            .map(RecipeFormat.stripStepNumber)
-            .filter { !$0.isEmpty }
-            .map { text in oldSteps.removeValue(forKey: text) ?? RecipeStepDraft(text: text) }
-        if !stepRows.isEmpty { steps = stepRows }
+        var oldRows = Dictionary(before.ingredients.map { (Self.ingredientLine($0), $0) }, uniquingKeysWith: { first, _ in first })
+        ingredients = ingredients.map { oldRows.removeValue(forKey: Self.ingredientLine($0)) ?? $0 }
+        var oldSteps = Dictionary(before.steps.map { ($0.text.recipeTrimmed, $0) }, uniquingKeysWith: { first, _ in first })
+        steps = steps.map { oldSteps.removeValue(forKey: $0.text.recipeTrimmed) ?? $0 }
     }
 
     // MARK: Text for AI
