@@ -42,11 +42,13 @@ nonisolated struct AIPlanPreviewRow: Identifiable, Hashable, Sendable {
 
 /// A generated plan waiting for the person to add it.
 nonisolated struct AIPlanPreview: Sendable {
-    /// The request that made it; sent again with `previewOnly: false` to save it.
+    /// The request that made it.
     var request: MealPlanRequest
     var generatedPlan: [String: [String: String]]
     var generatedBy: String
     var rows: [AIPlanPreviewRow]
+    /// Which recipe each planned title is (lowercased titles).
+    var lookup: [String: MealPlanResponse.LookupEntry]
 
     var dates: [String] {
         var seen = Set<String>()
@@ -55,8 +57,8 @@ nonisolated struct AIPlanPreview: Sendable {
 }
 
 /// Everything the AI meal planner sheet holds: the person's choices, the request in flight,
-/// and the preview. Generating asks for a preview first (`previewOnly`); adding sends the
-/// same request back with the previewed plan so exactly that plan is saved.
+/// and the preview. The plan comes from the device's model or the API, which saves nothing;
+/// adding writes exactly the previewed meals into the kitchen.
 @MainActor
 @Observable
 final class AIPlanStore {
@@ -211,8 +213,35 @@ final class AIPlanStore {
             overwriteExisting: overwriteExisting,
             previewOnly: true,
             generatedPlan: nil,
-            generatedBy: nil
+            generatedBy: nil,
+            household: HearthHouseholdStore.shared.exists ? HearthHouseholdStore.shared.aiContext() : nil,
+            myRecipes: KitchenStore.shared.ownSummaries().map { recipe in
+                MealPlanRequest.MyRecipe(id: recipe.id, title: recipe.title, tags: recipe.tags, minutes: recipe.totalMinutes > 0 ? recipe.totalMinutes : nil)
+            }
         )
+    }
+
+    /// What goes to the planner: with "replace" off, meals already planned are left out, so
+    /// only empty slots are filled (and counted).
+    private func plannerRequest(from request: MealPlanRequest) -> MealPlanRequest {
+        guard !(request.overwriteExisting ?? true) else { return request }
+        var trimmed = request
+        var meals = request.selectedMeals ?? [:]
+        var keptDates: [String] = []
+        for iso in request.selectedDates ?? [] {
+            let day = PlanDates.day(forISO: iso)
+            let week = ISODay.weekStart(containing: ISODay.date(from: iso) ?? .now)
+            let baseline = PlanStore.shared.planner(week)
+            let open = (meals[day.rawValue] ?? []).filter { name in
+                guard let slot = MealSlotType(rawValue: name) else { return false }
+                return baseline.map { $0.slot(day, slot).isEmpty } ?? true
+            }
+            meals[day.rawValue] = open
+            if !open.isEmpty { keptDates.append(iso) }
+        }
+        trimmed.selectedMeals = meals
+        trimmed.selectedDates = keptDates
+        return trimmed
     }
 
     /// Asks for a preview. Returns true when there's one to show. A usage limit opens the
@@ -226,7 +255,13 @@ final class AIPlanStore {
         await loadBaselines()
         try? await Task.sleep(for: .milliseconds(250))
 
-        var request = makeRequest()
+        let request = makeRequest()
+        let sent = plannerRequest(from: request)
+        guard !(sent.selectedDates ?? []).isEmpty else {
+            phase = .idle
+            error = "Those meals are already planned. Turn on Replace to plan them again."
+            return false
+        }
         phase = .requesting
         // The request takes a while; move the progress along so it doesn't look stuck.
         let stepper = Task { @MainActor [weak self] in
@@ -237,25 +272,37 @@ final class AIPlanStore {
         defer { stepper.cancel() }
 
         do {
-            // Plan on the device when it can; the API then only builds the preview (no
-            // Claude call). Otherwise the API plans it, as before.
-            if let onDevice = await OnDeviceMealPlanner.plan(for: request) {
-                request.generatedPlan = onDevice.plan
-                request.generatedBy = "anthropic"
+            // Plan on the device when it can; otherwise the API plans it (saving nothing).
+            let plan: [String: [String: String]]
+            let generatedBy: String
+            var lookup: [String: MealPlanResponse.LookupEntry]
+            if let onDevice = await OnDeviceMealPlanner.plan(for: sent) {
+                plan = onDevice.plan
+                generatedBy = "anthropic"
+                lookup = onDevice.lookup
+            } else {
+                let response = try await api.generateMealPlan(sent)
+                model.updateUsage(response.usage)
+                guard let generated = response.generatedPlan else {
+                    phase = .idle
+                    error = "The planner didn't send back any meals. Try again."
+                    return false
+                }
+                plan = generated
+                generatedBy = response.generatedBy
+                lookup = response.recipeLookup ?? [:]
             }
-            let response = try await api.generateMealPlan(request)
             phase = .drafting
-            model.updateUsage(response.usage)
-            guard let plan = response.generatedPlan else {
-                phase = .idle
-                error = "The planner didn't send back any meals. Try again."
-                return false
+            // The family's own recipes, by title, whatever the planner said.
+            for recipe in KitchenStore.shared.ownSummaries() {
+                lookup[recipe.title.lowercased()] = MealPlanResponse.LookupEntry(recipeId: recipe.id, imageUrl: recipe.imageUrl, bucket: "mine")
             }
             preview = AIPlanPreview(
                 request: request,
                 generatedPlan: plan,
-                generatedBy: response.generatedBy,
-                rows: makeRows(request: request, plan: plan, previewPlanner: response.previewPlanner)
+                generatedBy: generatedBy,
+                rows: makeRows(request: request, plan: plan, lookup: lookup),
+                lookup: lookup
             )
             try? await Task.sleep(for: .milliseconds(200))
             phase = .idle
@@ -267,27 +314,35 @@ final class AIPlanStore {
         }
     }
 
-    /// Saves the previewed plan. Returns true when it's on the plan.
+    /// Adds the previewed meals to the plan (the kitchen). Returns true when they're on it.
     func apply(model: AppModel, router: AppRouter) async -> Bool {
         guard let preview else { return false }
-        var request = preview.request
-        request.previewOnly = false
-        request.generatedPlan = preview.generatedPlan
-        request.generatedBy = preview.generatedBy
         phase = .applying
         do {
-            let response = try await api.generateMealPlan(request)
-            model.updateUsage(response.usage)
-            let plans = PlanStore.shared
-            if let planner = response.planner {
-                plans.replace(planner)
+            for row in preview.rows where row.change != .keeps {
+                let day = PlanDates.day(forISO: row.isoDate)
+                let week = ISODay.weekStart(containing: ISODay.date(from: row.isoDate) ?? .now)
+                var update = PlanSlotUpdate(weekStart: week, day: day, slot: row.slot)
+                if let found = preview.lookup[row.title.lowercased()] {
+                    update.recipeItems = [PlannerMealItem(
+                        title: row.title, role: .entree, imageUrl: found.imageUrl, recipeId: found.recipeId,
+                        recipeVersionId: nil, source: "library", recipeStatus: nil, currentVersionId: nil, hasUpdateAvailable: nil
+                    )]
+                    update.customMeal = .some(nil)
+                } else {
+                    update.recipeItems = []
+                    update.customMeal = .some(row.title)
+                }
+                update.dineOut = .some(nil)
+                update.completed = false
+                _ = try await KitchenStore.shared.updateSlot(update)
             }
-            // The range can reach into a second week; reload any the response didn't cover.
-            for week in previewWeeks(of: preview) where week != response.planner?.weekStart {
+            let plans = PlanStore.shared
+            for week in previewWeeks(of: preview) {
                 plans.invalidate(week)
                 await plans.load(week, force: true)
             }
-            if response.planner?.weekStart != router.weekStart {
+            if !previewWeeks(of: preview).contains(router.weekStart) {
                 await plans.load(router.weekStart, force: true)
             }
             phase = .idle
@@ -322,21 +377,20 @@ final class AIPlanStore {
     }
 
     /// Lines up each chosen day and meal with what's planned now and what the AI picked.
-    private func makeRows(request: MealPlanRequest, plan: [String: [String: String]], previewPlanner: PlannerResponse?) -> [AIPlanPreviewRow] {
+    private func makeRows(request: MealPlanRequest, plan: [String: [String: String]], lookup: [String: MealPlanResponse.LookupEntry]) -> [AIPlanPreviewRow] {
         var rows: [AIPlanPreviewRow] = []
         for iso in (request.selectedDates ?? []).sorted() {
             let day = PlanDates.day(forISO: iso)
             let week = ISODay.weekStart(containing: ISODay.date(from: iso) ?? .now)
             let baseline = PlanStore.shared.planner(week)
-            let previewForWeek = previewPlanner?.weekStart == week ? previewPlanner : nil
             for slotName in request.selectedMeals?[day.rawValue] ?? [] {
                 guard let slot = MealSlotType(rawValue: slotName) else { continue }
                 let generated = plan[day.rawValue]?[slot.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let previous = baseline.flatMap { PlanSlotText.primaryTitle($0.slot(day, slot)) }
-                let previewSlot = previewForWeek?.slot(day, slot)
-                let shown = previewSlot.flatMap { PlanSlotText.primaryTitle($0) } ?? generated
-                guard let title = shown, !title.isEmpty else { continue }
-                let image = previewSlot.flatMap { PlanSlotText.primaryImage($0) }
+                // With "replace" off, a planned meal wasn't sent and stays.
+                let kept = !(request.overwriteExisting ?? true) ? previous : nil
+                guard let title = kept ?? generated, !title.isEmpty else { continue }
+                let image = kept == nil ? lookup[title.lowercased()]?.imageUrl : baseline.flatMap { PlanSlotText.primaryImage($0.slot(day, slot)) }
 
                 let change: AIPlanPreviewRow.Change
                 if let previous {

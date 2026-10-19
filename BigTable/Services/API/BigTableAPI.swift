@@ -183,6 +183,47 @@ nonisolated struct BigTableAPI: Sendable {
         try await send("POST", "/v1/bigtable/recipes/\(id.pathEscaped)/unpublish")
     }
 
+    /// Copies a kitchen recipe to the server under its own id and publishes it (or updates the
+    /// published copy).
+    func putPublication(_ id: String, _ payload: RecipePayload) async throws -> PublishRecipeResponse {
+        try await send("PUT", "/v1/bigtable/recipes/\(id.pathEscaped)/publication", body: payload)
+    }
+
+    /// Stops publishing a recipe. The server keeps the row so other families' plans still work.
+    func unpublishPublication(_ id: String) async throws -> PublishRecipeResponse {
+        try await send("DELETE", "/v1/bigtable/recipes/\(id.pathEscaped)/publication")
+    }
+
+    // MARK: - Household (subscription sharing)
+
+    /// The organizer's join code, kept (encrypted) in the Hearth household so the family can
+    /// join their subscription.
+    func householdJoinCode(rotate: Bool = false) async throws -> String {
+        let response: JoinCodeResponse = try await send("POST", "/v1/bigtable/household/join-code", body: ["rotate": rotate])
+        return response.code
+    }
+
+    /// Joins the organizer's membership (their Pro plan) with the code from the household.
+    func joinHousehold(code: String) async throws -> String {
+        let response: JoinHouseholdResponse = try await send("POST", "/v1/bigtable/household/join", body: ["code": code])
+        return response.organizerProfileId
+    }
+
+    /// The name shown on recipes this person publishes.
+    func setDisplayName(_ name: String?) async throws {
+        let _: DisplayNameResponse = try await send("PUT", "/v1/bigtable/me/public-profile", body: DisplayNameBody(displayName: name))
+    }
+
+    // MARK: - The move to iCloud
+
+    func kitchenExport() async throws -> KitchenExport {
+        try await get("/v1/bigtable/me/kitchen-export")
+    }
+
+    func markKitchenMoved() async throws {
+        let _: KitchenMovedResponse = try await send("POST", "/v1/bigtable/me/kitchen-moved")
+    }
+
     func likeState(_ id: String) async throws -> Bool {
         let response: RecipeLikeStateResponse = try await get("/v1/bigtable/recipes/\(id.pathEscaped)/like")
         return response.liked

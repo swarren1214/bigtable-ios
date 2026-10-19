@@ -43,7 +43,7 @@ final class PlanStore {
         loadingWeeks.insert(weekStart)
         defer { loadingWeeks.remove(weekStart) }
         do {
-            var fetched = try await api.currentPlan(weekStart: weekStart)
+            var fetched = try await KitchenStore.shared.currentPlan(weekStart: weekStart)
             // Keep edits that are still saving rather than flashing back to the old value.
             if let current = weeks[weekStart] {
                 for id in savingSlots where id.hasPrefix(weekStart + "|") {
@@ -91,7 +91,7 @@ final class PlanStore {
         savingSlots.insert(ref.id)
         defer { savingSlots.remove(ref.id) }
         do {
-            let response = try await api.updateSlot(update)
+            let response = try await KitchenStore.shared.updateSlot(update)
             setLocal(merged(response.slotData, keeping: next), ref)
             return true
         } catch {
@@ -169,9 +169,9 @@ final class PlanStore {
             title: recipe.title,
             role: role,
             imageUrl: recipe.imageUrl,
-            recipeId: pinned == nil ? nil : recipe.id,
+            recipeId: pinned != nil || KitchenStore.shared.isOwn(recipe.id) ? recipe.id : nil,
             recipeVersionId: pinned,
-            source: pinned == nil ? "custom" : "library",
+            source: pinned != nil || KitchenStore.shared.isOwn(recipe.id) ? "library" : "custom",
             recipeStatus: recipe.status,
             currentVersionId: pinned,
             hasUpdateAvailable: false
@@ -208,7 +208,7 @@ final class PlanStore {
         let items = slot(ref).recipeItems
         guard items.indices.contains(index), let recipeID = items[index].recipeId else { return }
         do {
-            let detail = try await api.recipe(recipeID)
+            let detail = try await KitchenStore.shared.recipe(recipeID)
             let latest = detail.currentVersionId?.trimmingCharacters(in: .whitespaces) ?? ""
             var next = slot(ref).recipeItems
             guard next.indices.contains(index), next[index].recipeId == recipeID else { return }

@@ -98,7 +98,7 @@ final class AppModel {
             } else {
                 permissions = .organizer
             }
-            phase = me.isOnboarded || me.membership?.role == .member ? .ready : .needsHousehold
+            phase = isSetUp(me) ? .ready : .needsHousehold
             await refreshUsage()
             if phase == .ready { await requestPushIfNeeded() }
         } catch let error as APIError where error.kind == .signedOut {
@@ -108,6 +108,19 @@ final class AppModel {
             loadError = error.localizedDescription
             if phase == .loading { phase = me == nil ? .loading : .ready }
         }
+    }
+
+    /// Ready to cook: set up before (on the server, the old way), in someone's household, with
+    /// a Hearth household, or started as just this person.
+    private func isSetUp(_ me: MeResponse) -> Bool {
+        me.isOnboarded || me.membership?.role == .member || HearthHouseholdStore.shared.exists
+            || userID.map { UserDefaults.standard.bool(forKey: "bigtable.setUp.\($0)") } == true
+    }
+
+    /// The first run is done (a household was set up or joined, or "Just me for now").
+    func markSetUp() {
+        if let userID { UserDefaults.standard.set(true, forKey: "bigtable.setUp.\(userID)") }
+        if phase == .needsHousehold { phase = .ready }
     }
 
     func refreshUnreadCount() async {

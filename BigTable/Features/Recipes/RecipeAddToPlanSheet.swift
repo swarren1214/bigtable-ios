@@ -259,7 +259,7 @@ struct RecipeAddToPlanSheet: View {
         isLoadingPlan = true
         planError = nil
         do {
-            let loaded = try await api.currentPlan(weekStart: weekStart)
+            let loaded = try await KitchenStore.shared.currentPlan(weekStart: weekStart)
             if loaded.weekStart == weekStart || plan == nil {
                 plan = loaded
             }
@@ -301,7 +301,7 @@ struct RecipeAddToPlanSheet: View {
         defer { isSaving = false }
         do {
             if plan?.weekStart != weekStart {
-                plan = try await api.currentPlan(weekStart: weekStart)
+                plan = try await KitchenStore.shared.currentPlan(weekStart: weekStart)
             }
             let current = plan?.slot(day, slot) ?? PlannerSlot()
             let versionID = recipe.currentVersionId?.recipeTrimmed
@@ -310,9 +310,9 @@ struct RecipeAddToPlanSheet: View {
                 title: recipe.title,
                 role: role,
                 imageUrl: recipe.imageUrl,
-                recipeId: pinned == nil ? nil : recipe.id,
+                recipeId: pinned != nil || KitchenStore.shared.isOwn(recipe.id) ? recipe.id : nil,
                 recipeVersionId: pinned,
-                source: pinned == nil ? "custom" : "library"
+                source: pinned != nil || KitchenStore.shared.isOwn(recipe.id) ? "library" : "custom"
             )
             let items = replacing ? [item] : current.recipeItems + [item]
             var update = PlanSlotUpdate(weekStart: weekStart, day: day, slot: slot)
@@ -322,7 +322,7 @@ struct RecipeAddToPlanSheet: View {
             update.recipeItems = items
             update.excludedMembers = current.excludedMembers
             update.completed = false
-            let response = try await api.updateSlot(update)
+            let response = try await KitchenStore.shared.updateSlot(update)
             plan?.set(response.slotData, day: day, slot: slot)
             // The Plan tab caches weeks; make it show this right away.
             await PlanStore.shared.load(weekStart, force: true)

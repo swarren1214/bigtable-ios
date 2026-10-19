@@ -90,7 +90,7 @@ struct DeletedRecipesView: View {
     private func load() async {
         isLoading = true
         do {
-            recipes = RecipeFormat.sortedByTitle(try await api.deletedRecipes().recipes)
+            recipes = RecipeFormat.sortedByTitle(try await KitchenStore.shared.deletedRecipes().recipes)
             loadError = nil
         } catch is CancellationError {
             return
@@ -104,7 +104,7 @@ struct DeletedRecipesView: View {
         restoringID = recipe.id
         defer { restoringID = nil }
         do {
-            try await api.restoreRecipe(recipe.id)
+            try await KitchenStore.shared.restoreRecipe(recipe.id)
             withAnimation { recipes.removeAll { $0.id == recipe.id } }
             RecipeLibrary.shared.changed()
             restored = recipe

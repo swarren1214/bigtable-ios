@@ -26,6 +26,8 @@ enum OnDeviceMealPlanner {
     }
 
     struct Candidate: Hashable {
+        var id: String
+        var imageUrl: String?
         var title: String
         var tags: [String]
         var minutes: Int?
@@ -44,16 +46,26 @@ enum OnDeviceMealPlanner {
         OnDeviceRecipeParser.isAvailable && AppModel.shared.usage?.tier == "pro" && AppModel.shared.isOrganizer
     }
 
-    static func plan(for request: MealPlanRequest) async -> (plan: Plan, cells: Int)? {
+    static func plan(for request: MealPlanRequest) async -> (plan: Plan, cells: Int, lookup: [String: MealPlanResponse.LookupEntry])? {
         guard canPlan else { return nil }
         let cells = selectedCells(request.selectedMeals ?? [:])
         guard !cells.isEmpty else { return nil }
         guard let buckets = try? await loadBuckets(), buckets.values.contains(where: { !$0.isEmpty }) else { return nil }
 
-        let household = AppModel.shared.me
-        let restrictions = household?.dietaryRestrictions.map(\.value) ?? []
-        let likes = Array(Set((household?.householdMembers ?? []).flatMap(\.likes).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })).prefix(40)
-        let dislikes = Array(Set((household?.householdMembers ?? []).flatMap(\.dislikes).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })).prefix(40)
+        let restrictions: [String]
+        let likes: ArraySlice<String>
+        let dislikes: ArraySlice<String>
+        if let hearth = request.household {
+            // The Hearth household: allergies are hard rules, like restrictions.
+            restrictions = hearth.allergies + hearth.restrictions
+            likes = hearth.likes.prefix(40)
+            dislikes = hearth.dislikes.prefix(40)
+        } else {
+            let household = AppModel.shared.me
+            restrictions = household?.dietaryRestrictions.map(\.value) ?? []
+            likes = Array(Set((household?.householdMembers ?? []).flatMap(\.likes).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })).prefix(40)
+            dislikes = Array(Set((household?.householdMembers ?? []).flatMap(\.dislikes).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })).prefix(40)
+        }
 
         // Restrictions are hard rules; drop recipes that mention a blocked food.
         let blocked = blockedKeywords(restrictions)
@@ -65,7 +77,12 @@ enum OnDeviceMealPlanner {
         guard !shortlist.isEmpty else { return nil }
 
         guard let picks = await place(cells: cells, shortlist: shortlist, targets: targets, request: request, likes: Array(likes), dislikes: Array(dislikes), restrictions: restrictions) else { return nil }
-        return (fullWeek(picks, filler: shortlist[0].title), cells.count)
+        // Which recipe each title is, for adding the plan.
+        var lookup: [String: MealPlanResponse.LookupEntry] = [:]
+        for candidate in buckets.values.joined() {
+            lookup[candidate.title.lowercased()] = MealPlanResponse.LookupEntry(recipeId: candidate.id, imageUrl: candidate.imageUrl, bucket: candidate.bucket.rawValue)
+        }
+        return (fullWeek(picks, filler: shortlist[0].title), cells.count, lookup)
     }
 
     // MARK: Recipes
@@ -73,12 +90,11 @@ enum OnDeviceMealPlanner {
     /// The three recipe pools of the API's recipe mix: the household's own recipes, favorites
     /// that aren't theirs, and published recipes that are neither.
     private static func loadBuckets() async throws -> [Bucket: [Candidate]] {
-        let api = BigTableAPI.shared
-        async let mineFirst = api.recipes(collection: "my", limit: 50, offset: 0)
-        async let mineNext = api.recipes(collection: "my", limit: 50, offset: 50)
-        async let favorites = api.favoriteRecipes()
-        async let allFirst = api.recipes(limit: 50, offset: 0)
-        async let allNext = api.recipes(limit: 50, offset: 50)
+        async let mineFirst = KitchenStore.shared.recipes(collection: "my", limit: 50, offset: 0)
+        async let mineNext = KitchenStore.shared.recipes(collection: "my", limit: 50, offset: 50)
+        async let favorites = KitchenStore.shared.favoriteRecipes()
+        async let allFirst = KitchenStore.shared.recipes(limit: 50, offset: 0)
+        async let allNext = KitchenStore.shared.recipes(limit: 50, offset: 50)
         let mine = try await mineFirst.recipes + ((try? await mineNext.recipes) ?? [])
         let favoriteList = try await favorites.recipes
         let everyone = try await allFirst.recipes + ((try? await allNext.recipes) ?? [])
@@ -89,7 +105,7 @@ enum OnDeviceMealPlanner {
                 let title = recipe.title.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !title.isEmpty, recipe.status != .removed, seen.insert(title.lowercased()).inserted else { return nil }
                 let minutes = [recipe.prepMinutes, recipe.cookMinutes].compactMap { $0 }
-                return Candidate(title: title, tags: recipe.tags, minutes: minutes.isEmpty ? nil : minutes.reduce(0, +), bucket: bucket)
+                return Candidate(id: recipe.id, imageUrl: recipe.imageUrl, title: title, tags: recipe.tags, minutes: minutes.isEmpty ? nil : minutes.reduce(0, +), bucket: bucket)
             }
         }
         let mineIDs = Set(mine.map(\.id))
@@ -143,6 +159,9 @@ enum OnDeviceMealPlanner {
         ("beef", ["beef", "steak"]),
         ("chicken", ["chicken"]),
         ("turkey", ["turkey"]),
+        ("sesame", ["sesame", "tahini"]),
+        ("vegetarian", ["beef", "steak", "pork", "bacon", "ham", "sausage", "chicken", "turkey", "lamb", "fish", "salmon", "tuna", "shrimp"]),
+        ("vegan", ["beef", "steak", "pork", "bacon", "ham", "sausage", "chicken", "turkey", "lamb", "fish", "salmon", "tuna", "shrimp", "milk", "cream", "butter", "cheese", "yogurt", "egg", "honey"]),
     ]
 
     private static func blockedKeywords(_ restrictions: [String]) -> Set<String> {

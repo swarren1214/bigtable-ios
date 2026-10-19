@@ -204,7 +204,7 @@ final class RecipeLibrary {
     func setFavorite(id: String, saved: Bool) async throws {
         update(id) { $0.isFavorite = saved }
         do {
-            try await api.setFavorite(id, saved: saved)
+            try await KitchenStore.shared.setFavorite(id, saved: saved)
             for store in liveStores where store.collection == .favorites && store.hasLoaded {
                 if saved {
                     Task { await store.reload() }
@@ -241,20 +241,20 @@ final class RecipeLibrary {
 
     func loadCustomTags(force: Bool = false) async {
         guard force || !customTagsLoaded else { return }
-        if let tags = try? await api.customTags() {
+        if let tags = try? await KitchenStore.shared.customTags() {
             customTags = sorted(tags)
             customTagsLoaded = true
         }
     }
 
     func createTag(_ label: String) async throws -> CustomTag {
-        let tag = try await api.createTag(label)
+        let tag = try await KitchenStore.shared.createTag(label)
         upsert(tag)
         return tag
     }
 
     func renameTag(_ tag: CustomTag, to label: String) async throws -> CustomTag {
-        let renamed = try await api.renameTag(tag.id, to: label)
+        let renamed = try await KitchenStore.shared.renameTag(tag.id, to: label)
         customTags.removeAll { $0.id == tag.id }
         upsert(renamed)
         if renamed.normalized != tag.normalized {
@@ -267,7 +267,7 @@ final class RecipeLibrary {
     }
 
     func deleteTag(_ tag: CustomTag) async throws {
-        try await api.deleteTag(tag.id)
+        try await KitchenStore.shared.deleteTag(tag.id)
         customTags.removeAll { $0.id == tag.id }
     }
 
@@ -352,7 +352,7 @@ final class RecipeStore {
             let result: (recipes: [RecipeSummary], offset: Int, hasMore: Bool)
             switch collection {
             case .favorites:
-                let response = try await api.favoriteRecipes()
+                let response = try await KitchenStore.shared.favoriteRecipes()
                 let matching = response.recipes.filter {
                     RecipeFormat.matches($0, query: query) && RecipeFormat.matches($0, quickFilter: filter)
                 }
@@ -364,8 +364,9 @@ final class RecipeStore {
                 let all = try await fetchEveryPage(query: query, filter: filter, collection: nil)
                 result = (RecipeFormat.sortedByTitle(all), all.count, false)
             case .all:
-                let page = try await api.recipes(query: query, quickFilter: filter, collection: nil, limit: pageSize, offset: 0)
-                result = (RecipeFormat.sortedByTitle(page.recipes), page.recipes.count, page.pagination?.hasMore ?? false)
+                let page = try await KitchenStore.shared.recipes(query: query, quickFilter: filter, collection: nil, limit: pageSize, offset: 0)
+                // The first page also carries the family's own recipes; paging follows the server's.
+                result = (RecipeFormat.sortedByTitle(page.recipes), page.pagination?.nextOffset ?? page.recipes.count, page.pagination?.hasMore ?? false)
             }
             guard token == generation else { return }
             recipes = result.recipes
@@ -392,13 +393,15 @@ final class RecipeStore {
         let token = generation
         isLoadingMore = true
         do {
-            let page = try await api.recipes(query: query, quickFilter: quickFilter, collection: nil, limit: pageSize, offset: offset)
+            let page = try await KitchenStore.shared.recipes(query: query, quickFilter: quickFilter, collection: nil, limit: pageSize, offset: offset)
             if token == generation {
                 let known = Set(recipes.map(\.id))
                 let fresh = page.recipes.filter { !known.contains($0.id) }
                 recipes = RecipeFormat.sortedByTitle(recipes + fresh)
-                offset += page.recipes.count
-                hasMore = (page.pagination?.hasMore ?? false) && !page.recipes.isEmpty
+                offset = page.pagination?.nextOffset ?? offset + page.recipes.count
+                // A page can be empty here when it held only the family's own recipes (shown
+                // already); the server's own paging says whether there's more.
+                hasMore = page.pagination?.hasMore ?? false
             }
         } catch {
             if token == generation { loadError = error.localizedDescription }
@@ -412,10 +415,10 @@ final class RecipeStore {
         var all: [RecipeSummary] = []
         var offset = 0
         for _ in 0..<50 {
-            let page = try await api.recipes(query: query, quickFilter: filter, collection: collection, limit: pageSize, offset: offset)
-            if page.recipes.isEmpty { break }
-            all.append(contentsOf: page.recipes)
-            offset += page.recipes.count
+            let page = try await KitchenStore.shared.recipes(query: query, quickFilter: filter, collection: collection, limit: pageSize, offset: offset)
+            let known = Set(all.map(\.id))
+            all.append(contentsOf: page.recipes.filter { !known.contains($0.id) })
+            offset = page.pagination?.nextOffset ?? offset + page.recipes.count
             if page.pagination?.hasMore != true { break }
         }
         return all

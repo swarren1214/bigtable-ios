@@ -67,6 +67,13 @@ enum HearthPublisher {
         loadRecipes(toLoad, now: now)
     }
 
+    /// Shares the grocery list's estimate and how much is left to buy (Suffice shows it as
+    /// planned grocery spending). Nil clears it.
+    static func publishGroceries(_ list: HearthGroceries.List?) {
+        guard !ScreenshotMode.isOn else { return }
+        Hearth.publish(HearthGroceries(list: list), from: .bigtable)
+    }
+
     /// Shares the household: its name, people, their photos, who "me" is, and dietary
     /// restrictions. Photos not downloaded yet download in the background, and the household
     /// is shared again with them.
@@ -147,6 +154,7 @@ enum HearthPublisher {
         UserDefaults.standard.removeObject(forKey: photoSourcesKey)
         Hearth.remove(HearthMealPlan.self, from: .bigtable)
         Hearth.remove(HearthFamily.self, from: .bigtable)
+        Hearth.remove(HearthGroceries.self, from: .bigtable)
         Hearth.removePhotos(from: .bigtable, except: [])
     }
 

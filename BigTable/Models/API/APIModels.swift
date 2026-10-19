@@ -770,9 +770,31 @@ nonisolated struct MealPlanRequest: Encodable, Sendable {
     /// Sent back with previewOnly false to save exactly the plan that was previewed.
     var generatedPlan: [String: [String: String]]?
     var generatedBy: String?
+    /// The Hearth household, as unnamed ages, roles and food rules. With it, the API uses this
+    /// rather than the profile's household members.
+    var household: HearthAIContext? = nil
+    /// The family's own recipes (they're in iCloud, not on the server), for the "mine" share of
+    /// the mix. With it the API plans without reading or saving any plan.
+    var myRecipes: [MyRecipe]? = nil
+
+    nonisolated struct MyRecipe: Encodable, Sendable {
+        var id: String
+        var title: String
+        var tags: [String]
+        var minutes: Int?
+    }
 }
 
 nonisolated struct MealPlanResponse: Decodable, Sendable {
+    /// Which recipe a planned title is (keys are lowercased titles).
+    nonisolated struct LookupEntry: Decodable, Hashable, Sendable {
+        var recipeId: String
+        var imageUrl: String?
+        /// "mine", "favorites" or "other".
+        var bucket: String?
+    }
+
+    var recipeLookup: [String: LookupEntry]?
     var planner: PlannerResponse?
     var previewPlanner: PlannerResponse?
     var generatedPlan: [String: [String: String]]?
@@ -855,6 +877,21 @@ nonisolated struct GroceryListRequest: Encodable, Sendable {
     var endDate: String?
     var overwriteExisting: Bool?
     var additionalPrompt: String?
+    /// The Hearth household, as unnamed ages, roles and food rules (see MealPlanRequest).
+    var household: HearthAIContext? = nil
+    /// The planned meals, from the kitchen in iCloud (the server no longer has the plan). The
+    /// family's own recipes carry their ingredients; published ones are looked up by title.
+    var plannedMeals: [PlannedMeal]? = nil
+
+    nonisolated struct PlannedMeal: Encodable, Sendable {
+        var isoDate: String
+        var day: String
+        var slot: String
+        var title: String
+        var eaters: Int
+        var baseServings: Double?
+        var ingredients: [RecipeIngredientInput]?
+    }
 }
 
 nonisolated struct GroceryListResponse: Decodable, Sendable {
@@ -921,4 +958,23 @@ nonisolated enum ISODay {
         if let date = withFraction.date(from: string) { return date }
         return ISO8601DateFormatter().date(from: string)
     }
+}
+
+// MARK: - Kitchen in iCloud
+
+nonisolated struct JoinCodeResponse: Decodable, Sendable { var code: String }
+nonisolated struct JoinHouseholdResponse: Decodable, Sendable { var organizerProfileId: String }
+nonisolated struct DisplayNameBody: Encodable, Sendable { var displayName: String? }
+nonisolated struct DisplayNameResponse: Decodable, Sendable { var displayName: String? }
+nonisolated struct KitchenMovedResponse: Decodable, Sendable { var movedAt: String? }
+
+/// `GET /v1/bigtable/me/kitchen-export`: everything private the server kept, for the one-time
+/// move into the family's iCloud.
+nonisolated struct KitchenExport: Decodable, Sendable {
+    nonisolated struct Member: Decodable, Sendable { var id: String; var name: String }
+    var recipes: [RecipeDetail]
+    var tags: [CustomTag]
+    var plans: [PlannerResponse]
+    var grocery: GrocerySnapshotsResponse
+    var householdMembers: [Member]
 }

@@ -501,7 +501,10 @@ final class RecipeEditorModel {
         guard !hasInvalidAmount else { throw RecipeEditorError(message: "Use a decimal (1.5), fraction (1/2), or mixed fraction (1 1/2) for amounts.") }
 
         if let photoData {
-            let url = try await StorageClient.shared.uploadRecipePhoto(photoData, mimeType: photoMimeType)
+            // Kept in the family's kitchen (iCloud); uploaded only if the recipe is published.
+            guard let url = KitchenStore.shared.savePhoto(photoData, mimeType: photoMimeType) else {
+                throw RecipeEditorError(message: "The photo couldn't be saved. Try another one.")
+            }
             imageURL = url
             self.photoData = nil
         }
@@ -525,12 +528,12 @@ final class RecipeEditorModel {
 
         switch mode {
         case .create:
-            let id = try await api.createRecipe(payload)
-            try? await api.setFavorite(id, saved: true)
+            let id = try await KitchenStore.shared.createRecipe(payload)
+            try? await KitchenStore.shared.setFavorite(id, saved: true)
             initial = snapshot()
             return id
         case .edit(let recipe):
-            try await api.updateRecipe(recipe.id, payload)
+            try await KitchenStore.shared.updateRecipe(recipe.id, payload)
             initial = snapshot()
             return recipe.id
         }

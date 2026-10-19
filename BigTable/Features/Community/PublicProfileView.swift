@@ -201,12 +201,9 @@ struct PublicProfileView: View {
                         Button("Cancel Invitation", menuIcon: "xmark.circle", role: .destructive) {
                             confirming = .cancelInvitation(pendingInvitation)
                         }
-                    } else if model.isOrganizer {
-                        Button("Invite to Household", menuIcon: "person.badge.plus") {
-                            confirming = .invite
-                        }
-                        .disabled(!canInvite)
                     }
+                    // Family joins through the Hearth household now (Profile › Household ›
+                    // Invite), which shares the kitchen and the plan.
                     Divider()
                     if isBlocked {
                         Button("Unblock \(name)", menuIcon: "person.crop.circle.badge.checkmark") {

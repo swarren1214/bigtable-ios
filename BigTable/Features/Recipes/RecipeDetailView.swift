@@ -549,7 +549,7 @@ struct RecipeDetailView: View {
     private func load() async {
         let version: String? = requestedVersionID ?? versionID
         do {
-            let loaded = try await api.recipe(recipeID, versionId: version)
+            let loaded = try await KitchenStore.shared.recipe(recipeID, versionId: version)
             if detail == nil || detail?.id != loaded.id || detail?.baseServings != loaded.baseServings {
                 servings = min(50, max(1, Int(loaded.baseServings.rounded())))
             }
@@ -653,11 +653,11 @@ struct RecipeDetailView: View {
                 $0.publishedAt = nextPublishedAt
             }
             if action == .publish {
-                _ = try await api.publishRecipe(recipe.id)
+                _ = try await KitchenStore.shared.publishRecipe(recipe.id)
             } else {
-                _ = try await api.unpublishRecipe(recipe.id)
+                _ = try await KitchenStore.shared.unpublishRecipe(recipe.id)
             }
-            if let refreshed = try? await api.recipe(recipe.id, versionId: requestedVersionID ?? versionID) {
+            if let refreshed = try? await KitchenStore.shared.recipe(recipe.id, versionId: requestedVersionID ?? versionID) {
                 detail = refreshed
                 library.update(recipe.id) {
                     $0.status = refreshed.status
@@ -690,7 +690,7 @@ struct RecipeDetailView: View {
         isWorking = true
         defer { isWorking = false }
         do {
-            try await api.deleteRecipe(recipe.id)
+            try await KitchenStore.shared.deleteRecipe(recipe.id)
             library.remove(recipe.id)
             dismiss()
         } catch {
@@ -719,7 +719,7 @@ struct RecipeDetailView: View {
                 ingredients: recipe.ingredients.map(\.input),
                 instructions: recipe.instructions.map(RecipeFormat.stripStepNumber)
             )
-            _ = try await api.createRecipe(payload)
+            _ = try await KitchenStore.shared.createRecipe(payload)
             library.changed()
             notice = "A draft copy of “\(recipe.title)” is in My Recipes."
         } catch {

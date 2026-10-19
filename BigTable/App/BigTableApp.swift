@@ -35,6 +35,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         return true
     }
 
+    /// Household invitations (iCloud) arrive through the scene delegate.
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = HearthHouseholdSceneDelegate.self
+        return configuration
+    }
+
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
         Task { try? await BigTableAPI.shared.registerPushToken(token, enabled: true) }
@@ -168,7 +175,7 @@ struct AppRoot: View {
             case .signedOut:
                 AuthView()
             case .needsHousehold:
-                HouseholdSetupView()
+                KitchenSetupView()
             case .ready:
                 RootTabView()
                     .sheet(item: $router.sheet) { sheet in
@@ -203,11 +210,34 @@ struct AppRoot: View {
             guard !Task.isCancelled, !showTutorial else { return }
             showAppleLink = true
         }
+        // The Hearth household and the kitchen in iCloud: invitations, sharing the kitchen with
+        // the family, and the one-time move of what the server kept.
+        .hearthHouseholdInvitations()
+        // Someone set up before households (or who left one) gets the household step.
+        .hearthHouseholdRequired(isActive: model.phase == .ready && !ScreenshotMode.isOn, accent: accent)
+        .task {
+            guard !ScreenshotMode.isOn else { return }
+            KitchenStore.shared.prepare()
+            HearthHouseholdStore.shared.start(app: .bigtable)
+        }
+        // Not a .task(id:): these change the household themselves, which would cancel them.
+        .onChange(of: KitchenCheck(phase: model.phase, household: HearthHouseholdStore.shared.snapshot, account: HearthHouseholdStore.shared.account), initial: true) { _, _ in
+            guard !ScreenshotMode.isOn else { return }
+            KitchenStore.shared.prepare()
+            KitchenStore.shared.refreshLocation()
+            Task {
+                await KitchenMove.runIfNeeded(model: model)
+                await KitchenSharing.update()
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             // Another Hearth app may have signed in, out, or as someone else meanwhile.
             if phase == .active {
                 Task { await AuthClient.shared.followSharedSession() }
                 HearthPhotoCache.shared.refreshIfChanged()
+                Task { await KitchenSharing.update() }
+            } else {
+                KitchenStore.shared.persistNow()
             }
             guard phase == .active, model.phase == .ready else { return }
             Task {
@@ -263,4 +293,12 @@ struct LaunchView: View {
 private struct AppleLinkCheck: Equatable {
     var phase: AppModel.Phase
     var needsLink: Bool
+}
+
+/// Re-runs the kitchen's sharing and move when the app becomes ready, the household changes or
+/// iCloud becomes available.
+private struct KitchenCheck: Equatable {
+    var phase: AppModel.Phase
+    var household: HearthHouseholdSnapshot
+    var account: HearthHouseholdStore.Account
 }

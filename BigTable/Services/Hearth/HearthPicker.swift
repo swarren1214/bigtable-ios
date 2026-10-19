@@ -13,6 +13,11 @@
 //
 //   People (color only): .hearthColorPicker(isPresented:, title: person.name, color: $person.color)
 //
+//   Icon only, when the color comes from somewhere else (a reward's kind, the app's accent):
+//   HearthIconColorLabel(icon: chore.icon, color: tint, title: "Icon", showsColorName: false)
+//   .hearthIconPicker(isPresented:, title: chore.name, caption: "Chore", context: .chore,
+//                     icon: $chore.icon, tint: tint)
+//
 // - Colors are stored as `HearthColorChoice.storage`: a palette id ("green") or "#RRGGBB" for a
 //   custom color. `HearthColorChoice(hex:)` turns any old color into one losslessly (a palette
 //   color when it matches exactly, otherwise custom).
@@ -361,6 +366,8 @@ struct HearthIconColorLabel: View {
     let icon: String
     let color: HearthColorChoice
     var title: String = "Icon & Color"
+    /// Off when the color isn't chosen here (an icon-only picker).
+    var showsColorName = true
 
     var body: some View {
         HStack(spacing: 12) {
@@ -368,12 +375,14 @@ struct HearthIconColorLabel: View {
             Text(title)
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
-            Text(color.name)
-                .foregroundStyle(.secondary)
+            if showsColorName {
+                Text(color.name)
+                    .foregroundStyle(.secondary)
+            }
         }
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens the icon and color picker")
+        .accessibilityHint(showsColorName ? "Opens the icon and color picker" : "Opens the icon picker")
     }
 }
 
@@ -423,6 +432,24 @@ extension View {
         }
     }
 
+    /// The icon-only picker, for things whose color is set elsewhere: the icons preview in
+    /// `tint`, and there's no color section.
+    func hearthIconPicker(
+        isPresented: Binding<Bool>,
+        title: String,
+        caption: String? = nil,
+        context: HearthIconContext = .general,
+        icon: Binding<String>,
+        tint: HearthColorChoice
+    ) -> some View {
+        popover(isPresented: isPresented, arrowEdge: .top) {
+            HearthIconColorPicker(mode: .iconOnly, title: title, caption: caption, context: context, icon: icon, color: .constant(tint))
+                .frame(idealWidth: 400, idealHeight: 640)
+                .presentationCompactAdaptation(.sheet)
+                .presentationDragIndicator(.visible)
+        }
+    }
+
     /// The color-only picker, for people: previews the color on their initial.
     func hearthColorPicker(
         isPresented: Binding<Bool>,
@@ -443,7 +470,7 @@ extension View {
 // MARK: - The picker
 
 struct HearthIconColorPicker: View {
-    enum Mode { case iconAndColor, colorOnly }
+    enum Mode { case iconAndColor, iconOnly, colorOnly }
 
     let mode: Mode
     /// The item's name, shown under the preview and used for suggestions.
@@ -490,9 +517,11 @@ struct HearthIconColorPicker: View {
                 LazyVStack(alignment: .leading, spacing: 22) {
                     if !searching {
                         preview
-                        colorSection
+                        if mode != .iconOnly {
+                            colorSection
+                        }
                     }
-                    if mode == .iconAndColor {
+                    if mode != .colorOnly {
                         iconSection
                     }
                 }
@@ -502,7 +531,7 @@ struct HearthIconColorPicker: View {
             }
             .scrollDismissesKeyboard(.immediately)
             .background(Color(.systemGroupedBackground))
-            .navigationTitle(mode == .colorOnly ? "Color" : "Icon & Color")
+            .navigationTitle(mode == .colorOnly ? "Color" : mode == .iconOnly ? "Icon" : "Icon & Color")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -516,7 +545,7 @@ struct HearthIconColorPicker: View {
                     SheetDoneButton { dismiss() }
                 }
             }
-            .modifier(IconSearch(enabled: mode == .iconAndColor, query: $query))
+            .modifier(IconSearch(enabled: mode != .colorOnly, query: $query))
         }
     }
 
@@ -525,7 +554,7 @@ struct HearthIconColorPicker: View {
     private var preview: some View {
         VStack(spacing: 8) {
             Group {
-                if mode == .iconAndColor {
+                if mode != .colorOnly {
                     Image(systemName: icon.isEmpty ? "square.dashed" : icon)
                         .symbolVariant(.fill)
                         .font(.system(size: 40, weight: .semibold))

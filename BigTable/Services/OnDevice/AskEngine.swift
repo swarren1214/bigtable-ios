@@ -172,7 +172,7 @@ final class AskEngine {
     /// What the model is told about BigTable and this household, with today's date.
     static func instructions() -> String {
         let model = AppModel.shared
-        let names = model.members.map(\.name).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let names = model.householdNames
         let people = names.isEmpty ? "" : " The household: \(names.count) people (\(names.joined(separator: ", ")))."
         let times = HearthMealTimes.current
         func time(_ slot: String) -> String {

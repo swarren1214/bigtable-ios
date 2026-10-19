@@ -36,13 +36,6 @@ struct ProfileView: View {
 
             householdSection
 
-            ProfileInvitationsCard(
-                invitations: invitations,
-                showsSent: model.isOrganizer,
-                onChanged: { await loadInvitations() },
-                onAccepted: { name in joinedHouseholdName = name }
-            )
-
             proSection
             settingsSection
             recipesSection
@@ -192,16 +185,19 @@ struct ProfileView: View {
             SectionTitle("Household")
             ProfileCard {
                 NavigationLink {
-                    HouseholdEditorView()
+                    // People and their food details live in the Hearth household, the same in
+                    // every Hearth app (and it sets one up when there's none).
+                    HearthHouseholdView(accent: Brand.defaultAccent)
                 } label: {
                     ProfileRow(
-                        symbol: "house.fill",
+                        symbol: HearthHouseholdLabel.symbol,
                         color: Brand.recipeTile,
-                        title: model.householdName.isEmpty ? "Household" : model.householdName,
+                        title: HearthHouseholdLabel.title,
                         detail: householdDetail
                     )
                 }
                 .buttonStyle(.plain)
+
 
                 if model.isOrganizer {
                     ForEach(Array(joinedPeople.enumerated()), id: \.offset) { _, member in
@@ -243,9 +239,10 @@ struct ProfileView: View {
     }
 
     private var householdDetail: String {
-        let count = model.members.count
+        let household = HearthHouseholdStore.shared
+        let count = household.people.count
         let people = count == 1 ? "1 person" : "\(count) people"
-        return model.canEditMembers || model.isOrganizer ? "\(people) · Names, ages, likes and restrictions" : people
+        return [household.info?.name, people].compactMap { $0 }.joined(separator: " · ")
     }
 
     // MARK: Pro

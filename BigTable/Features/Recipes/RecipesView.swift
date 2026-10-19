@@ -22,7 +22,12 @@ struct RecipesView: View {
             RecipeLibraryResults(store: store, emptyState: emptyState)
         }
         .searchable(text: $store.query, prompt: "Search recipes")
-        .refreshable { await store.reload() }
+        .refreshable {
+            await KitchenStore.shared.syncNow()
+            await store.reload()
+        }
+        // The family changed something on another phone.
+        .onChange(of: KitchenStore.shared.revision) { Task { await store.reload() } }
         .onChange(of: store.collection) { Task { await store.reload() } }
         .onChange(of: store.quickFilter) { Task { await store.reload() } }
         .onChange(of: store.query) { store.queryChanged() }

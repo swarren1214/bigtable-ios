@@ -62,7 +62,12 @@ struct PlanView: View {
                 LoadingCard(title: "Loading the plan…")
             }
         }
-        .refreshable { await store.load(weekStart, force: true) }
+        .refreshable {
+            await KitchenStore.shared.syncNow()
+            await store.load(weekStart, force: true)
+        }
+        // The family changed the plan on another phone.
+        .onChange(of: KitchenStore.shared.revision) { Task { await store.load(weekStart, force: true) } }
         .task(id: weekStart) { await store.load(weekStart) }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }

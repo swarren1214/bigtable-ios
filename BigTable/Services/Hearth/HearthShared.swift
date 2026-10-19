@@ -341,6 +341,117 @@ nonisolated struct HearthMealTimes: HearthPublication, Hashable {
     }
 }
 
+// MARK: - Groceries (BigTable)
+
+/// The household's current grocery list from BigTable: what it should cost and how much is
+/// left to buy. Suffice shows the estimate as planned spending on its groceries budget; it
+/// never records it as a transaction, so the real charge isn't counted twice.
+nonisolated struct HearthGroceries: HearthPublication, Hashable {
+    static let kind = "groceries"
+    static let version = 1
+
+    /// The active list, or nil when there isn't one.
+    var list: List?
+
+    nonisolated struct List: Codable, Hashable, Sendable, Identifiable {
+        var id: String
+        /// BigTable's estimate for the whole list, in the device's currency; nil when it has none.
+        var estimatedCost: Double?
+        var itemCount: Int
+        /// Items not checked off yet.
+        var remainingCount: Int
+        var generatedAt: Date?
+        /// The meal plan days it was built for, "YYYY-MM-DD", when BigTable knows them.
+        var startDate: String?
+        var endDate: String?
+        /// Opens the list in BigTable.
+        var link: String?
+    }
+}
+
+// MARK: - Grocery budget (Suffice)
+
+/// This month's groceries budget from Suffice: planned, spent and left. BigTable shows it on
+/// the grocery list next to the list's estimate.
+nonisolated struct HearthGroceryBudget: HearthPublication, Hashable {
+    static let kind = "grocery-budget"
+    static let version = 1
+
+    /// The budget's name in Suffice ("Groceries").
+    var name: String
+    /// The first day of the month it's for, "YYYY-MM-DD".
+    var month: String
+    var limitCents: Int
+    var spentCents: Int
+    /// ISO 4217, "USD".
+    var currencyCode: String
+    /// Opens the budget in Suffice.
+    var link: String?
+
+    var leftCents: Int { limitCents - spentCents }
+}
+
+// MARK: - Allowance (Caloma)
+
+/// Allowance Caloma has paid out on payday, so Suffice can record it. Each payout has a
+/// stable id; Suffice imports each one once, as an expense to review.
+nonisolated struct HearthAllowance: HearthPublication, Hashable {
+    static let kind = "allowance"
+    static let version = 1
+
+    /// ISO 4217, "USD".
+    var currencyCode: String
+    /// The last 90 days of payouts, newest first.
+    var payouts: [Payout]
+
+    nonisolated struct Payout: Codable, Hashable, Sendable, Identifiable {
+        var id: String
+        /// The kid's name, as in Caloma.
+        var name: String
+        var cents: Int
+        var date: Date
+    }
+}
+
+// MARK: - Reading (Hearken)
+
+/// The reading Hearken's plans have scheduled, by day, for the person using this device:
+/// yesterday through the next two weeks. Caloma shows each day's reading on the calendar.
+nonisolated struct HearthReading: HearthPublication, Hashable {
+    static let kind = "reading"
+    static let version = 1
+
+    /// When the daily study reminder is set, in minutes after midnight; nil when it's off.
+    var reminderMinutes: Int?
+    var days: [Day]
+    /// Whose reading it is: their id in the Hearth household, when there is one.
+    var readerID: String? = nil
+
+    nonisolated struct Day: Codable, Hashable, Sendable, Identifiable {
+        /// "YYYY-MM-DD".
+        var date: String
+        var readings: [Reading]
+        var id: String { date }
+    }
+
+    nonisolated struct Reading: Codable, Hashable, Sendable, Identifiable {
+        /// The plan enrollment (or group) it comes from.
+        var id: String
+        /// "Alma 5–7".
+        var title: String
+        /// "Book of Mormon in 90 Days", or the group's name.
+        var planName: String
+        var isDone: Bool
+        /// Opens the reading in Hearken.
+        var link: String?
+    }
+
+    func day(_ date: Date, calendar: Calendar = .current) -> Day? {
+        let key = HearthDay.string(from: date, calendar: calendar)
+        return days.first { $0.date == key }
+    }
+}
+
 // MARK: - Photos
 
 nonisolated extension Hearth {

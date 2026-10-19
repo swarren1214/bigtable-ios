@@ -215,14 +215,41 @@ struct CameraPicker: UIViewControllerRepresentable {
 }
 
 extension AppModel {
-    /// The household's people as faces, each with a stable color by their place in the list.
+    /// The household's people as faces. With a Hearth household, its people (by first name,
+    /// which is what a meal's "not eating" list holds), their photos and colors; otherwise the
+    /// server's list, each with a stable color by its place.
     var faces: [Face] {
-        members.enumerated().map { index, member in
+        let household = HearthHouseholdStore.shared
+        if household.exists {
+            return household.people.map { person in
+                Face(id: person.id, name: Self.planName(person), url: person.photo.flatMap { Hearth.photosDirectory?.appending(path: $0).absoluteString }, color: person.color)
+            }
+        }
+        return members.enumerated().map { index, member in
             Face(id: member.id ?? member.name, name: member.name, url: ProfileAvatar.url(for: member.avatarUrl), color: PersonColor.forIndex(index).color)
         }
     }
 
+    /// How someone is named in the plan: their first name.
+    static func planName(_ person: HearthMember) -> String {
+        person.firstName.isEmpty ? person.trimmedName : person.firstName
+    }
+
+    /// How many people eat at home.
+    var householdSize: Int {
+        let household = HearthHouseholdStore.shared
+        return max(household.exists ? household.people.count : members.count, 1)
+    }
+
+    /// Everyone's names, for Ask.
+    var householdNames: [String] {
+        let household = HearthHouseholdStore.shared
+        if household.exists { return household.people.map(Self.planName) }
+        return members.map(\.name).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
     func color(forMember name: String) -> Color {
+        if let face = faces.first(where: { $0.name == name }) { return face.color }
         let index = members.firstIndex { $0.name == name } ?? 0
         return PersonColor.forIndex(index).color
     }

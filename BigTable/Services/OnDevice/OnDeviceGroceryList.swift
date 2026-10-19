@@ -37,7 +37,7 @@ enum OnDeviceGroceryList {
 
     static func generate(dates: [String], costcoMode: Bool, note: String?) async throws -> GroceryListResponse.List? {
         guard canGenerate, !dates.isEmpty else { return nil }
-        let householdSize = max(AppModel.shared.members.count, 1)
+        let householdSize = AppModel.shared.householdSize
         let planned = try await plannedRecipes(on: Set(dates), householdSize: householdSize)
         guard !planned.isEmpty else { return nil }
         let needs = try await ingredientNeeds(for: planned)
@@ -64,7 +64,7 @@ enum OnDeviceGroceryList {
         let weekStarts = Set(dates.compactMap { ISODay.date(from: $0).map { ISODay.weekStart(containing: $0) } })
         var planned: [PlannedRecipe] = []
         for weekStart in weekStarts.sorted() {
-            let plan = try await BigTableAPI.shared.currentPlan(weekStart: weekStart)
+            let plan = try await KitchenStore.shared.currentPlan(weekStart: weekStart)
             for (index, day) in DayOfWeek.allCases.enumerated() where dates.contains(ISODay.adding(days: index, to: plan.weekStart)) {
                 for slotType in MealSlotType.allCases {
                     let slot = plan.slot(day, slotType)
@@ -86,7 +86,7 @@ enum OnDeviceGroceryList {
         let keys = Set(planned.map { Key(id: $0.recipeId, version: $0.versionId) })
         let details = try await withThrowingTaskGroup(of: (Key, RecipeDetail?).self) { group in
             for key in keys {
-                group.addTask { (key, try? await BigTableAPI.shared.recipe(key.id, versionId: key.version)) }
+                group.addTask { (key, try? await KitchenStore.shared.recipe(key.id, versionId: key.version)) }
             }
             var found: [Key: RecipeDetail] = [:]
             for try await (key, detail) in group { if let detail { found[key] = detail } }

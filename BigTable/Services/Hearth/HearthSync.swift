@@ -169,11 +169,9 @@ struct HearthSyncCard: View {
                     .foregroundStyle(.white)
                     .frame(width: 52, height: 52)
                     .background(info.color, in: .rect(cornerRadius: 15, style: .continuous))
-                Image(systemName: badgeSymbol)
+                badge
                     .font(.system(size: 11, weight: .heavy))
                     .foregroundStyle(.white)
-                    .symbolEffect(.rotate, options: .repeat(.continuous), isActive: phase == .syncing)
-                    .contentTransition(.symbolEffect(.replace))
                     .frame(width: 24, height: 24)
                     .background(statusColor, in: .circle)
                     .padding(3)
@@ -324,6 +322,20 @@ struct HearthSyncCard: View {
         case .failed: "Couldn’t sync"
         case .waiting: "Waiting to sync"
         case .upToDate: "Up to date"
+        }
+    }
+
+    /// The status badge. Only the syncing arrows spin; every other symbol is its own view, so
+    /// a spin can never carry over to the checkmark (or stop it mid-turn, tilted).
+    @ViewBuilder private var badge: some View {
+        if phase == .syncing {
+            Image(systemName: badgeSymbol)
+                .symbolEffect(.rotate, options: .repeat(.continuous))
+                .transition(.opacity)
+        } else {
+            Image(systemName: badgeSymbol)
+                .contentTransition(.symbolEffect(.replace))
+                .transition(.opacity)
         }
     }
 

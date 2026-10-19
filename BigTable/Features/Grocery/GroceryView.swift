@@ -38,7 +38,18 @@ struct GroceryView: View {
             .toolbar { toolbarContent }
             .bigTableToolbar(overHeader: false)
             .task(id: householdKey) { await store.load() }
-            .refreshable { await store.load() }
+            .refreshable {
+                await store.flush()
+                await KitchenStore.shared.syncNow()
+                await store.load()
+            }
+            // The family changed the list on another phone.
+            .onChange(of: KitchenStore.shared.revision) {
+                Task {
+                    await store.flush()
+                    await store.load()
+                }
+            }
             .onDisappear { Task { await store.flush() } }
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { Task { await store.flush() } }
@@ -366,6 +377,9 @@ struct GroceryHeaderCard: View {
     var onUpgrade: () -> Void
 
     @Environment(\.accent) private var accent
+    @Environment(\.openURL) private var openURL
+    /// This month's groceries budget from Suffice, when Suffice is on this device.
+    @State private var sufficeBudget: HearthGroceryBudget?
 
     init(store: GroceryStore, isPro: Bool, onUpgrade: @escaping () -> Void) {
         self.store = store
@@ -428,8 +442,80 @@ struct GroceryHeaderCard: View {
                         .tint(accent)
                         .accessibilityLabel("\(store.checkedCount) of \(store.totalCount) checked off")
                 }
+
+                if let budget = sufficeBudget, budget.limitCents > 0 {
+                    Divider()
+                    sufficeRow(budget)
+                }
             }
         }
+        .task { loadSufficeBudget() }
+        .onReceive(NotificationCenter.default.publisher(for: Hearth.didChange)) { _ in loadSufficeBudget() }
+    }
+
+    /// Suffice's groceries budget, and whether what's left on the list fits in it. Tapping
+    /// opens the budget in Suffice.
+    private func sufficeRow(_ budget: HearthGroceryBudget) -> some View {
+        let left = budget.leftCents
+        let toBuy = isPro ? listCostCents : nil
+        let after = toBuy.map { left - $0 }
+        return Button {
+            if let link = budget.link, let url = URL(string: link) { openURL(url) }
+        } label: {
+            HStack(spacing: 10) {
+                IconTile(symbol: "chart.pie.fill", color: Self.sufficeGreen, size: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(left >= 0 ? "\(money(left, budget)) left in \(budget.name)" : "\(money(-left, budget)) over in \(budget.name)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(left >= 0 ? Color.primary : Color.red)
+                    Group {
+                        if let toBuy, let after {
+                            Text("This list, about \(money(toBuy, budget)): " + (after >= 0 ? "leaves \(money(after, budget))" : "\(money(-after, budget)) over"))
+                                .foregroundStyle(after >= 0 ? Color.secondary : Color.red)
+                        } else {
+                            Text("Of \(money(budget.limitCents, budget)) this month in Suffice")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.caption)
+                    .monospacedDigit()
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens the budget in Suffice")
+    }
+
+    /// What's still to buy should cost, in cents: the estimate scaled to the items left.
+    private var listCostCents: Int? {
+        guard store.estimatedCost > 0, store.totalCount > 0, store.remainingCount > 0 else { return nil }
+        let share = Double(store.remainingCount) / Double(store.totalCount)
+        return Int((store.estimatedCost * share * 100).rounded())
+    }
+
+    private func money(_ cents: Int, _ budget: HearthGroceryBudget) -> String {
+        (Double(cents) / 100).formatted(.currency(code: budget.currencyCode).precision(.fractionLength(0)))
+    }
+
+    /// Suffice's green, for its budget.
+    private static let sufficeGreen = Color(red: 0.23, green: 0.49, blue: 0.20)
+
+    /// Suffice's groceries budget for this month; an older month's isn't shown.
+    private func loadSufficeBudget() {
+        guard !ScreenshotMode.isOn,
+              let budget = Hearth.read(HearthGroceryBudget.self, from: .suffice)?.value,
+              let month = Calendar.current.dateInterval(of: .month, for: .now)?.start,
+              budget.month == HearthDay.string(from: month) else {
+            if sufficeBudget != nil { sufficeBudget = nil }
+            return
+        }
+        if budget != sufficeBudget { sufficeBudget = budget }
     }
 
     private var title: String {

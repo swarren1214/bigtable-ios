@@ -396,7 +396,7 @@ final class AskHousehold {
 
     /// "Thursday dinner · serves 8".
     private static func detail(_ ref: PlanSlotRef, excluded: [String]) -> String {
-        let eating = AppModel.shared.members.count - excluded.count
+        let eating = AppModel.shared.householdSize - excluded.count
         return eating > 0 ? "\(ref.title) · serves \(eating)" : ref.title
     }
 
@@ -413,9 +413,9 @@ final class AskHousehold {
                 title: recipe.title,
                 role: .entree,
                 imageUrl: recipe.imageUrl,
-                recipeId: pinned == nil ? nil : recipe.id,
+                recipeId: pinned != nil || KitchenStore.shared.isOwn(recipe.id) ? recipe.id : nil,
                 recipeVersionId: pinned,
-                source: pinned == nil ? "custom" : "library",
+                source: pinned != nil || KitchenStore.shared.isOwn(recipe.id) ? "library" : "custom",
                 recipeStatus: recipe.status,
                 currentVersionId: pinned,
                 hasUpdateAvailable: false
@@ -434,10 +434,10 @@ final class AskHousehold {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return "Nothing to search for." }
         do {
-            var found = try await api.recipes(query: query, collection: "my", limit: 8).recipes
+            var found = try await KitchenStore.shared.recipes(query: query, collection: "my", limit: 8).recipes
             var source = "The family's recipes"
             if found.isEmpty {
-                found = try await api.recipes(query: query, limit: 5).recipes
+                found = try await KitchenStore.shared.recipes(query: query, limit: 5).recipes
                 source = "None of the family's own recipes match. From BigTable's recipes"
             }
             guard !found.isEmpty else { return "No recipes match \"\(query)\"." }
@@ -458,7 +458,7 @@ final class AskHousehold {
     /// as a simple meal.
     private func findRecipe(named dish: String) async -> RecipeSummary? {
         for collection in ["my", nil] as [String?] {
-            guard let found = try? await api.recipes(query: dish, collection: collection, limit: 8).recipes else { continue }
+            guard let found = try? await KitchenStore.shared.recipes(query: dish, collection: collection, limit: 8).recipes else { continue }
             let scored = found.map { (recipe: $0, score: AskMatch.score(dish, $0.title)) }.filter { $0.score > 0 }
             if let best = scored.max(by: { $0.score < $1.score }) { return best.recipe }
         }

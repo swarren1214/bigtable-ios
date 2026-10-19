@@ -23,10 +23,10 @@ final class GroceryStore {
     static let saveDelay: Duration = .seconds(2)
 
     private(set) var snapshots: [GrocerySnapshot] = []
-    private(set) var activeSnapshotID: String?
-    private(set) var sections: [GrocerySection] = []
-    private(set) var checks: [String: Bool] = [:]
-    private(set) var estimatedCost: Double = 0
+    private(set) var activeSnapshotID: String? { didSet { shareSoon() } }
+    private(set) var sections: [GrocerySection] = [] { didSet { shareSoon() } }
+    private(set) var checks: [String: Bool] = [:] { didSet { shareSoon() } }
+    private(set) var estimatedCost: Double = 0 { didSet { shareSoon() } }
     private(set) var source: GrocerySource?
     private(set) var generatedAt: String?
 
@@ -43,6 +43,7 @@ final class GroceryStore {
     private var pendingSave: Task<Void, Never>?
     private var inFlightSave: Task<Void, Never>?
     private var lastSaved: GrocerySaveSignature?
+    private var pendingShare: Task<Void, Never>?
     private static let log = Logger(subsystem: "com.stephenwarren.bigtable", category: "grocery")
 
     // MARK: - What's on the list
@@ -87,6 +88,35 @@ final class GroceryStore {
         return GroceryRangeMemory.range(for: activeSnapshotID)
     }
 
+    // MARK: - Sharing with the other Hearth apps
+
+    /// Shares the list (its estimate and what's left) with the other Hearth apps a moment after
+    /// it changes, so a run of check-offs shares once. Suffice shows it as planned spending.
+    private func shareSoon() {
+        pendingShare?.cancel()
+        pendingShare = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled, let self else { return }
+            HearthPublisher.publishGroceries(self.hearthList)
+        }
+    }
+
+    /// The active list as the other Hearth apps see it, or nil when there's none.
+    var hearthList: HearthGroceries.List? {
+        guard let activeSnapshotID, totalCount > 0 else { return nil }
+        let range = activeRange
+        return HearthGroceries.List(
+            id: activeSnapshotID,
+            estimatedCost: estimatedCost > 0 ? estimatedCost : nil,
+            itemCount: totalCount,
+            remainingCount: remainingCount,
+            generatedAt: ISODay.timestamp(generatedAt),
+            startDate: range?.start,
+            endDate: range?.end,
+            link: "bigtable://grocery"
+        )
+    }
+
     // MARK: - Loading
 
     /// Loads the snapshots and shows the active one. Unsaved changes are saved first so a
@@ -96,7 +126,7 @@ final class GroceryStore {
         if !hasLoaded { isLoading = true }
         defer { isLoading = false }
         do {
-            let response = try await api.grocerySnapshots()
+            let response = try await KitchenStore.shared.grocerySnapshots()
             snapshots = response.snapshots
             let active = response.snapshots.first { $0.id == response.activeSnapshotId } ?? response.snapshots.first
             show(active)
@@ -280,7 +310,7 @@ final class GroceryStore {
         isSaving = true
         defer { isSaving = false }
         do {
-            let saved = try await api.saveGrocerySnapshot(payload)
+            let saved = try await KitchenStore.shared.saveGrocerySnapshot(payload)
             if activeSnapshotID == nil || activeSnapshotID == sent.id { activeSnapshotID = saved.id }
             if generatedAt == nil { generatedAt = saved.generatedAtIso }
             if source == nil { source = saved.source }
@@ -316,7 +346,7 @@ final class GroceryStore {
         defer { isRestoring = false }
         show(snapshot)
         do {
-            let saved = try await api.saveGrocerySnapshot(SaveGrocerySnapshotPayload(
+            let saved = try await KitchenStore.shared.saveGrocerySnapshot(SaveGrocerySnapshotPayload(
                 id: snapshot.id,
                 sections: snapshot.sections,
                 checks: snapshot.checks,
@@ -333,6 +363,32 @@ final class GroceryStore {
 
     // MARK: - AI
 
+    /// The meals planned between two days, from the kitchen, for the API's grocery list.
+    static func plannedMeals(from start: String, to end: String) -> [GroceryListRequest.PlannedMeal] {
+        let kitchen = KitchenStore.shared
+        let size = AppModel.shared.householdSize
+        var meals: [GroceryListRequest.PlannedMeal] = []
+        for planned in kitchen.plannedSlots(from: start, to: end) {
+            let eaters = max(1, size - planned.value.excludedMembers.count)
+            if planned.value.recipeItems.isEmpty {
+                let title = (planned.value.customMeal ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !title.isEmpty, planned.value.dineOut == nil else { continue }
+                meals.append(.init(isoDate: planned.date, day: planned.day.rawValue, slot: planned.slot.rawValue, title: title, eaters: eaters))
+                continue
+            }
+            for item in planned.value.recipeItems {
+                let own = item.recipeId.flatMap { kitchen.state.recipes[$0]?.detail }
+                meals.append(.init(
+                    isoDate: planned.date, day: planned.day.rawValue, slot: planned.slot.rawValue,
+                    title: own?.title ?? item.title, eaters: eaters,
+                    baseServings: own?.baseServings,
+                    ingredients: own?.ingredients.map(\.input)
+                ))
+            }
+        }
+        return meals
+    }
+
     /// Asks the AI for a list for the planned meals between two days, and returns it for
     /// review. With `overwrite` off, the new items are merged into the current list.
     func generate(start: String, end: String, weekStart: String, costcoMode: Bool, overwrite: Bool, prompt: String) async throws -> GroceryPreview {
@@ -344,7 +400,9 @@ final class GroceryStore {
             startDate: start,
             endDate: end,
             overwriteExisting: overwrite,
-            additionalPrompt: trimmed.isEmpty ? nil : String(trimmed.prefix(500))
+            additionalPrompt: trimmed.isEmpty ? nil : String(trimmed.prefix(500)),
+            household: HearthHouseholdStore.shared.exists ? HearthHouseholdStore.shared.aiContext() : nil,
+            plannedMeals: Self.plannedMeals(from: start, to: end)
         )
         // Built on the device when it can (Apple Intelligence and Pro); the API otherwise.
         let list: GroceryListResponse.List
@@ -382,7 +440,7 @@ final class GroceryStore {
         pendingSave = nil
         while let running = inFlightSave { await running.value }
         let nextChecks = preview.overwrite ? [:] : carriedChecks(into: preview.sections)
-        let saved = try await api.saveGrocerySnapshot(SaveGrocerySnapshotPayload(
+        let saved = try await KitchenStore.shared.saveGrocerySnapshot(SaveGrocerySnapshotPayload(
             id: nil,
             sections: preview.sections,
             checks: nextChecks,

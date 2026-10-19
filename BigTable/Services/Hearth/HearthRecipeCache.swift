@@ -69,7 +69,7 @@ final class HearthRecipeCache {
     }
 
     nonisolated private static func fetch(_ key: Key) async -> (Key, RecipeDetail?) {
-        let detail = try? await BigTableAPI.shared.recipe(key.recipeID, versionId: key.versionID)
+        let detail = try? await KitchenStore.shared.recipe(key.recipeID, versionId: key.versionID)
         return (key, detail)
     }
 
