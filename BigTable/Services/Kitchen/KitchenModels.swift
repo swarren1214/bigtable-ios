@@ -52,6 +52,8 @@ nonisolated struct KitchenState: Codable, Hashable, Sendable {
     var groceries: [String: KitchenGrocery] = [:]
     var tags: [String: KitchenTag] = [:]
     var settings = KitchenSettings()
+    /// The pantry (PantryModels). Optional so kitchens saved before it existed still load.
+    var pantry: KitchenPantry? = nil
 
     var isEmpty: Bool { recipes.isEmpty && slots.isEmpty && groceries.isEmpty && tags.isEmpty }
 }

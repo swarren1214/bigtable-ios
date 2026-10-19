@@ -42,6 +42,10 @@ final class KitchenStore: HearthZoneParticipant {
     private(set) var location: Location = .personal
     /// Goes up whenever iCloud brought changes, so screens can reload.
     private(set) var revision = 0
+    /// Goes up when the pantry changes on this device (screens showing the pantry already follow
+    /// `state`; this is for what's read outside it, like dismissed receipts). Kept apart from
+    /// `revision` so a check-off or a cooked meal doesn't make the list and plan reload.
+    private(set) var pantryRevision = 0
 
     @ObservationIgnored private var systemFields: [String: Data] = [:]
     /// Each grocery list's ticks as a screen last loaded them (see saveGrocerySnapshot).
@@ -176,6 +180,49 @@ final class KitchenStore: HearthZoneParticipant {
         removed(KitchenRecords.tagName(id))
     }
 
+    // MARK: Pantry (screens use KitchenStore+Pantry)
+
+    func put(pantryItem item: PantryItem) {
+        state.pantry = state.pantry ?? KitchenPantry()
+        state.pantry?.items[item.id] = item
+        changed(KitchenRecords.pantryItemName(item.id))
+    }
+
+    func put(pantryPlace place: PantryPlace) {
+        state.pantry = state.pantry ?? KitchenPantry()
+        state.pantry?.places[place.id] = place
+        changed(KitchenRecords.pantryPlaceName(place.id))
+    }
+
+    func put(pantryContainer container: PantryContainer) {
+        state.pantry = state.pantry ?? KitchenPantry()
+        state.pantry?.containers[container.id] = container
+        changed(KitchenRecords.pantryContainerName(container.id))
+    }
+
+    func put(pantryChange change: PantryChange) {
+        state.pantry = state.pantry ?? KitchenPantry()
+        state.pantry?.changes[change.id] = change
+        changed(KitchenRecords.pantryChangeName(change.id))
+    }
+
+    func removePantryChange(_ id: String) {
+        guard state.pantry?.changes[id] != nil else { return }
+        state.pantry?.changes[id] = nil
+        removed(KitchenRecords.pantryChangeName(id))
+    }
+
+    func put(pantrySwap swap: PantrySwap) {
+        state.pantry = state.pantry ?? KitchenPantry()
+        state.pantry?.swaps[swap.id] = swap
+        changed(KitchenRecords.pantrySwapName(swap.id))
+    }
+
+    /// Tells screens the pantry changed on this device (iCloud changes bump `revision`).
+    func pantryChanged() {
+        pantryRevision += 1
+    }
+
     /// Replaces everything (the one-time move from the server). Queues every record.
     func importState(_ imported: KitchenState) {
         for (id, recipe) in imported.recipes where (state.recipes[id]?.updatedAt ?? .distantPast) < recipe.updatedAt { state.recipes[id] = recipe }
@@ -216,6 +263,11 @@ final class KitchenStore: HearthZoneParticipant {
             + state.slots.keys.map(KitchenRecords.slotName)
             + state.groceries.keys.map(KitchenRecords.groceryName)
             + state.tags.keys.map(KitchenRecords.tagName)
+            + (state.pantry?.items.keys.map(KitchenRecords.pantryItemName) ?? [])
+            + (state.pantry?.places.keys.map(KitchenRecords.pantryPlaceName) ?? [])
+            + (state.pantry?.containers.keys.map(KitchenRecords.pantryContainerName) ?? [])
+            + (state.pantry?.changes.keys.map(KitchenRecords.pantryChangeName) ?? [])
+            + (state.pantry?.swaps.keys.map(KitchenRecords.pantrySwapName) ?? [])
             + (state.settings.updatedAt > .distantPast ? [KitchenRecords.settingsName] : [])
         queue(names.map { .saveRecord(recordID($0)) })
     }
@@ -393,6 +445,11 @@ nonisolated enum KitchenRecords {
     static func slotName(_ key: String) -> String { "slot-" + key }
     static func groceryName(_ id: String) -> String { "grocery-" + id }
     static func tagName(_ id: String) -> String { "tag-" + id }
+    static func pantryItemName(_ id: String) -> String { "pitem-" + id }
+    static func pantryPlaceName(_ id: String) -> String { "pplace-" + id }
+    static func pantryContainerName(_ id: String) -> String { "pcont-" + id }
+    static func pantryChangeName(_ id: String) -> String { "pchange-" + id }
+    static func pantrySwapName(_ id: String) -> String { "pswap-" + id }
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -439,6 +496,31 @@ nonisolated enum KitchenRecords {
         if let id = name.dropPrefix("tag-"), let tag = state.tags[id] {
             let record = make("RecipeTag")
             write(tag, updatedAt: tag.updatedAt, to: record)
+            return record
+        }
+        if let id = name.dropPrefix("pitem-"), let item = state.pantry?.items[id] {
+            let record = make("PantryItem")
+            write(item, updatedAt: item.updatedAt, to: record)
+            return record
+        }
+        if let id = name.dropPrefix("pplace-"), let place = state.pantry?.places[id] {
+            let record = make("PantryPlace")
+            write(place, updatedAt: place.updatedAt, to: record)
+            return record
+        }
+        if let id = name.dropPrefix("pcont-"), let container = state.pantry?.containers[id] {
+            let record = make("PantryContainer")
+            write(container, updatedAt: container.updatedAt, to: record)
+            return record
+        }
+        if let id = name.dropPrefix("pchange-"), let change = state.pantry?.changes[id] {
+            let record = make("PantryChange")
+            write(change, updatedAt: change.at, to: record)
+            return record
+        }
+        if let id = name.dropPrefix("pswap-"), let swap = state.pantry?.swaps[id] {
+            let record = make("PantrySwap")
+            write(swap, updatedAt: swap.updatedAt, to: record)
             return record
         }
         if name == settingsName {
@@ -497,6 +579,37 @@ nonisolated enum KitchenRecords {
             guard let incoming = content(KitchenSettings.self, from: record), incoming.updatedAt > state.settings.updatedAt else { return false }
             state.settings = incoming
             return true
+        case "PantryItem":
+            guard let id = name.dropPrefix("pitem-"), let incoming = content(PantryItem.self, from: record),
+                  incoming.updatedAt > (state.pantry?.items[id]?.updatedAt ?? .distantPast) else { return false }
+            state.pantry = state.pantry ?? KitchenPantry()
+            state.pantry?.items[id] = incoming
+            return true
+        case "PantryPlace":
+            guard let id = name.dropPrefix("pplace-"), let incoming = content(PantryPlace.self, from: record),
+                  incoming.updatedAt > (state.pantry?.places[id]?.updatedAt ?? .distantPast) else { return false }
+            state.pantry = state.pantry ?? KitchenPantry()
+            state.pantry?.places[id] = incoming
+            return true
+        case "PantryContainer":
+            guard let id = name.dropPrefix("pcont-"), let incoming = content(PantryContainer.self, from: record),
+                  incoming.updatedAt > (state.pantry?.containers[id]?.updatedAt ?? .distantPast) else { return false }
+            state.pantry = state.pantry ?? KitchenPantry()
+            state.pantry?.containers[id] = incoming
+            return true
+        case "PantryChange":
+            // Written once; a copy already here is the same change.
+            guard let id = name.dropPrefix("pchange-"), state.pantry?.changes[id] == nil,
+                  let incoming = content(PantryChange.self, from: record) else { return false }
+            state.pantry = state.pantry ?? KitchenPantry()
+            state.pantry?.changes[id] = incoming
+            return true
+        case "PantrySwap":
+            guard let id = name.dropPrefix("pswap-"), let incoming = content(PantrySwap.self, from: record),
+                  incoming.updatedAt > (state.pantry?.swaps[id]?.updatedAt ?? .distantPast) else { return false }
+            state.pantry = state.pantry ?? KitchenPantry()
+            state.pantry?.swaps[id] = incoming
+            return true
         default:
             return false
         }
@@ -507,6 +620,11 @@ nonisolated enum KitchenRecords {
         if let key = name.dropPrefix("slot-") { state.slots[key] = nil }
         if let id = name.dropPrefix("grocery-") { state.groceries[id] = nil }
         if let id = name.dropPrefix("tag-") { state.tags[id] = nil }
+        if let id = name.dropPrefix("pitem-") { state.pantry?.items[id] = nil }
+        if let id = name.dropPrefix("pplace-") { state.pantry?.places[id] = nil }
+        if let id = name.dropPrefix("pcont-") { state.pantry?.containers[id] = nil }
+        if let id = name.dropPrefix("pchange-") { state.pantry?.changes[id] = nil }
+        if let id = name.dropPrefix("pswap-") { state.pantry?.swaps[id] = nil }
     }
 }
 

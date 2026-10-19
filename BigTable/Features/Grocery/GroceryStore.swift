@@ -159,14 +159,36 @@ final class GroceryStore {
     func toggle(_ item: GroceryItem) {
         checks[item.id] = !isChecked(item)
         changed()
+        tellPantry(item, checked: checks[item.id] == true)
     }
 
     func setSection(_ section: GrocerySection, checked: Bool) {
-        for item in section.items { checks[item.id] = checked }
+        for item in section.items where isChecked(item) != checked {
+            checks[item.id] = checked
+            tellPantry(item, checked: checked)
+        }
         changed()
     }
 
+    /// What's checked off came home: the pantry adds it (unchecking takes it back). Items in
+    /// Already Have came from the pantry, so they're left alone.
+    private func tellPantry(_ item: GroceryItem, checked: Bool) {
+        guard !sections.contains(where: { $0.name == Self.alreadyHaveSection && $0.items.contains { $0.id == item.id } }) else { return }
+        KitchenStore.shared.groceryChecked(item, listID: activeSnapshotID, checked: checked)
+    }
+
+    /// Checks items off without telling the pantry (a receipt put them away already).
+    func markBought(_ ids: [String]) {
+        guard !ids.isEmpty else { return }
+        for id in ids { checks[id] = true }
+        changed()
+    }
+
+    /// The section a generated list puts what the pantry already has in, checked off.
+    static let alreadyHaveSection = "Already Have"
+
     func uncheckAll() {
+        for item in allItems where isChecked(item) { tellPantry(item, checked: false) }
         for key in checks.keys { checks[key] = false }
         changed()
     }
@@ -439,7 +461,8 @@ final class GroceryStore {
         pendingSave?.cancel()
         pendingSave = nil
         while let running = inFlightSave { await running.value }
-        let nextChecks = preview.overwrite ? [:] : carriedChecks(into: preview.sections)
+        var nextChecks = preview.overwrite ? [:] : carriedChecks(into: preview.sections)
+        for item in preview.sections.first(where: { $0.name == Self.alreadyHaveSection })?.items ?? [] { nextChecks[item.id] = true }
         let saved = try await KitchenStore.shared.saveGrocerySnapshot(SaveGrocerySnapshotPayload(
             id: nil,
             sections: preview.sections,

@@ -84,16 +84,54 @@ nonisolated private extension Color {
     }
 }
 
+nonisolated private func hearthUIColor(_ hex: UInt32, _ opacity: Double) -> UIColor {
+    UIColor(
+        red: CGFloat((hex >> 16) & 0xFF) / 255,
+        green: CGFloat((hex >> 8) & 0xFF) / 255,
+        blue: CGFloat(hex & 0xFF) / 255,
+        alpha: opacity
+    )
+}
+
+nonisolated private extension Color {
+    /// One color in light mode, another in dark; follows the app's or the system's appearance.
+    init(hearthLight light: UInt32, _ lightOpacity: Double = 1, dark: UInt32, _ darkOpacity: Double = 1) {
+        self.init(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? hearthUIColor(dark, darkOpacity)
+                : hearthUIColor(light, lightOpacity)
+        })
+    }
+}
+
+/// Hearth+ colors. Dark: ember on brown-black. Light: ember on warm paper (the "Hearth Paywall"
+/// canvas's Light mode row). Each follows the app's or the system's appearance.
 @MainActor
 private enum Ember {
-    static let ground = Color(hearthHex: 0x17110D)
-    static let card = Color(hearthHex: 0x1F1712)
-    static let text = Color(hearthHex: 0xFFF6EE)
-    static let sub = Color(hearthHex: 0xFFF0E4, opacity: 0.70)
-    static let label = Color(hearthHex: 0xFFB27A)
+    static let ground = Color(hearthLight: 0xFBF5EE, dark: 0x17110D)
+    static let card = Color(hearthLight: 0xFFFFFF, dark: 0x1F1712)
+    static let text = Color(hearthLight: 0x24160D, dark: 0xFFF6EE)
+    static let sub = Color(hearthLight: 0x6B5444, dark: 0xFFF0E4, 0.70)
+    static let label = Color(hearthLight: 0xB4501A, dark: 0xFFB27A)
     static let ember = Color(hearthHex: 0xFF8A3D)
+    /// Text on ember and on the orange button, in both appearances.
     static let ink = Color(hearthHex: 0x241005)
-    static let error = Color(hearthHex: 0xFF9B8A)
+    /// Text on `text` (the selected segment, Continue).
+    static let inverse = Color(hearthLight: 0xFFF6EE, dark: 0x241005)
+    static let error = Color(hearthLight: 0xC4281C, dark: 0xFF9B8A)
+    /// Cards and rows.
+    static let fill = Color(hearthLight: 0xFFFFFF, dark: 0xFFFFFF, 0.06)
+    static let stroke = Color(hearthLight: 0x5A3214, 0.10, dark: 0xFFFFFF, 0.10)
+    static let divider = Color(hearthLight: 0x5A3214, 0.12, dark: 0xFFFFFF, 0.12)
+    /// Secondary buttons and chips.
+    static let raised = Color(hearthLight: 0xFFFFFF, dark: 0xFFFFFF, 0.10)
+    static let track = Color(hearthLight: 0x5A3214, 0.07, dark: 0xFFFFFF, 0.14)
+    static let trackStroke = Color(hearthLight: 0x5A3214, 0.12, dark: 0xFFFFFF, 0.24)
+    static let radioOff = Color(hearthLight: 0x24160D, 0.28, dark: 0xFFFFFF, 0.35)
+    static let selectedFill = Color(hearthLight: 0xFFF1E6, dark: 0xFF8A3D, 0.14)
+    static let upgradeInk = Color(hearthLight: 0x6A3510, dark: 0xFFE7D6)
+    static let scrim = Color(hearthLight: 0xFBF5EE, 0.96, dark: 0x140E0A, 0.96)
+    static let shine = Color(hearthLight: 0xF3E7DA, dark: 0xFFFFFF, 0.14)
     static let button = LinearGradient(colors: [Color(hearthHex: 0xFF7A3D), Color(hearthHex: 0xFFB347)], startPoint: .leading, endPoint: .trailing)
     static let badge = LinearGradient(colors: [Color(hearthHex: 0xFFB347), Color(hearthHex: 0xFF6A2B)], startPoint: .topLeading, endPoint: .bottomTrailing)
 }
@@ -183,7 +221,6 @@ struct HearthPaywall: View {
                 toastView(toast)
             }
         }
-        .preferredColorScheme(isHearth || phase == .success ? .dark : nil)
         .animation(.smooth(duration: 0.3), value: kind)
         .animation(.smooth(duration: 0.3), value: phase)
         .animation(.smooth(duration: 0.3), value: toast)
@@ -256,15 +293,15 @@ struct HearthPaywall: View {
             }
             .buttonStyle(.glass)
             .buttonBorderShape(.circle)
-            .tint(.white)
+            .tint(isHearth ? Ember.text : .white)
             .accessibilityLabel("Close")
             Spacer()
             Button("Restore") { Task { await restore() } }
                 .font(.subheadline.weight(.semibold))
                 .buttonStyle(.glass)
-                .tint(.white)
+                .tint(isHearth ? Ember.text : .white)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(isHearth ? Ember.text : .white)
         .padding(.top, 8)
     }
 
@@ -313,7 +350,7 @@ struct HearthPaywall: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .foregroundStyle(isHearth ? Ember.text : .white)
-            .background(.white.opacity(isHearth ? 0.1 : 0.2), in: .capsule)
+            .background(isHearth ? AnyShapeStyle(Ember.raised) : AnyShapeStyle(.white.opacity(0.2)), in: .capsule)
             .padding(.top, 16)
     }
 
@@ -323,8 +360,8 @@ struct HearthPaywall: View {
             segmentButton("\(app.displayName) only", selected: !isHearth) { kind = .app }
         }
         .padding(4)
-        .background(.white.opacity(0.14), in: .capsule)
-        .overlay(Capsule().strokeBorder(.white.opacity(0.24)))
+        .background(isHearth ? Ember.track : .white.opacity(0.14), in: .capsule)
+        .overlay(Capsule().strokeBorder(isHearth ? Ember.trackStroke : .white.opacity(0.24)))
         .padding(.top, 22)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("What to unlock")
@@ -335,7 +372,7 @@ struct HearthPaywall: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: 36)
-                .foregroundStyle(selected ? (isHearth ? Ember.ink : info.ink) : (isHearth ? Ember.text : .white))
+                .foregroundStyle(selected ? (isHearth ? Ember.inverse : info.ink) : (isHearth ? Ember.text : .white))
                 .background(selected ? AnyShapeStyle(isHearth ? Ember.text : .white) : AnyShapeStyle(.clear), in: .capsule)
                 .contentShape(.capsule)
         }
@@ -349,7 +386,7 @@ struct HearthPaywall: View {
                 .clipShape(.rect(cornerRadius: 9, style: .continuous))
             Text(upgradeText)
                 .font(.subheadline)
-                .foregroundStyle(Color(hearthHex: 0xFFE7D6))
+                .foregroundStyle(Ember.upgradeInk)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -383,7 +420,7 @@ struct HearthPaywall: View {
             switch store.plansState {
             case .idle, .loading:
                 ForEach(0..<3, id: \.self) { _ in
-                    HearthShimmer(dark: isHearth)
+                    HearthShimmer(hearth: isHearth)
                         .frame(height: 66)
                         .clipShape(.rect(cornerRadius: 18))
                 }
@@ -432,7 +469,7 @@ struct HearthPaywall: View {
                             .font(.caption.weight(.heavy))
                             .foregroundStyle(isHearth ? Ember.ink : .white)
                     } else {
-                        Circle().strokeBorder(isHearth ? Color.white.opacity(0.35) : Color(.systemGray3), lineWidth: 2)
+                        Circle().strokeBorder(isHearth ? Ember.radioOff : Color(.systemGray3), lineWidth: 2)
                     }
                 }
                 .frame(width: 24, height: 24)
@@ -465,7 +502,7 @@ struct HearthPaywall: View {
             .background(rowBackground(selected: selected), in: .rect(cornerRadius: 18))
             .overlay {
                 RoundedRectangle(cornerRadius: 18)
-                    .strokeBorder(selected ? (isHearth ? Ember.ember : info.ink) : (isHearth ? Color.white.opacity(0.12) : .clear), lineWidth: selected ? (isHearth ? 1.5 : 2) : 1)
+                    .strokeBorder(selected ? (isHearth ? Ember.ember : info.ink) : (isHearth ? Ember.divider : .clear), lineWidth: selected ? (isHearth ? 1.5 : 2) : 1)
             }
             .scaleEffect(selected && !reduceMotion ? 1.015 : 1)
             .contentShape(.rect(cornerRadius: 18))
@@ -477,7 +514,7 @@ struct HearthPaywall: View {
 
     private func rowBackground(selected: Bool) -> AnyShapeStyle {
         if isHearth {
-            return AnyShapeStyle(selected ? Ember.ember.opacity(0.14) : Color.white.opacity(0.06))
+            return AnyShapeStyle(selected ? Ember.selectedFill : Ember.fill)
         }
         return AnyShapeStyle(Color(.secondarySystemGroupedBackground))
     }
@@ -537,12 +574,12 @@ struct HearthPaywall: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .overlay(alignment: .top) {
-                        if index > 0 { Rectangle().fill(.white.opacity(0.12)).frame(height: 0.5) }
+                        if index > 0 { Rectangle().fill(Ember.divider).frame(height: 0.5) }
                     }
                 }
             }
-            .background(.white.opacity(0.06), in: .rect(cornerRadius: 22))
-            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.1)))
+            .background(Ember.fill, in: .rect(cornerRadius: 22))
+            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Ember.stroke))
             HStack(spacing: 8) {
                 trustTile("Your whole family, however big", symbol: "person.2")
                 trustTile("Your data stays in your iCloud", symbol: "lock.shield")
@@ -579,8 +616,8 @@ struct HearthPaywall: View {
                 .background(Ember.ember, in: .rect(cornerRadius: 12))
         }
         .padding(16)
-        .background(.white.opacity(0.06), in: .rect(cornerRadius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.1)))
+        .background(Ember.fill, in: .rect(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Ember.stroke))
         .padding(.top, 16)
     }
 
@@ -598,8 +635,8 @@ struct HearthPaywall: View {
         .padding(.vertical, 12)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.white.opacity(0.06), in: .rect(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
+        .background(Ember.fill, in: .rect(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Ember.stroke))
     }
 
     // MARK: Selling the app's plan
@@ -659,6 +696,7 @@ struct HearthPaywall: View {
                 .contentShape(.rect(cornerRadius: 22))
             }
             .buttonStyle(.plain)
+            .environment(\.colorScheme, .dark)
             .padding(.top, 16)
         }
     }
@@ -681,7 +719,7 @@ struct HearthPaywall: View {
                 Label("Waiting for approval", systemImage: "hourglass")
                     .font(.callout.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 54)
-                    .background(isHearth ? AnyShapeStyle(Color.white.opacity(0.1)) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: .capsule)
+                    .background(isHearth ? AnyShapeStyle(Ember.raised) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: .capsule)
                     .foregroundStyle(isHearth ? Ember.text : info.ink)
                 Text("Your request went to your family organizer. \(isHearth ? "Hearth+" : app.planName) unlocks as soon as it's approved; you can close this.")
                     .font(.footnote)
@@ -769,7 +807,7 @@ struct HearthPaywall: View {
 
     private var subStyle: Color { isHearth ? Ember.sub : Color.secondary }
     private var cardBackground: AnyShapeStyle {
-        isHearth ? AnyShapeStyle(Color.white.opacity(0.06)) : AnyShapeStyle(Color(.secondarySystemGroupedBackground))
+        isHearth ? AnyShapeStyle(Ember.fill) : AnyShapeStyle(Color(.secondarySystemGroupedBackground))
     }
 
     // MARK: Actions
@@ -823,7 +861,7 @@ struct HearthPaywall: View {
     private var success: some View {
         let unlocked = store.hasHearthPlus ? HearthAppInfo.order : [app]
         return ZStack {
-            Color(hearthHex: 0x140E0A, opacity: 0.96).ignoresSafeArea()
+            Ember.scrim.ignoresSafeArea()
             VStack(spacing: 0) {
                 Spacer()
                 HearthCelebration(reduceMotion: reduceMotion)
@@ -858,7 +896,7 @@ struct HearthPaywall: View {
                     Text("Continue")
                         .font(.headline)
                         .frame(maxWidth: .infinity, minHeight: 54)
-                        .foregroundStyle(Ember.ink)
+                        .foregroundStyle(Ember.inverse)
                         .background(Ember.text, in: .capsule)
                 }
                 .buttonStyle(.plain)
@@ -883,8 +921,8 @@ struct HearthPaywall: View {
                     }
                     .buttonStyle(.glass)
                     .buttonBorderShape(.circle)
-                    .tint(.white)
-                    .foregroundStyle(.white)
+                    .tint(hearth ? Ember.text : .white)
+                    .foregroundStyle(hearth ? Ember.text : .white)
                     .accessibilityLabel("Close")
                     Spacer()
                 }
@@ -919,12 +957,13 @@ struct HearthPaywall: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 11)
                         .overlay(alignment: .top) {
-                            Rectangle().fill(hearth ? Color.white.opacity(0.12) : Color(.separator)).frame(height: 0.5)
+                            Rectangle().fill(hearth ? Ember.divider : Color(.separator)).frame(height: 0.5)
                         }
                     }
                 }
                 .foregroundStyle(hearth ? Ember.text : Color.primary)
-                .background(hearth ? AnyShapeStyle(Color.white.opacity(0.06)) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: .rect(cornerRadius: 22))
+                .background(hearth ? AnyShapeStyle(Ember.fill) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: .rect(cornerRadius: 22))
+                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(hearth ? Ember.stroke : .clear))
                 .padding(.top, 22)
                 if !hearth && isUpgrade {
                     Button { kind = .hearthPlus } label: {
@@ -950,7 +989,8 @@ struct HearthPaywall: View {
                             .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: 54)
                             .foregroundStyle(hearth ? Ember.text : info.ink)
-                            .background(hearth ? AnyShapeStyle(Color.white.opacity(0.1)) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: .capsule)
+                            .background(hearth ? AnyShapeStyle(Ember.raised) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: .capsule)
+                            .overlay(Capsule().strokeBorder(hearth ? Ember.stroke : .clear))
                     }
                     .buttonStyle(.plain)
                     Text(membership?.term == .lifetime ? "Yours for good." : "Change or cancel your plan in Apple Account settings.")
@@ -1036,12 +1076,12 @@ struct HearthLinkAccountView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         .overlay(alignment: .top) {
-                            if index > 0 { Rectangle().fill(.white.opacity(0.12)).frame(height: 0.5) }
+                            if index > 0 { Rectangle().fill(Ember.divider).frame(height: 0.5) }
                         }
                     }
                 }
-                .background(.white.opacity(0.06), in: .rect(cornerRadius: 22))
-                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.1)))
+                .background(Ember.fill, in: .rect(cornerRadius: 22))
+                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Ember.stroke))
                 .padding(.top, 30)
                 Spacer()
                 if let button = store.signInButton {
@@ -1064,7 +1104,6 @@ struct HearthLinkAccountView: View {
             .padding(.bottom, 12)
             .frame(maxWidth: 520)
         }
-        .preferredColorScheme(.dark)
         .onChange(of: store.isSignedIn) { _, signedIn in
             if signedIn {
                 Task {
@@ -1140,6 +1179,7 @@ struct HearthLockedCard: View {
             }
         }
         .clipShape(.rect(cornerRadius: 22))
+        .environment(\.colorScheme, .dark)
         .hearthPaywall(isPresented: $showsPaywall, feature: feature)
     }
 
@@ -1179,6 +1219,7 @@ struct HearthMemberBadge: View {
                 .padding(.vertical, 4)
                 .foregroundStyle(Ember.label)
                 .background(Ember.ground, in: .capsule)
+                .environment(\.colorScheme, .dark)
                 .accessibilityLabel(membership.kind == .hearthPlus ? "Hearth+ member" : "\(store.app.planName) member")
         }
     }
@@ -1235,14 +1276,14 @@ struct HearthBillingBanner: View {
             HStack(spacing: 12) {
                 Image(systemName: "creditcard")
                     .font(.title3)
-                    .foregroundStyle(Color(hearthHex: 0xB25E00))
+                    .foregroundStyle(Color(hearthLight: 0xB25E00, dark: 0xFFB25C))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("\(membership.kind == .hearthPlus ? "Hearth+" : store.app.planName) couldn't renew")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color(hearthHex: 0x5C3300))
+                        .foregroundStyle(Color(hearthLight: 0x5C3300, dark: 0xFFE2C2))
                     Text("Update your payment method by \(until.formatted(.dateTime.month(.abbreviated).day())) to keep it.")
                         .font(.footnote)
-                        .foregroundStyle(Color(hearthHex: 0x7A4A12))
+                        .foregroundStyle(Color(hearthLight: 0x7A4A12, dark: 0xE8C39A))
                 }
                 Spacer(minLength: 0)
                 Button("Update") { Task { await store.manageSubscription() } }
@@ -1255,8 +1296,8 @@ struct HearthBillingBanner: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(Color(hearthHex: 0xFFF4E5), in: .rect(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color(hearthHex: 0xF5C77E)))
+            .background(Color(hearthLight: 0xFFF4E5, dark: 0x2E1F0E), in: .rect(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color(hearthLight: 0xF5C77E, dark: 0x6B4A1F)))
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
         }
@@ -1297,6 +1338,7 @@ struct HearthPlusTeaser: View {
                 }
                 .padding(14)
                 .background(Ember.card, in: .rect(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Ember.stroke))
                 .contentShape(.rect(cornerRadius: 18))
             }
             .buttonStyle(.plain)
@@ -1310,12 +1352,18 @@ struct HearthPlusTeaser: View {
 /// The warm, drifting background behind everything Hearth+.
 struct HearthEmberBackground: View {
     var reduceMotion: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        // Light mode keeps the same glow, much softer, on warm paper.
+        let light = colorScheme == .light
+        let ground = light ? Color(hearthHex: 0xFBF5EE) : Color(hearthHex: 0x17110D)
+        let orbOpacity = light ? 0.22 : 0.55
+        let emberStrength = light ? 0.55 : 0.95
         TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
             let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             Canvas { canvas, size in
-                canvas.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Ember.ground))
+                canvas.fill(Path(CGRect(origin: .zero, size: size)), with: .color(ground))
                 let orbs: [(UInt32, CGFloat, CGFloat, CGFloat, Double)] = [
                     (0xE0503A, -0.15, -0.05, 260, 11),
                     (0x3B74D9, 0.52, -0.07, 240, 13),
@@ -1330,7 +1378,7 @@ struct HearthEmberBackground: View {
                         let y = orb.2 * size.height + 22 * phase
                         let scale = 1 + 0.12 * (phase + 1) / 2
                         let side = orb.3 * scale
-                        layer.opacity = 0.55
+                        layer.opacity = orbOpacity
                         layer.fill(Path(ellipseIn: CGRect(x: x, y: y, width: side, height: side)), with: .color(Color(hearthHex: orb.0)))
                     }
                 }
@@ -1341,7 +1389,7 @@ struct HearthEmberBackground: View {
                     let x = CGFloat((index * 53) % 370 + 10) / 390 * size.width
                     let y = size.height + 10 - CGFloat(progress) * min(640, size.height * 0.8)
                     let radius = CGFloat(2 + index % 3) * CGFloat(1 - 0.7 * progress) / 2 + 0.5
-                    let alpha = progress < 0.12 ? progress / 0.12 * 0.95 : 0.95 * (1 - progress)
+                    let alpha = progress < 0.12 ? progress / 0.12 * emberStrength : emberStrength * (1 - progress)
                     canvas.fill(Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)), with: .color(Color(hearthHex: colors[index % 4], opacity: alpha)))
                 }
             }
@@ -1434,8 +1482,8 @@ private struct HearthFlowCard: View {
                 }
             }
         }
-        .background(.white.opacity(0.06), in: .rect(cornerRadius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.1)))
+        .background(Ember.fill, in: .rect(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Ember.stroke))
         .accessibilityElement(children: .combine)
     }
 }
@@ -1506,14 +1554,14 @@ private struct HearthSheen: View {
 
 /// A placeholder plan row while prices load.
 private struct HearthShimmer: View {
-    var dark: Bool
+    var hearth: Bool
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { context in
             let progress = (context.date.timeIntervalSinceReferenceDate / 1.3).truncatingRemainder(dividingBy: 1)
             GeometryReader { proxy in
-                let base = dark ? Color.white.opacity(0.05) : Color(.secondarySystemGroupedBackground)
-                let shine = dark ? Color.white.opacity(0.14) : Color(.systemGray5)
+                let base = hearth ? Ember.fill : Color(.secondarySystemGroupedBackground)
+                let shine = hearth ? Ember.shine : Color(.systemGray5)
                 ZStack {
                     base
                     LinearGradient(colors: [base, shine, base], startPoint: .leading, endPoint: .trailing)

@@ -40,8 +40,10 @@ enum OnDeviceGroceryList {
         let householdSize = AppModel.shared.householdSize
         let planned = try await plannedRecipes(on: Set(dates), householdSize: householdSize)
         guard !planned.isEmpty else { return nil }
-        let needs = try await ingredientNeeds(for: planned)
-        guard !needs.isEmpty else { return nil }
+        let allNeeds = try await ingredientNeeds(for: planned)
+        guard !allNeeds.isEmpty else { return nil }
+        // What the pantry already has, by the shop date, comes off the list.
+        let (needs, alreadyHave) = subtractPantry(allNeeds)
 
         var items: [(section: Section, item: GroceryItem)] = []
         for start in stride(from: 0, to: needs.count, by: batchSize) {
@@ -51,7 +53,10 @@ enum OnDeviceGroceryList {
         if let note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             items += await extras(from: note, costcoMode: costcoMode)
         }
-        let sections = assemble(items)
+        var sections = assemble(items)
+        if !alreadyHave.isEmpty {
+            sections.append(GrocerySection(name: GroceryStore.alreadyHaveSection, icon: "🏠", items: alreadyHave))
+        }
         guard !sections.isEmpty else { return nil }
         let count = sections.reduce(0) { $0 + $1.items.count }
         return GroceryListResponse.List(sections: sections, estimatedCost: Double(max(60, count * 6 + 35)))
@@ -116,6 +121,37 @@ enum OnDeviceGroceryList {
             }
         }
         return order.compactMap { needs[$0] }
+    }
+
+    // MARK: The pantry
+
+    /// Takes off what the pantry has (only amounts it's fairly sure of). Fully covered needs
+    /// become Already Have items; partly covered ones keep the rest.
+    private static func subtractPantry(_ needs: [Need]) -> (needs: [Need], have: [GroceryItem]) {
+        let kitchen = KitchenStore.shared
+        let pantry = kitchen.pantry
+        guard !pantry.liveItems.isEmpty else { return (needs, []) }
+        let amounts = PantryLedger.amounts(pantry)
+        var left: [String: Double] = amounts.compactMapValues { $0.confidence >= 0.5 ? $0.amount : nil }
+        var remaining: [Need] = []
+        var have: [GroceryItem] = []
+        for need in needs {
+            guard let item = PantryNames.match(need.name, in: pantry.liveItems), let onHand = left[item.id], onHand > 0,
+                  let total = need.total, let wanted = PantryUnits.toBase(total, unit: need.unit, for: item) else {
+                remaining.append(need)
+                continue
+            }
+            if onHand >= wanted {
+                left[item.id] = onHand - wanted
+                have.append(GroceryItem(name: item.name, quantity: "have " + PantryUnits.display(onHand, for: item), meals: Array(need.recipes.prefix(4))))
+            } else {
+                left[item.id] = 0
+                var rest = need
+                rest.total = total * (1 - onHand / wanted)
+                remaining.append(rest)
+            }
+        }
+        return (remaining, have)
     }
 
     // MARK: Sections and quantities

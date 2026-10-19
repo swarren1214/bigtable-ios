@@ -5,7 +5,8 @@ import SwiftUI
 /// Hearth app on this device already has one, just says so.
 ///
 /// Put it in the app's onboarding with `onContinue` moving to the next step. It never lets the
-/// person continue without a household.
+/// person continue without a household: "Not Now" starts a household of just them, and says
+/// where Household is in this app for when they're ready to add their family or join theirs.
 extension View {
     /// Every Hearth app works inside a household: once the app's own onboarding is done
     /// (`isActive`), anyone without one gets the household step over everything until they
@@ -19,14 +20,21 @@ private struct HearthHouseholdRequirement: ViewModifier {
     var isActive: Bool
     var accent: Color
     @State private var store = HearthHouseholdStore.shared
+    /// Stays up after the household exists, until the person taps Continue, so they see what
+    /// happened (and, after Not Now, where to find Household later).
+    @State private var presented = false
 
     private var needed: Bool { isActive && store.hasLoaded && !store.exists }
 
     func body(content: Content) -> some View {
-        content.fullScreenCover(isPresented: Binding(get: { needed }, set: { _ in })) {
-            HearthHouseholdOnboarding(accent: accent) {}
-                .interactiveDismissDisabled()
-        }
+        content
+            .fullScreenCover(isPresented: $presented) {
+                HearthHouseholdOnboarding(accent: accent) { presented = false }
+                    .interactiveDismissDisabled()
+            }
+            .onChange(of: needed, initial: true) { _, needed in
+                if needed { presented = true }
+            }
     }
 }
 
@@ -36,13 +44,15 @@ struct HearthHouseholdOnboarding: View {
     @State private var store = HearthHouseholdStore.shared
     @State private var showsSetup = false
     @State private var waitsForInvite = false
+    /// They chose Not Now: a household of just them was started for them.
+    @State private var setUpLater = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 header
                 if store.exists {
-                    joinedCard
+                    if setUpLater { laterCard } else { joinedCard }
                 } else if store.pendingInvite != nil {
                     // The invitation alert can't show over this screen, so it's here.
                     invitationCard
@@ -70,6 +80,17 @@ struct HearthHouseholdOnboarding: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 12)
                 .frame(maxWidth: 520)
+            } else if store.pendingInvite == nil && !waitsForInvite {
+                Button(action: startJustMe) {
+                    Text("Not Now")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.glass)
+                .disabled(!store.hasLoaded || store.isWorking)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+                .frame(maxWidth: 520)
             }
         }
         .sheet(isPresented: $showsSetup) {
@@ -94,20 +115,86 @@ struct HearthHouseholdOnboarding: View {
 
     private var header: some View {
         VStack(spacing: 14) {
-            HStack(spacing: 10) {
-                ForEach(HearthAppInfo.order, id: \.self) { app in
-                    HearthAppIcon(app: app, size: app == store.app ? 52 : 40)
-                        .opacity(app == store.app ? 1 : 0.85)
-                }
-            }
-            .padding(.bottom, 4)
+            HearthLogo(size: 76)
+                .padding(.bottom, 2)
             Text("Your Household")
                 .font(.largeTitle.bold())
             Text("\(store.app.displayName) is one of the Hearth apps for family life. Your household is who you share them with, set up once for all of them.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+            HStack(spacing: 8) {
+                ForEach(HearthAppInfo.order, id: \.self) { app in
+                    HearthAppIcon(app: app, size: app == store.app ? 38 : 30)
+                        .opacity(app == store.app ? 1 : 0.85)
+                }
+            }
+            .padding(.top, 2)
+            .accessibilityHidden(true)
         }
+    }
+
+    /// Not Now: a household of just this person, so the app works, set up properly later.
+    /// Their name comes from another Hearth app on this device when one knows it.
+    private func startJustMe() {
+        let mine = HearthHouseholdPlanner.sources().filter { HearthHouseholdPlanner.meSourceIDs().contains($0.id) }
+        var me = mine.isEmpty
+            ? HearthMember(name: "Me", role: .parent, colorHex: HearthPalette.colors[5].hex)
+            : HearthHouseholdPlanner.member(from: mine, sortOrder: 0)
+        me.role = .parent
+        let first = mine.isEmpty ? "" : me.firstName
+        setUpLater = true
+        store.create(
+            name: first.isEmpty ? "My Household" : "\(first)'s Household",
+            members: [me],
+            organizerID: me.id
+        )
+    }
+
+    /// Where Household is in each app, for "when you're ready".
+    static func householdLocation(in app: HearthApp) -> String {
+        switch app {
+        case .bigtable, .suffice: "tap your picture at the top of the screen, then Household"
+        case .sated: "tap the person button at the top of Today, then Household"
+        case .caloma: "tap Family at the top of Home, then Household"
+        case .hearken: "tap the person button at the top of Today and look under Household"
+        }
+    }
+
+    private var laterCard: some View {
+        VStack(spacing: 16) {
+            Image(systemName: HearthHouseholdLabel.symbol)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(accent, in: .circle)
+                .accessibilityHidden(true)
+            VStack(spacing: 6) {
+                Text("Set Up Later")
+                    .font(.title3.bold())
+                Text("For now your household is just you, so everything in \(store.app.displayName) works.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("When you’re ready")
+                    .font(.headline)
+                Text("To add your family or join their household, \(Self.householdLocation(in: store.app)).")
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("You can do it from any Hearth app, and only once.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(accent.opacity(0.14), in: .rect(cornerRadius: 16))
+            .accessibilityElement(children: .combine)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 22))
     }
 
     /// What a household is for, before asking for one.
@@ -269,5 +356,29 @@ struct HearthHouseholdOnboarding: View {
                 .foregroundStyle(accent)
             Text(text)
         }
+    }
+}
+
+/// The Hearth mark (Assets.xcassets/Hearth/hearth, light and dark), with a symbol if the asset
+/// is missing.
+struct HearthLogo: View {
+    var size: CGFloat = 64
+
+    var body: some View {
+        Group {
+            if let image = UIImage(named: "Hearth/hearth") {
+                Image(uiImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+            } else {
+                Image(systemName: "flame.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.orange)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("Hearth")
     }
 }

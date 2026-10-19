@@ -280,6 +280,7 @@ extension KitchenStore {
         let week = update.weekStart ?? ISODay.weekStart(containing: .now)
         let key = KitchenSlot.key(weekStart: week, day: update.day, slot: update.slot)
         var value = state.slots[key]?.value ?? PlannerSlot()
+        let wasCompleted = value.completed
         if let customMeal = update.customMeal { value.customMeal = customMeal }
         if let dineOut = update.dineOut { value.dineOut = dineOut }
         if let items = update.recipeItems {
@@ -294,6 +295,8 @@ extension KitchenStore {
         if let completed = update.completed { value.completed = completed }
         value.id = value.id ?? key
         put(slot: KitchenSlot(weekStart: week, day: update.day, slot: update.slot, value: value, updatedAt: .now))
+        // Cooking it takes its ingredients off the pantry; unmarking puts them back.
+        if value.completed != wasCompleted { mealCooked(value, key: key, completed: value.completed) }
         return PlannerSlotUpdateResponse(day: update.day, slot: update.slot, weekStart: week, planId: "kitchen-" + week, slotData: displaySlot(value))
     }
 

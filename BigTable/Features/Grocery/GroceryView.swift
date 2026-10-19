@@ -22,6 +22,8 @@ struct GroceryView: View {
     @State private var newItemText = ""
     @State private var newItemSection = "Other"
     @FocusState private var addFieldFocused: Bool
+    /// List or Pantry, remembered.
+    @AppStorage("grocery.side") private var side = "list"
 
     private var isPro: Bool { model.hasPro }
     private var canEdit: Bool { model.isOrganizer }
@@ -32,6 +34,31 @@ struct GroceryView: View {
     private var householdKey: String { "\(model.userID ?? "")|\(model.membership?.organizerProfileId ?? "")" }
 
     var body: some View {
+        Group {
+            if side == "pantry" {
+                PantryView()
+            } else {
+                listSide
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) { sidePicker }
+        .navigationTitle(side == "pantry" ? "Pantry" : "Grocery")
+        .navigationBarTitleDisplayMode(.large)
+    }
+
+    /// What you need (the list) or what you have (the pantry).
+    private var sidePicker: some View {
+        Picker("Show", selection: $side.animation(.snappy)) {
+            Text("List").tag("list")
+            Text("Pantry").tag("pantry")
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    private var listSide: some View {
         content
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Grocery")
