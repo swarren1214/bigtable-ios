@@ -8,7 +8,6 @@ struct BigTableApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var router = AppRouter.shared
     @State private var model = AppModel.shared
-    @State private var subscriptions = Subscriptions.shared
 
     init() {
         // Debug: marketing screenshots (scripts/screenshots.sh). Does nothing otherwise.
@@ -20,7 +19,6 @@ struct BigTableApp: App {
             AppRoot()
                 .environment(router)
                 .environment(model)
-                .environment(subscriptions)
                 .task { await model.start() }
                 .onOpenURL { url in router.open(url) }
         }
@@ -86,7 +84,6 @@ enum AppTab: Hashable {
 
 /// Sheets any screen can open.
 enum AppSheet: Identifiable, Hashable {
-    case paywall
     case profile
     case notifications
     case newRecipe
@@ -98,7 +95,6 @@ enum AppSheet: Identifiable, Hashable {
 
     var id: String {
         switch self {
-        case .paywall: "paywall"
         case .profile: "profile"
         case .notifications: "notifications"
         case .newRecipe: "newRecipe"
@@ -162,6 +158,7 @@ struct AppRoot: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showTutorial = false
     @State private var showAppleLink = false
+    @State private var purchases = HearthPurchases.shared
 
     private var accent: Color { Brand.defaultAccent }
 
@@ -230,6 +227,17 @@ struct AppRoot: View {
                 await KitchenSharing.update()
             }
         }
+        // BigTable Plus or Hearth+ turned on (bought, restored, or the household's) or off: the
+        // server's usage and tier set the AI limits, so fetch them again. RevenueCat's webhook
+        // can land a moment after the purchase, so check once more shortly after.
+        .onChange(of: purchases.isUnlocked) { _, _ in
+            guard model.phase == .ready else { return }
+            Task {
+                await model.refreshUsage()
+                try? await Task.sleep(for: .seconds(5))
+                await model.refreshUsage()
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             // Another Hearth app may have signed in, out, or as someone else meanwhile.
             if phase == .active {
@@ -240,17 +248,14 @@ struct AppRoot: View {
                 KitchenStore.shared.persistNow()
             }
             guard phase == .active, model.phase == .ready else { return }
-            Task {
-                await model.refreshUnreadCount()
-                await Subscriptions.shared.refresh()
-            }
+            // HearthPurchases refreshes the plan itself when the app comes back.
+            Task { await model.refreshUnreadCount() }
         }
     }
 
     @ViewBuilder
     private func sheetContent(_ sheet: AppSheet) -> some View {
         switch sheet {
-        case .paywall: PaywallView()
         case .profile: NavigationStack { ProfileView() }
         case .notifications: NavigationStack { NotificationsView() }
         case .newRecipe: RecipeEditorView(mode: .create)

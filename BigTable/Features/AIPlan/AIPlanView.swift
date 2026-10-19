@@ -4,7 +4,8 @@ import UIKit
 
 /// The AI meal planner (Plan › sparkles, or "meals to fill"): say what the week needs, pick
 /// the days and meals, how the recipes should be mixed, then preview what it plans before
-/// adding it to the plan. Needs Pro (the server's tier); members need the organizer's OK.
+/// adding it to the plan. Needs BigTable Plus or Hearth+ (the server's usage still sets the
+/// AI limits); members need the organizer's OK.
 struct AIPlanView: View {
     @Environment(AppModel.self) private var model
     @Environment(AppRouter.self) private var router
@@ -20,8 +21,10 @@ struct AIPlanView: View {
     }
 
     private var usage: UsageCheckResponse? { model.usage }
-    /// The server says this account can't make AI requests right now (free tier or used up).
-    private var needsUpgrade: Bool { usage.map { !$0.canMakeRequest } ?? false }
+    /// AI meal plans are part of BigTable Plus and Hearth+.
+    private var isLocked: Bool { !model.hasPro }
+    /// The server says this account can't make AI requests right now (this month's are used up).
+    private var isUsedUp: Bool { usage.map { !$0.canMakeRequest } ?? false }
 
     var body: some View {
         NavigationStack {
@@ -66,7 +69,14 @@ struct AIPlanView: View {
         .animation(.smooth, value: store.phase)
         .errorAlert($store.error, title: "Couldn't plan your meals")
         .interactiveDismissDisabled(store.phase.isBusy)
+        .hearthPaywall(isPresented: $store.showsPaywall, feature: Self.paywallFeature)
     }
+
+    static let paywallFeature = HearthPaywallFeature(
+        "AI meal plans",
+        detail: "Plan a week of meals from your recipes and favorites, then build the grocery list from it.",
+        symbol: "sparkles"
+    )
 
     // MARK: Not allowed
 
@@ -182,17 +192,27 @@ struct AIPlanView: View {
 
     @ViewBuilder
     private var usageSection: some View {
-        if let usage {
-            if needsUpgrade {
-                Section {
-                    UpgradeCard(
-                        title: usage.isPro ? "You've used this month's AI plans" : "AI meal plans are part of Pro",
-                        message: usage.isPro
-                            ? "Your AI allowance resets \(resetText(usage)). Upgrade options are on the next screen."
-                            : "Plan a week of meals from your recipes and favorites, then build the grocery list from it."
-                    )
+        if isLocked {
+            Section {
+                HearthLockedCard(feature: Self.paywallFeature)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
+            }
+        } else if let usage {
+            if isUsedUp {
+                Section {
+                    HStack(spacing: 12) {
+                        IconTile(symbol: "sparkles", color: accent, size: 34)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("You've used this month's AI plans")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Your AI allowance resets \(resetText(usage)).")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
             } else {
                 Section {
@@ -200,7 +220,7 @@ struct AIPlanView: View {
                         IconTile(symbol: "sparkles", color: accent, size: 34)
                         VStack(alignment: .leading, spacing: 2) {
                             if usage.isUnlimited {
-                                Text("BigTable Pro").font(.subheadline.weight(.semibold))
+                                Text("BigTable Plus").font(.subheadline.weight(.semibold))
                                 Text("Plan as often as you like.")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
@@ -232,13 +252,13 @@ struct AIPlanView: View {
                 promptFocused = false
                 Task { await generate() }
             } label: {
-                Label(needsUpgrade ? "See Pro Plans" : "Generate Meal Plan", systemImage: "sparkles")
+                Label(isLocked ? "See Plans" : "Generate Meal Plan", systemImage: "sparkles")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
             .buttonStyle(.glassProminent)
-            .disabled(store.selectedMealCount == 0 || store.phase.isBusy)
+            .disabled(store.selectedMealCount == 0 || store.phase.isBusy || (isUsedUp && !isLocked))
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
@@ -246,10 +266,11 @@ struct AIPlanView: View {
 
     private func generate() async {
         guard model.canUseAIPlan else { return }
-        if needsUpgrade {
-            router.present(.paywall)
+        if isLocked {
+            store.showsPaywall = true
             return
         }
+        guard !isUsedUp else { return }
         if await store.generate(model: model, router: router) {
             showsPreview = true
         }

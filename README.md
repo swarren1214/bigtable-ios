@@ -64,7 +64,7 @@ Requires Xcode 26 and iOS 26. iPhone and iPad.
   members and their permissions, invitations, BigTable Pro and usage, notification settings,
   privacy (Community visibility, blocked people), deleted recipes, manage tags, appearance and
   accent, invite a friend, the tour, help links, sign out, delete account.
-- **Pro**: RevenueCat offerings (annual first), subscribe, restore.
+- **Pro**: BigTable Pro or Hearth+, through HearthKit's paywall (`.hearthPaywall`, `HearthLockedCard`).
 - **Tour**: the Expo app's tutorial slides, shown once to new organizers.
 
 ## How it's built
@@ -78,11 +78,11 @@ BigTable/
   Models/         API shapes (one for one with the Expo app's types), ingredient parsing
                   (ported from lib/recipe-ingredients.ts), ISODay
   Services/       AuthClient (Supabase Auth over REST, Keychain), BigTableAPI (every endpoint,
-                  fallback URL, token refresh), StorageClient (photo uploads), Subscriptions
-                  (RevenueCat), OnDevice (Apple Maps search, recipe parsing, link import,
+                  fallback URL, token refresh), StorageClient (photo uploads), Hearth
+                  (shared HearthKit code, incl. HearthPurchases/HearthPaywall), OnDevice (Apple Maps search, recipe parsing, link import,
                   transcription, grocery lists,
                   scanning, meal planning)
-  Features/       Account, Profile, Paywall, Tutorial, Plan, AIPlan, Recipes, Grocery,
+  Features/       Account, Profile, Tutorial, Plan, AIPlan, Recipes, Grocery,
                   Community, Notifications (each with its own @Observable store)
 BigTableTests/    Swift Testing: ingredient parsing, dates, API decoding
 docs/             PORTING_GUIDE.md (how the port is organized)
@@ -95,9 +95,12 @@ docs/             PORTING_GUIDE.md (how the port is organized)
   Every API call carries the access token; a 401 refreshes once and retries.
 - **API**: tries `api.bigtableapp.com` first and the Vercel URL when that can't be
   reached or answers with a 5xx, like the Expo app.
-- **Pro**: RevenueCat with the Supabase user id as the app user id, the same entitlement
-  ("BigTable Pro") and products. RevenueCat's webhook keeps the server's tier current, and the
-  server's tier (`/api/usage/check`) is what gates AI.
+- **Pro**: HearthKit's `HearthPurchases` (configured in `AppModel.configurePurchases`), the
+  app's only RevenueCat setup: the shared Hearth sign-in's user id (the Supabase user id) as the
+  app user id, entitlement "BigTable Pro" or `hearth_plus`, and the household organizer's plan
+  from `/v1/me/entitlements`. Screens gate on `AppModel.hasPro`. RevenueCat's webhook keeps the
+  server's tier current, and the server's usage and tier still set the AI limits. Free accounts
+  get three web imports a month (`WebImportAllowance`, counted on the device).
 - **On the device**: Dine Out searches Apple Maps (MapKit). Recipes from a link are read on the
   phone (schema.org recipe data, including prep and cook times, or the page's text through
   Apple's on-device model). What you say is heard on the phone (on-device speech recognition), but

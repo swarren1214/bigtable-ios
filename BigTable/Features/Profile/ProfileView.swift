@@ -5,7 +5,7 @@ import SwiftUI
 import UIKit
 
 /// Profile: who's signed in, the household and the people who share it, invitations,
-/// BigTable Pro, settings, and the account itself. The sheet behind the avatar in every tab's
+/// the plan (BigTable Plus or Hearth+) and AI usage, settings, and the account itself. The sheet behind the avatar in every tab's
 /// toolbar (the caller provides the NavigationStack).
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
@@ -27,7 +27,7 @@ struct ProfileView: View {
     @State private var isWorking = false
     @State private var errorMessage: String?
 
-    private var subscriptions: Subscriptions { Subscriptions.shared }
+    @State private var purchases = HearthPurchases.shared
 
     var body: some View {
         BigTableScreen(title: "Profile") {
@@ -60,14 +60,15 @@ struct ProfileView: View {
         .refreshable {
             await model.reload()
             await loadInvitations()
-            await subscriptions.refresh()
+            await model.refreshUsage()
+            await purchases.refresh()
         }
         .task {
             await loadInvitations()
             await model.refreshUsage()
-            await subscriptions.refresh()
+            await purchases.refresh()
         }
-        .sheet(isPresented: $showPaywall) { PaywallView() }
+        .hearthPaywall(isPresented: $showPaywall, startWith: .app)
         .sheet(isPresented: $showTutorial) { TutorialView {} }
         .sheet(isPresented: $showMembershipInfo) {
             ProfileJoinedHouseholdInfoView(householdName: model.householdName)
@@ -97,7 +98,7 @@ struct ProfileView: View {
             Button("Delete Account", role: .destructive) { Task { await deleteAccount() } }
             Button("Cancel", role: .cancel) { deleteConfirmation = "" }
         } message: {
-            Text("This permanently erases your household, recipes and account. It can't be undone. A BigTable Pro subscription is canceled separately in your Apple Account's subscriptions. Type DELETE to confirm.")
+            Text("This permanently erases your household, recipes and account. It can't be undone. A BigTable Plus or Hearth+ subscription is canceled separately in your Apple Account's subscriptions. Type DELETE to confirm.")
         }
         .errorAlert($errorMessage)
         .overlay {
@@ -120,7 +121,13 @@ struct ProfileView: View {
             .first { !$0.isEmpty } ?? "BigTable"
     }
 
-    private var isPro: Bool { subscriptions.isPro || model.usage?.isPro == true }
+    private var isPro: Bool { model.hasPro }
+
+    /// "Hearth+" or "BigTable Plus", when there's a plan.
+    private var planLabel: String? {
+        if purchases.membership?.kind == .hearthPlus { return "Hearth+" }
+        return isPro ? "BigTable Plus" : nil
+    }
 
     /// The shared Hearth account section (HearthAccount.swift). BigTable always has someone
     /// signed in, so it never shows the Sign in with Apple pitch.
@@ -134,10 +141,15 @@ struct ProfileView: View {
                 email: user?.email,
                 detail: model.householdName.isEmpty ? nil : model.householdName,
                 photoURL: ProfileAvatar.url(for: model.me?.myMember?.avatarUrl).flatMap { URL(string: $0) },
-                method: isPro ? (signedInWithApple ? "BigTable Pro · Signed in with Apple" : "BigTable Pro") : (signedInWithApple ? "Signed in with Apple" : "Signed in with email")
+                method: planLabel.map { signedInWithApple ? "\($0) · Signed in with Apple" : $0 } ?? (signedInWithApple ? "Signed in with Apple" : "Signed in with email")
             )
         ) {
             AccountAppleSignInButton(label: .signIn) { message in errorMessage = message }
+        } rows: {
+            // Get Hearth+, or manage BigTable Plus or Hearth+ (HearthPaywall.swift).
+            HearthMembershipRow()
+                .padding(.horizontal, 14)
+                .frame(minHeight: 48)
         } onSignOut: {
             confirmSignOut = true
         } onDeleteAccount: {
@@ -249,13 +261,15 @@ struct ProfileView: View {
 
     private var proSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionTitle("BigTable Pro")
+            SectionTitle("Your Plan") {
+                HearthMemberBadge()
+            }
             Card {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
                         IconTile(symbol: "sparkles", color: PersonColor.purple.color, size: 40, filled: isPro)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(isPro ? "Pro" : "Starter").font(.headline)
+                            Text(planLabel ?? "Starter").font(.headline)
                             Text(proSummary)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -266,24 +280,16 @@ struct ProfileView: View {
                     if let usage = model.usage {
                         usageView(usage)
                     }
-                    if model.isOrganizer {
-                        if subscriptions.isPro {
-                            ProfileSecondaryButton(title: "Manage Subscription", systemImage: "slider.horizontal.3") {
-                                openURL(subscriptions.managementURL ?? ProfileLinks.manageSubscriptions)
-                            }
-                        } else {
-                            Button {
-                                showPaywall = true
-                            } label: {
-                                Label("See Plans", systemImage: "sparkles")
-                                    .frame(maxWidth: .infinity, minHeight: 36)
-                            }
-                            .buttonStyle(.glassProminent)
-                            .controlSize(.large)
-                            ProfileSecondaryButton(title: "Restore Purchases", systemImage: "arrow.clockwise") {
-                                Task { await restore() }
-                            }
+                    if model.isOrganizer && !isPro {
+                        // The paywall also restores purchases and redeems codes.
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            Label("See Plans", systemImage: "sparkles")
+                                .frame(maxWidth: .infinity, minHeight: 36)
                         }
+                        .buttonStyle(.glassProminent)
+                        .controlSize(.large)
                     }
                 }
             }
@@ -291,18 +297,28 @@ struct ProfileView: View {
     }
 
     private var proSummary: String {
+        if let membership = purchases.membership {
+            switch membership.source {
+            case .household:
+                return "\(planLabel ?? "Plus") comes with \(model.householdName.isEmpty ? "your household" : model.householdName)."
+            case .familySharing:
+                return "\(planLabel ?? "Plus") comes with Family Sharing."
+            case .own:
+                if let date = membership.expiresAt {
+                    let day = date.formatted(date: .abbreviated, time: .omitted)
+                    return membership.willRenew ? "Renews \(day)." : "Ends \(day)."
+                }
+                if membership.term == .lifetime { return "Yours for good." }
+            }
+        }
         if !model.isOrganizer {
             return isPro
-                ? "Pro comes with \(model.householdName.isEmpty ? "your household" : model.householdName)."
+                ? "Plus comes with \(model.householdName.isEmpty ? "your household" : model.householdName)."
                 : "The household's organizer manages its plan."
-        }
-        if subscriptions.isPro, let date = subscriptions.expirationDate {
-            let day = date.formatted(date: .abbreviated, time: .omitted)
-            return subscriptions.willRenew ? "Renews \(day)." : "Ends \(day)."
         }
         return isPro
             ? "AI meal plans, AI grocery lists, recipe scanning and imports are on."
-            : "Add AI meal plans and grocery lists, recipe scanning and imports from the web."
+            : "Add AI meal plans and grocery lists, recipe scanning and unlimited imports from the web."
     }
 
     private func usageView(_ usage: UsageCheckResponse) -> some View {
@@ -488,16 +504,6 @@ struct ProfileView: View {
 
     private func loadInvitations() async {
         invitations = try? await model.api.householdInvitations()
-    }
-
-    private func restore() async {
-        isWorking = true
-        defer { isWorking = false }
-        await subscriptions.restore()
-        if let message = subscriptions.lastError {
-            subscriptions.lastError = nil
-            errorMessage = message
-        }
     }
 
     private func leaveHousehold() async {

@@ -49,6 +49,7 @@ struct HearthHouseholdOnboarding: View {
                 } else if waitsForInvite {
                     inviteSteps
                 } else {
+                    explainer
                     choices
                 }
             }
@@ -92,18 +93,63 @@ struct HearthHouseholdOnboarding: View {
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
-            Image(systemName: HearthHouseholdLabel.symbol)
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(accent)
-                .accessibilityHidden(true)
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                ForEach(HearthAppInfo.order, id: \.self) { app in
+                    HearthAppIcon(app: app, size: app == store.app ? 52 : 40)
+                        .opacity(app == store.app ? 1 : 0.85)
+                }
+            }
+            .padding(.bottom, 4)
             Text("Your Household")
                 .font(.largeTitle.bold())
-            Text("The people you share home life with, the same in every Hearth app. Birthdays, allergies and diets stay encrypted in your family's iCloud.")
+            Text("\(store.app.displayName) is one of the Hearth apps for family life. Your household is who you share them with, set up once for all of them.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
+    }
+
+    /// What a household is for, before asking for one.
+    private var explainer: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            point(symbol: HearthHouseholdLabel.symbol, title: "In \(store.app.displayName)", detail: Self.purpose(in: store.app))
+            point(symbol: "square.stack.3d.up", title: "The same people in every app", detail: "Add someone once and BigTable, Suffice, Sated, Caloma and Hearken all know them. Change them anywhere and it changes everywhere.")
+            point(symbol: "envelope", title: "One invitation", detail: "Invite your family once. They join in every Hearth app they use.")
+            point(symbol: "lock", title: "Private to your family", detail: "Birthdays, allergies and diets are encrypted in your family’s iCloud, not on Hearth’s servers.")
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 22))
+    }
+
+    /// What the household does in this app, from the person's side.
+    static func purpose(in app: HearthApp) -> String {
+        switch app {
+        case .bigtable: "Plan meals around everyone’s tastes and allergies, and share recipes, the plan and the grocery list."
+        case .suffice: "Share the budget with your partner and see who made each purchase."
+        case .sated: "The coach keeps your household’s allergies and diets, and your own likes, in mind."
+        case .caloma: "Chores, rewards and the family calendar, for each person in it."
+        case .hearken: "Your reading stays yours, and Caloma can show whose reading is whose on the family calendar."
+        }
+    }
+
+    private func point(symbol: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(accent)
+                .frame(width: 28)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var joinedCard: some View {
@@ -155,11 +201,14 @@ struct HearthHouseholdOnboarding: View {
     }
 
     private var choices: some View {
-        VStack(spacing: 12) {
-            choice(symbol: "house.fill", title: "Set Up My Household", detail: "Start with yourself; add your family now or later. People other Hearth apps already know are suggested.") {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Get Started")
+                .font(.title3.bold())
+                .padding(.top, 8)
+            choice(symbol: "house.fill", title: "Set Up My Household", detail: "Just you is fine. Add family now or later.") {
                 showsSetup = true
             }
-            choice(symbol: "envelope.open.fill", title: "I've Been Invited", detail: "Someone in your family already uses a Hearth app and is inviting you.") {
+            choice(symbol: "envelope.open.fill", title: "Join My Family’s Household", detail: "Someone already set one up in a Hearth app. Join theirs instead of starting another.") {
                 waitsForInvite = true
             }
         }

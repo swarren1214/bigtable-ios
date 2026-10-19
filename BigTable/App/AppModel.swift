@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import OSLog
+import SwiftUI
 import UIKit
 import UserNotifications
 
@@ -57,9 +58,16 @@ final class AppModel {
     var canUseAIGrocery: Bool { isOrganizer || permissions.canUseAiGrocery }
     var canEditMembers: Bool { isOrganizer || permissions.canEditMembers }
 
+    /// BigTable Plus or Hearth+: bought on this Apple Account, family-shared, or the household
+    /// organizer's (HearthKit's `HearthPurchases`, which reads the household's plan from
+    /// `/v1/me/entitlements`), or the server's tier says Pro. The server's usage and tier still
+    /// set the AI limits.
+    var hasPro: Bool { HearthPurchases.shared.isUnlocked || usage?.isPro == true }
+
     // MARK: Starting up
 
     func start() async {
+        configurePurchases()
         await AuthClient.shared.observe { session in
             Task { @MainActor in AppModel.shared.sessionChanged(session) }
         }
@@ -74,16 +82,39 @@ final class AppModel {
             usage = nil
             permissions = .organizer
             phase = .signedOut
-            Task { await Subscriptions.shared.signedOut() }
+            Task { await HearthPurchases.shared.followSignIn() }
             return
         }
         // A token refresh for the same person changes nothing on screen.
         guard previous != new.user.id || phase == .launching || phase == .signedOut else { return }
         phase = .loading
         Task {
-            await Subscriptions.shared.signedIn(userID: new.user.id)
+            await HearthPurchases.shared.followSignIn()
             await reload()
         }
+    }
+
+    /// BigTable Plus and Hearth+ through HearthKit: the app's only RevenueCat setup. The
+    /// RevenueCat app user id is the shared Hearth sign-in's user id (the Supabase user id, as
+    /// before), so current BigTable Plus subscribers carry over.
+    private func configurePurchases() {
+        let purchases = HearthPurchases.shared
+        // Screenshot mode (Debug): everything unlocked, no RevenueCat or App Store.
+        if ScreenshotMode.isOn { purchases.previewUnlocked = true }
+        guard AppConfig.revenueCatAPIKey != "REVENUECAT_PUBLIC_KEY" else { return }
+        // Loading the saved session first shares it as the Hearth sign-in RevenueCat follows.
+        _ = AuthClient.shared
+        purchases.configure(
+            app: .bigtable,
+            apiKey: AppConfig.revenueCatAPIKey,
+            apiBaseURL: AppConfig.apiBaseURL,
+            accessToken: { try? await AuthClient.shared.accessToken() },
+            signInButton: {
+                AnyView(AccountAppleSignInButton(label: .signIn) { message in
+                    AppModel.log.error("Sign in with Apple from the paywall failed: \(message, privacy: .public)")
+                })
+            }
+        )
     }
 
     /// Loads `/v1/bigtable/me`, then permissions and usage.

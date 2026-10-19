@@ -7,12 +7,14 @@ import VisionKit
 /// The first page of New Recipe: describe a recipe, ask for one or paste a link in one box
 /// (the mic starts listening the moment it's tapped), or bring one in from a scanned page or
 /// a photo, or start from a blank recipe. Words are heard on the device and a link is read on
-/// the device; the recipe itself is written by Claude through the API.
+/// the device; the recipe itself is written by Claude through the API. Scanning needs BigTable
+/// Pro or Hearth+; without them, three web imports a month are free.
 struct RecipeStartView: View {
     var model: RecipeEditorModel
     @Bindable var flow: RecipeImportFlow
     var isPro: Bool
-    var onUpgrade: () -> Void
+    /// Opens the Hearth paywall for a feature.
+    var onUpgrade: (HearthPaywallFeature) -> Void
     var onNotice: (RecipeEditorNotice) -> Void
     /// AI filled in the recipe: show it, ready to change by talking.
     var onFilled: () -> Void
@@ -23,6 +25,7 @@ struct RecipeStartView: View {
     @State private var prompt = ""
     @State private var dictation = RecipeDictation()
     @State private var textBeforeDictation = ""
+    @State private var imports = WebImportAllowance.shared
     @FocusState private var focused: Bool
 
     static let ideas = [
@@ -33,6 +36,15 @@ struct RecipeStartView: View {
     ]
 
     private var link: URL? { Self.link(in: prompt) }
+    /// Free accounts have used this month's web imports.
+    private var importsUsedUp: Bool { !isPro && imports.remaining == 0 }
+
+    static let scanFeature = HearthPaywallFeature("Recipe scanning", detail: "Photograph a cookbook page, a recipe card or a screenshot.", symbol: "doc.viewfinder")
+    static let importFeature = HearthPaywallFeature(
+        "Unlimited imports from the web",
+        detail: "Paste a link from any recipe site, as often as you like. Three a month are free.",
+        symbol: "link"
+    )
     private var isWorking: Bool { model.isCreatingWithAI || model.isImportingLink || model.isScanning }
     private var canSend: Bool { prompt.recipeTrimmed.count >= 3 && !isWorking }
 
@@ -83,9 +95,17 @@ struct RecipeStartView: View {
                 .accessibilityLabel("Describe a recipe or paste a link")
 
             if link != nil {
-                Label("Recipe link · read on your \(DeviceName.current)", systemImage: "link")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(accent)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Recipe link · read on your \(DeviceName.current)", systemImage: "link")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(accent)
+                    if !isPro {
+                        Text(importsNote)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.numericText())
+                    }
+                }
             } else if dictation.isListening {
                 RecipeListeningLabel()
             } else if isWorking {
@@ -170,7 +190,7 @@ struct RecipeStartView: View {
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
                 Button {
-                    guard isPro else { return onUpgrade() }
+                    guard isPro else { return onUpgrade(Self.scanFeature) }
                     if VNDocumentCameraViewController.isSupported {
                         flow.showScanner = true
                     } else {
@@ -187,7 +207,7 @@ struct RecipeStartView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Button(action: onUpgrade) {
+                    Button { onUpgrade(Self.scanFeature) } label: {
                         tile(symbol: "photo", color: Color(hex: 0x2FAE6A), title: "Photo or Screenshot", detail: "From your library")
                     }
                     .buttonStyle(.plain)
@@ -251,6 +271,14 @@ struct RecipeStartView: View {
         .contentShape(.rect)
     }
 
+    /// "2 of 3 free imports left this month".
+    private var importsNote: String {
+        if importsUsedUp {
+            return "You've used this month's \(WebImportAllowance.freePerMonth) free imports."
+        }
+        return "\(imports.remaining) of \(WebImportAllowance.freePerMonth) free imports left this month"
+    }
+
     // MARK: Actions
 
     private func toggleDictation() {
@@ -272,6 +300,10 @@ struct RecipeStartView: View {
     private func send() async {
         dictation.stop()
         focused = false
+        if link != nil, importsUsedUp {
+            onUpgrade(Self.importFeature)
+            return
+        }
         do {
             let outcome: RecipeImportOutcome
             if let link {
@@ -281,6 +313,7 @@ struct RecipeStartView: View {
             }
             switch outcome {
             case .filled:
+                if link != nil, !isPro { imports.recordImport() }
                 onFilled()
             case .notRecipe(let reason):
                 onNotice(RecipeEditorNotice(title: "No recipe found", message: reason))

@@ -13,7 +13,8 @@ nonisolated enum AppConfig {
     nonisolated static let supabaseURL = URL(string: "https://kvhvsztvfpydhfpzicyy.supabase.co")!
     nonisolated static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2aHZzenR2ZnB5ZGhmcHppY3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1ODI2ODIsImV4cCI6MjA5NTE1ODY4Mn0.403bjxC9vkgMJ_ytARSd3DvTnJix2jDbS8rJtd1BpPE"
 
-    /// RevenueCat's Test Store in Debug (no real charges), the App Store in Release.
+    /// RevenueCat's Test Store in Debug (no real charges), the App Store in Release. Used by
+    /// HearthKit's `HearthPurchases` (BigTable Plus, entitlement `bigtable_plus`, which also counts the legacy "BigTable Pro", and Hearth+).
     #if DEBUG
     nonisolated static let revenueCatAPIKey = "test_VWlSzocJhmnUcnzNbLGZvtLEPZY"
     #else
@@ -22,12 +23,6 @@ nonisolated enum AppConfig {
 
     /// img.logo.dev publishable key for restaurant logos (the Expo app shipped the same one).
     static let logoDevPublishableKey = "pk_M7uaQUcjQq6Zni3X4QMHSA"
-
-    /// The RevenueCat entitlement that means Pro, and the App Store products behind it,
-    /// unchanged from the Expo app so current subscribers stay subscribed.
-    static let proEntitlement = "BigTable Pro"
-    static let proMonthlyProductID = "com.stephenwarren.bigtable.pro.monthly"
-    static let proAnnualProductID = "com.stephenwarren.bigtable.pro.annual"
 
     /// Feature switches the Expo app read from EXPO_PUBLIC_FEATURE_* (all on in production).
     static let socialEnabled = true

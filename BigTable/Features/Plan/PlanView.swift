@@ -32,6 +32,10 @@ struct PlanView: View {
 
     var body: some View {
         BigTableScreen(title: "Plan") {
+            // BigTable Plus or Hearth+ couldn't renew: update the payment method (shows nothing
+            // otherwise).
+            HearthBillingBanner()
+
             if !canManage {
                 Label("View only. \(organizerName) manages this plan.", systemImage: "eye")
                     .font(.footnote)

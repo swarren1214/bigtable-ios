@@ -69,6 +69,8 @@ final class AIPlanStore {
     }
 
     var prompt = ""
+    /// Shows the Hearth paywall (the server said AI plans need BigTable Plus or Hearth+).
+    var showsPaywall = false
     var quickTags: Set<String> = []
     var mealStyle: MealStyle = .comfort
     /// The Expo app's default: half your recipes, a quarter each favorites and others.
@@ -369,8 +371,15 @@ final class AIPlanStore {
 
     private func handle(_ error: Error, router: AppRouter) {
         if error is CancellationError { return }
-        if let apiError = error as? APIError, apiError.isLimitReached || apiError.code == "LIMIT_REACHED" {
-            router.present(.paywall)
+        if let apiError = error as? APIError,
+           apiError.isLimitReached || apiError.code == "LIMIT_REACHED" || apiError.code == "ENTITLEMENT_REQUIRED" {
+            if !AppModel.shared.hasPro || apiError.status == 402 {
+                showsPaywall = true
+            } else {
+                // Pro, but this month's AI requests are used up.
+                self.error = apiError.localizedDescription
+                Task { await AppModel.shared.refreshUsage() }
+            }
             return
         }
         self.error = error.localizedDescription

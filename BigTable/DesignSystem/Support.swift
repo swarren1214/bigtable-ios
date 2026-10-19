@@ -120,39 +120,7 @@ struct ProBadge: View {
             .padding(.vertical, 2)
             .foregroundStyle(.white)
             .background(.tint, in: Capsule())
-            .accessibilityLabel("Pro feature")
-    }
-}
-
-/// Upgrade to Pro: what it unlocks and a button to the paywall.
-struct UpgradeCard: View {
-    var title = "Upgrade to BigTable Pro"
-    var message = "AI meal plans and grocery lists, recipe scanning, cost estimates and grocery history."
-    @Environment(AppRouter.self) private var router
-
-    var body: some View {
-        Button {
-            router.present(.paywall)
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                Label("BIGTABLE PRO", systemImage: "sparkles")
-                    .font(.footnote.weight(.bold))
-                Text(title).font(.title3.bold())
-                Text(message).font(.subheadline).opacity(0.92)
-                Text("See Plans")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 34)
-                    .foregroundStyle(.tint)
-                    .background(.white, in: Capsule())
-                    .padding(.top, 4)
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(18)
-            .background(.tint, in: .rect(cornerRadius: 22))
-        }
-        .buttonStyle(.plain)
+            .accessibilityLabel("Plus feature")
     }
 }
 

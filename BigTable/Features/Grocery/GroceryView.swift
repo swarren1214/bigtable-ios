@@ -2,13 +2,12 @@ import SwiftUI
 import UIKit
 
 /// The Grocery tab: the household's shopping list by aisle. Tap an item to check it off; the
-/// header shows the days it covers, how much is left and (with Pro) the cost estimate. The
+/// header shows the days it covers, how much is left and (with BigTable Plus or Hearth+) the cost estimate. The
 /// organizer can add, edit and swipe away items, make a list with AI, and restore an older
 /// list from History. Everyone can share what's still needed.
 struct GroceryView: View {
     @Environment(AppModel.self) private var model
     @Environment(AppRouter.self) private var router
-    @Environment(Subscriptions.self) private var subscriptions
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accent) private var accent
 
@@ -16,13 +15,15 @@ struct GroceryView: View {
     @State private var hideChecked = false
     @State private var showGenerate = false
     @State private var showHistory = false
+    @State private var showsPaywall = false
+    @State private var paywallFeature: HearthPaywallFeature?
     @State private var showNewSection = false
     @State private var editing: GroceryItemEditTarget?
     @State private var newItemText = ""
     @State private var newItemSection = "Other"
     @FocusState private var addFieldFocused: Bool
 
-    private var isPro: Bool { model.usage?.isPro == true || subscriptions.isPro }
+    private var isPro: Bool { model.hasPro }
     private var canEdit: Bool { model.isOrganizer }
     /// The snapshot API only lets the organizer save a whole list, so AI lists are theirs to
     /// make (as in the Expo app).
@@ -75,7 +76,12 @@ struct GroceryView: View {
                 }
             }
             .errorAlert($store.errorMessage)
+            .hearthPaywall(isPresented: $showsPaywall, feature: paywallFeature)
     }
+
+    static let costFeature = HearthPaywallFeature("Grocery cost estimates", detail: "See about what the list will cost before you shop.", symbol: "dollarsign.circle")
+    static let historyFeature = HearthPaywallFeature("Grocery history", detail: "Bring back an older list in a tap.", symbol: "clock.arrow.circlepath")
+    static let generateFeature = HearthPaywallFeature("AI grocery lists", detail: "Built from the plan, sorted by aisle, with amounts and a cost estimate.", symbol: "wand.and.stars")
 
     // MARK: - Content
 
@@ -100,7 +106,7 @@ struct GroceryView: View {
         List {
             Section {
                 GroceryHeaderCard(store: store, isPro: isPro) {
-                    router.present(.paywall)
+                    openPaywall(Self.costFeature)
                 }
             }
             .listRowInsets(EdgeInsets())
@@ -328,9 +334,9 @@ struct GroceryView: View {
                     Button("Generate List…", menuIcon: "sparkles") { openGenerate() }
                 }
                 Button {
-                    if isPro { showHistory = true } else { router.present(.paywall) }
+                    if isPro { showHistory = true } else { openPaywall(Self.historyFeature) }
                 } label: {
-                    Label { Text(isPro ? "History…" : "History (Pro)…") } icon: { Image.menuIcon("clock.arrow.circlepath") }
+                    Label { Text(isPro ? "History…" : "History (Plus)…") } icon: { Image.menuIcon("clock.arrow.circlepath") }
                 }
                 if !store.isEmpty {
                     ShareLink(item: store.shareText(includeCost: isPro), subject: Text("Grocery list")) {
@@ -357,6 +363,11 @@ struct GroceryView: View {
         }
     }
 
+    private func openPaywall(_ feature: HearthPaywallFeature) {
+        paywallFeature = feature
+        showsPaywall = true
+    }
+
     private func openGenerate() {
         guard canGenerate else { return }
         addFieldFocused = false
@@ -364,13 +375,13 @@ struct GroceryView: View {
             showGenerate = true
         } else {
             // The Expo app sent organizers without Pro straight to the paywall.
-            router.present(.paywall)
+            openPaywall(Self.generateFeature)
         }
     }
 }
 
 /// The top of the list: the days it covers and where it came from, what's left, and the cost
-/// estimate (a Pro feature; without Pro it's a locked tile that opens the plans).
+/// estimate (a Plus feature; without Pro it's a locked tile that opens the plans).
 struct GroceryHeaderCard: View {
     var store: GroceryStore
     var isPro: Bool
@@ -380,6 +391,8 @@ struct GroceryHeaderCard: View {
     @Environment(\.openURL) private var openURL
     /// This month's groceries budget from Suffice, when Suffice is on this device.
     @State private var sufficeBudget: HearthGroceryBudget?
+    /// Showing another app's data here (Suffice's budget) is a Hearth+ feature.
+    @State private var purchases = HearthPurchases.shared
 
     init(store: GroceryStore, isPro: Bool, onUpgrade: @escaping () -> Void) {
         self.store = store
@@ -432,8 +445,8 @@ struct GroceryHeaderCard: View {
                             .contentShape(.rect(cornerRadius: 16))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Cost estimate, a Pro feature")
-                        .accessibilityHint("Shows BigTable Pro plans")
+                        .accessibilityLabel("Cost estimate, a Plus feature")
+                        .accessibilityHint("Shows BigTable Plus plans")
                     }
                 }
 
@@ -445,7 +458,11 @@ struct GroceryHeaderCard: View {
 
                 if let budget = sufficeBudget, budget.limitCents > 0 {
                     Divider()
-                    sufficeRow(budget)
+                    if purchases.hasHearthPlus {
+                        sufficeRow(budget)
+                    } else {
+                        HearthPlusTeaser(from: .suffice, title: "Your Suffice grocery budget could show up here", detail: "See what's left in it next to the list, with Hearth+.")
+                    }
                 }
             }
         }

@@ -24,8 +24,9 @@ struct ProfileJoinedMemberView: View {
     @State private var showPaywall = false
 
     private var api: BigTableAPI { model.api }
-    /// AI permissions need the organizer to have Pro (the API refuses them otherwise).
-    private var organizerHasPro: Bool { Subscriptions.shared.isPro || model.usage?.isPro == true }
+    /// AI permissions need the organizer to have BigTable Plus or Hearth+ (the API refuses them
+    /// otherwise).
+    private var organizerHasPro: Bool { model.hasPro }
 
     var body: some View {
         BigTableScreen(title: name) {
@@ -82,7 +83,7 @@ struct ProfileJoinedMemberView: View {
             Text("Remove \(name) from your household? They'll go back to managing their own household.")
         }
         .errorAlert($errorMessage)
-        .sheet(isPresented: $showPaywall) { PaywallView() }
+        .hearthPaywall(isPresented: $showPaywall, feature: HearthPaywallFeature("Share AI with your household", detail: "Let the people in your household plan meals and make grocery lists with AI.", symbol: "sparkles"))
         .overlay {
             if isRemoving {
                 ProgressView().controlSize(.large)
@@ -132,7 +133,7 @@ struct ProfileJoinedMemberView: View {
                 Button {
                     showPaywall = true
                 } label: {
-                    ProfileRow(symbol: "sparkles", color: PersonColor.purple.color, title: "Upgrade to Pro to share AI", detail: "AI planning and grocery lists need BigTable Pro.")
+                    ProfileRow(symbol: "sparkles", color: PersonColor.purple.color, title: "Share AI with your household", detail: "AI planning and grocery lists need BigTable Plus or Hearth+.")
                 }
                 .buttonStyle(.plain)
             }

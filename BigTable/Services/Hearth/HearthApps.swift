@@ -173,7 +173,7 @@ nonisolated struct HearthAppInfo: Sendable {
             Feature(symbol: "person.3", title: "The household, together", detail: "Invite family and set who can edit the plan."),
         ],
         platforms: "iPhone · iPad",
-        note: "Free, with BigTable Pro for more. BigTable uses an account so everyone in your household sees the same plan.",
+        note: "Free, with BigTable Plus for more. BigTable uses an account so everyone in your household sees the same plan.",
         scheme: "bigtable",
         availability: .appStore(URL(string: "https://apps.apple.com/us/app/bigtable/id6772788255")!),
         symbol: "fork.knife",

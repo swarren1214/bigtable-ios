@@ -62,7 +62,7 @@ struct TutorialView: View {
         }
         .frame(maxWidth: .infinity)
         .background(Color(.systemBackground))
-        .sheet(isPresented: $showPaywall) { PaywallView() }
+        .hearthPaywall(isPresented: $showPaywall, startWith: .app)
         .onDisappear {
             if !finished {
                 finished = true
@@ -103,7 +103,7 @@ private struct TutorialSlidePage: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 380)
-                if slide.isPro && !Subscriptions.shared.isPro {
+                if slide.isPro && !HearthPurchases.shared.isUnlocked {
                     Button("See Upgrade Options", systemImage: "sparkles", action: onUpgrade)
                         .buttonStyle(.glass)
                         .controlSize(.large)
@@ -171,14 +171,14 @@ struct TutorialSlideContent: Identifiable, Hashable {
                 id: "pro-planning",
                 symbol: "sparkles",
                 title: "Let AI plan your week",
-                body: "BigTable Pro plans a whole week of meals in seconds, around everyone's restrictions, preferences and what's already planned.",
+                body: "BigTable Plus plans a whole week of meals in seconds, around everyone's restrictions, preferences and what's already planned.",
                 isPro: true
             ),
             TutorialSlideContent(
                 id: "pro-grocery",
                 symbol: "wand.and.stars",
                 title: "Smarter shopping lists",
-                body: "With Pro, AI builds the grocery list for you: grouped by aisle, with amounts filled in and a cost estimate.",
+                body: "With Plus, AI builds the grocery list for you: grouped by aisle, with amounts filled in and a cost estimate.",
                 isPro: true
             ),
             TutorialSlideContent(

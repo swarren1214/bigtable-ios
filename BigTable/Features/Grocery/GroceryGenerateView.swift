@@ -2,14 +2,14 @@ import SwiftUI
 
 /// Make a grocery list with AI from the meals on the plan (the Expo app's "Magic Grocery
 /// List"): pick up to seven days, choose warehouse sizes, add anything the AI should know,
-/// then review the list before it replaces (or joins) the current one. A Pro feature.
+/// then review the list before it replaces (or joins) the current one. Part of BigTable Plus
+/// and Hearth+.
 struct GroceryGenerateView: View {
     var store: GroceryStore
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @Environment(AppRouter.self) private var router
-    @Environment(Subscriptions.self) private var subscriptions
     @AppStorage(SettingsKey.warehouseSizes) private var costcoMode = true
 
     @State private var start: Date
@@ -32,7 +32,7 @@ struct GroceryGenerateView: View {
         _end = State(initialValue: max(saturday, first))
     }
 
-    private var isPro: Bool { model.usage?.isPro == true || subscriptions.isPro }
+    private var isPro: Bool { model.hasPro }
     private var today: Date { Calendar.current.startOfDay(for: .now) }
     private var latestEnd: Date { Calendar.current.date(byAdding: .day, value: 6, to: start) ?? start }
     private var dayCount: Int { (Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0) + 1 }
@@ -42,7 +42,9 @@ struct GroceryGenerateView: View {
             Form {
                 if !isPro {
                     Section {
-                        GroceryUpgradeRow { showPaywall = true }
+                        HearthLockedCard(feature: GroceryView.generateFeature)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
                     }
                 }
 
@@ -103,7 +105,7 @@ struct GroceryGenerateView: View {
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 } footer: {
-                    Text(isPro ? "BigTable Pro: unlimited AI grocery lists." : "AI grocery lists are part of BigTable Pro.")
+                    Text(isPro ? "Unlimited AI grocery lists with your plan." : "AI grocery lists are part of BigTable Plus and Hearth+.")
                         .frame(maxWidth: .infinity)
                         .padding(.top, 6)
                 }
@@ -127,9 +129,7 @@ struct GroceryGenerateView: View {
                     dismiss()
                 }
             }
-            .sheet(isPresented: $showPaywall) {
-                PaywallView()
-            }
+            .hearthPaywall(isPresented: $showPaywall, feature: GroceryView.generateFeature)
             .alert("Couldn't make a list", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -158,7 +158,7 @@ struct GroceryGenerateView: View {
         } catch is CancellationError {
             return
         } catch let error as APIError {
-            if error.isLimitReached || error.code == "LIMIT_REACHED" || (error.isForbidden && model.isOrganizer) {
+            if error.isLimitReached || error.code == "LIMIT_REACHED" || error.code == "ENTITLEMENT_REQUIRED" || (error.isForbidden && model.isOrganizer) {
                 showPaywall = true
             } else if error.code == "PLAN_EMPTY" {
                 message = "No meals are planned for those days. Plan some meals, then make your grocery list."
@@ -168,39 +168,6 @@ struct GroceryGenerateView: View {
         } catch {
             message = error.localizedDescription
         }
-    }
-}
-
-/// The locked state: what Pro adds here, and a way to the plans.
-struct GroceryUpgradeRow: View {
-    var action: () -> Void
-    @Environment(\.accent) private var accent
-
-    init(action: @escaping () -> Void) {
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                IconTile(symbol: "sparkles", color: accent, size: 40, filled: true)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("Upgrade to Pro").font(.headline)
-                        ProBadge()
-                    }
-                    Text("Unlock AI grocery lists, cost estimates and list history.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(.tertiary)
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -218,11 +185,10 @@ struct GroceryPreviewView: View {
     }
 
     @Environment(AppModel.self) private var model
-    @Environment(Subscriptions.self) private var subscriptions
     @State private var isSaving = false
     @State private var error: String?
 
-    private var isPro: Bool { model.usage?.isPro == true || subscriptions.isPro }
+    private var isPro: Bool { model.hasPro }
 
     var body: some View {
         List {

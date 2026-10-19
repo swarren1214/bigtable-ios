@@ -48,9 +48,10 @@ compile errors before you finish.
 - `Services/Auth/AuthClient.swift`: `AuthClient.shared` (actor): `signIn`, `signUp`
   (returns false when email confirmation is needed), `signInWithApple(idToken:nonce:fullName:)`,
   `sendPasswordReset`, `updatePassword`, `updateFullName`, `signOut`.
-- `Services/Subscriptions/Subscriptions.swift`: `Subscriptions.shared` (RevenueCat):
-  `isPro`, `plans`, `purchase(_:)`, `restore()`, `loadPlans()`, `expirationDate`, `willRenew`,
-  `managementURL`, `lastError`. Note the *server's* tier (`AppModel.usage.tier`) is what gates AI.
+- `Services/Hearth/HearthPurchases.swift` (HearthKit copy): `HearthPurchases.shared`
+  (RevenueCat): `isUnlocked`, `hasHearthPlus`, `membership`, `billingIssueUntil`. Screens use
+  `AppModel.hasPro` (that, or the server's tier). The *server's* usage (`AppModel.usage`) still
+  sets the AI limits.
 - `Models/API/APIModels.swift`: every API shape (`PlannerResponse`, `PlannerSlot`, `PlanSlotUpdate`,
   `RecipeSummary`, `RecipeDetail`, `RecipePayload`, `MeResponse`, `HouseholdMember`,
   `GrocerySnapshot`, `NotificationRecord`, `FollowProfile`, `UsageCheckResponse`, `MealPlanRequest`,
@@ -84,7 +85,7 @@ compile errors before you finish.
 
 | Agent | Folders | Views other code already calls (exact signatures) |
 |---|---|---|
-| Account | `Features/Account/`, `Features/Profile/`, `Features/Paywall/`, `Features/Tutorial/` | `AuthView()`, `NewPasswordView()`, `HouseholdSetupView()`, `ProfileView()`, `PaywallView()`, `TutorialView(onFinish: @escaping () -> Void)` |
+| Account | `Features/Account/`, `Features/Profile/`, `Features/Tutorial/` | `AuthView()`, `NewPasswordView()`, `HouseholdSetupView()`, `ProfileView()`, `TutorialView(onFinish: @escaping () -> Void)` |
 | Plan | `Features/Plan/`, `Features/AIPlan/` | `PlanView()`, `AIPlanView()` |
 | Recipes | `Features/Recipes/` | `RecipesView()`, `RecipeSearchView()`, `RecipeDetailView(recipeID: String, versionID: String?)`, `RecipeEditorView(mode: RecipeEditorMode)` with `enum RecipeEditorMode { case create; case edit(RecipeDetail) }`, `DeletedRecipesView()`, `ManageTagsView()`, `RecipePickerView(onPick: (RecipeSummary) -> Void)` |
 | Grocery & Community | `Features/Grocery/`, `Features/Community/`, `Features/Notifications/` | `GroceryView()`, `CommunityView()`, `PublicProfileView(profileID: String)`, `NotificationsView()` |

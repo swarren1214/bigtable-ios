@@ -17,7 +17,7 @@ struct AppleLinkView: View {
             title: linked ? "You're all set" : "Add Sign in with Apple",
             subtitle: linked
                 ? "From now on, sign in to BigTable with Apple. Sated and Suffice will know you too."
-                : "BigTable is moving to Sign in with Apple, like the other Hearth apps. Add it to your account now and everything stays: your recipes, household, plans and Pro."
+                : "BigTable is moving to Sign in with Apple, like the other Hearth apps. Add it to your account now and everything stays: your recipes, household, plans and Plus."
         ) { isShort in
             OnboardingSymbolIcon(symbol: linked ? "checkmark.seal.fill" : "apple.logo", size: isShort ? 64 : 80)
         } content: { _ in

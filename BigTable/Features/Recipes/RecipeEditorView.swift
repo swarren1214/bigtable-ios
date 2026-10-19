@@ -32,6 +32,8 @@ struct RecipeEditorView: View {
     @State private var importFlow = RecipeImportFlow()
     @State private var pasteTarget: RecipePasteTarget?
     @State private var keyboardUp = false
+    @State private var showsPaywall = false
+    @State private var paywallFeature: HearthPaywallFeature?
 
     init(mode: RecipeEditorMode) {
         self.mode = mode
@@ -43,9 +45,10 @@ struct RecipeEditorView: View {
         }
     }
 
-    private var isPro: Bool {
-        appModel.usage?.isPro == true || Subscriptions.shared.isPro
-    }
+    /// BigTable Plus or Hearth+: scanning, unlimited web imports and your own recipe photos.
+    private var isPro: Bool { appModel.hasPro }
+
+    static let photosFeature = HearthPaywallFeature("Recipe photos", detail: "Add your own photos to recipes. AI can still make one for free.", symbol: "photo")
 
     var body: some View {
         NavigationStack {
@@ -56,7 +59,7 @@ struct RecipeEditorView: View {
                         model: model,
                         flow: importFlow,
                         isPro: isPro,
-                        onUpgrade: openPaywall,
+                        onUpgrade: { openPaywall($0) },
                         onNotice: show,
                         onFilled: openRefine,
                         onBlank: { withAnimation(.snappy) { stage = .editor } }
@@ -67,6 +70,7 @@ struct RecipeEditorView: View {
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+            .hearthPaywall(isPresented: $showsPaywall, feature: paywallFeature)
             .navigationTitle(stage == .start ? "New Recipe" : (model.isEditing ? "Edit Recipe" : "New Recipe"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
@@ -103,7 +107,7 @@ struct RecipeEditorView: View {
             }
             .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } }), presenting: notice) { notice in
                 if notice.offersUpgrade {
-                    Button("See Plans") { openPaywall() }
+                    Button("See Plans") { openPaywall(nil) }
                     Button("Not Now", role: .cancel) {}
                 } else {
                     Button("OK", role: .cancel) {}
@@ -252,8 +256,12 @@ struct RecipeEditorView: View {
 
     private func photoMenu<MenuLabel: View>(@ViewBuilder label: () -> MenuLabel) -> some View {
         Menu {
-            Button("Take Photo", menuIcon: "camera") { showCamera = true }
-            Button("Choose from Library", menuIcon: "photo.on.rectangle") { showPhotoPicker = true }
+            Button(isPro ? "Take Photo" : "Take Photo (Plus)", menuIcon: "camera") {
+                if isPro { showCamera = true } else { openPaywall(Self.photosFeature) }
+            }
+            Button(isPro ? "Choose from Library" : "Choose from Library (Plus)", menuIcon: "photo.on.rectangle") {
+                if isPro { showPhotoPicker = true } else { openPaywall(Self.photosFeature) }
+            }
             Button("Make One with AI", menuIcon: "sparkles") { generatePhoto() }
         } label: {
             label()
@@ -456,10 +464,10 @@ struct RecipeEditorView: View {
         showRefine = true
     }
 
-    /// Pro is a sheet of its own: this one closes first (as the Expo app did).
-    private func openPaywall() {
-        dismiss()
-        router.present(.paywall)
+    /// The Hearth paywall, over the editor so nothing typed is lost.
+    private func openPaywall(_ feature: HearthPaywallFeature?) {
+        paywallFeature = feature
+        showsPaywall = true
     }
 
     private func generatePhoto() {
