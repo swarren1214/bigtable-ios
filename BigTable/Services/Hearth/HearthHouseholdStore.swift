@@ -388,6 +388,75 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         scheduleFieldsSave()
     }
 
+    /// Folds people who are plainly the same person into one: the same full name, both kids or
+    /// both grown-ups, and no two different birthdays or Apple Accounts. The one kept is the
+    /// organizer, then whoever has joined with their own Apple Account, then the fullest record;
+    /// ties go to the lower id, so every device picks the same one. It takes the others'
+    /// birthday, photo, food and app links, and becomes "me" here if one of them was. Only for
+    /// someone who can change everyone. Returns how many were folded in.
+    @discardableResult
+    func mergeDuplicates() -> Int {
+        guard exists, hasLoaded, canEditEveryone else { return 0 }
+        let groups = Dictionary(grouping: snapshot.members.filter { !$0.isArchived && !$0.trimmedName.isEmpty }) {
+            HearthNames.normalized($0.name) + ($0.role == .kid ? "|kid" : "|adult")
+        }
+        var folded = 0
+        for group in groups.values where group.count > 1 {
+            guard Set(group.compactMap(\.birthday)).count <= 1,
+                  Set(group.compactMap(\.appleUserID)).count <= 1 else { continue }
+            let ordered = group.sorted { lhs, rhs in
+                let a = mergeRank(lhs), b = mergeRank(rhs)
+                return a != b ? a > b : lhs.id < rhs.id
+            }
+            var keep = ordered[0]
+            for other in ordered.dropFirst() {
+                keep = Self.fold(other, into: keep)
+                if snapshot.info?.organizerID == other.id {
+                    snapshot.info?.organizerID = keep.id
+                    snapshot.info?.updatedAt = .now
+                    queueSaves([Self.householdRecordName])
+                }
+                if localMeID == other.id { setLocalMe(keep.id) }
+                delete(other.id)
+                folded += 1
+            }
+            save(keep)
+        }
+        if folded > 0 { log.notice("Folded \(folded) duplicate people") }
+        return folded
+    }
+
+    private func mergeRank(_ member: HearthMember) -> Int {
+        var rank = 0
+        if member.id == info?.organizerID { rank += 100 }
+        if member.appleUserID != nil { rank += 50 }
+        if member.birthday != nil { rank += 4 }
+        if member.photo != nil { rank += 4 }
+        rank += member.appIDs.count
+        rank += min(member.allergies.count + member.diet.count + member.likes.count + member.dislikes.count, 3)
+        return rank
+    }
+
+    private static func fold(_ other: HearthMember, into keep: HearthMember) -> HearthMember {
+        func union(_ a: [String], _ b: [String]) -> [String] {
+            var seen = Set(a.map { $0.lowercased() })
+            return a + b.filter { seen.insert($0.lowercased()).inserted }
+        }
+        var merged = keep
+        merged.birthday = keep.birthday ?? other.birthday
+        merged.photo = keep.photo ?? other.photo
+        merged.appleUserID = keep.appleUserID ?? other.appleUserID
+        merged.allergies = union(keep.allergies, other.allergies)
+        merged.diet = union(keep.diet, other.diet)
+        merged.likes = union(keep.likes, other.likes)
+        merged.dislikes = union(keep.dislikes, other.dislikes)
+        for (app, id) in other.appIDs where merged.appIDs[app] == nil { merged.appIDs[app] = id }
+        if keep.role == .adult && other.role == .parent { merged.role = .parent }
+        if keep.trimmedName.count < other.trimmedName.count { merged.name = other.trimmedName }
+        merged.sortOrder = min(keep.sortOrder, other.sortOrder)
+        return merged
+    }
+
     /// Records the id an app uses for someone, so the app can find them again.
     func link(_ memberID: String, app: HearthApp, appID: String) {
         guard var member = member(memberID), member.appIDs[app.rawValue] != appID else { return }
@@ -622,6 +691,7 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
             snapshot = next
             publish()
             claimMyRecordIfNeeded()
+            mergeDuplicates()
         }
         scheduleFieldsSave()
     }

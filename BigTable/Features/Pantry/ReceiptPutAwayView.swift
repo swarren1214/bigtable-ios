@@ -23,7 +23,7 @@ struct ReceiptPutAwayView: View {
             .navigationTitle("Put Away")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Close", systemImage: "xmark") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { SheetCancelButton("Close") { dismiss() } }
             }
         }
         .task {

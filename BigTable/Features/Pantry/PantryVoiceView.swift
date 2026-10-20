@@ -18,6 +18,9 @@ struct PantryVoiceView: View {
     @State private var isSaving = false
     @State private var typed = ""
     @State private var typing = false
+    /// The person wants it listening (they haven't paused, typed or saved). The recognizer
+    /// ends its session on its own after a pause; while this is on, it starts again.
+    @State private var wantsListening = true
 
     private var said: String {
         [earlier, dictation.transcript].filter { !$0.isEmpty }.joined(separator: ". ")
@@ -48,7 +51,21 @@ struct PantryVoiceView: View {
             parseTask?.cancel()
             dictation.stop()
         }
-        .onChange(of: dictation.transcript) { scheduleParse() }
+        .onChange(of: dictation.transcript) { old, new in
+            // After a pause the recognizer starts a fresh transcript: keep what came before.
+            if !old.isEmpty, new.count < old.count / 2 || !Self.continues(old, with: new) {
+                earlier = [earlier, old].filter { !$0.isEmpty }.joined(separator: ". ")
+            }
+            scheduleParse()
+        }
+        .onChange(of: dictation.isListening) { _, listening in
+            // It stopped by itself (a long pause, a time limit): pick up again.
+            guard !listening, wantsListening, !typing, !isSaving else { return }
+            Task {
+                try? await Task.sleep(for: .milliseconds(250))
+                await listen()
+            }
+        }
         .alert("Can't listen right now", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("Type Instead") { typing = true }
             Button("OK", role: .cancel) {}
@@ -78,6 +95,7 @@ struct PantryVoiceView: View {
             Spacer()
             Button(typing ? "Talk" : "Type") {
                 typing.toggle()
+                wantsListening = !typing
                 if typing { dictation.stop() } else { Task { await listen() } }
             }
             .font(.subheadline.weight(.semibold))
@@ -92,7 +110,13 @@ struct PantryVoiceView: View {
     private var orbRow: some View {
         HStack(spacing: 18) {
             Button {
-                if dictation.isListening { dictation.stop() } else { Task { await listen() } }
+                if dictation.isListening {
+                    wantsListening = false
+                    dictation.stop()
+                } else {
+                    wantsListening = true
+                    Task { await listen() }
+                }
             } label: {
                 ZStack {
                     if dictation.isListening {
@@ -275,7 +299,13 @@ struct PantryVoiceView: View {
     private var controls: some View {
         HStack(spacing: 12) {
             Button {
-                if dictation.isListening { dictation.stop() } else { Task { await listen() } }
+                if dictation.isListening {
+                    wantsListening = false
+                    dictation.stop()
+                } else {
+                    wantsListening = true
+                    Task { await listen() }
+                }
             } label: {
                 Image(systemName: dictation.isListening ? "mic.fill" : "mic.slash.fill")
                     .font(.title3)
@@ -305,11 +335,17 @@ struct PantryVoiceView: View {
 
     // MARK: Actions
 
+    /// Whether `new` is the same utterance as `old`, still being written (its first words
+    /// match), rather than a new one after a pause.
+    static func continues(_ old: String, with new: String) -> Bool {
+        let first = { (text: String) in text.lowercased().split(separator: " ").prefix(2).joined(separator: " ") }
+        let a = first(old), b = first(new)
+        return a.isEmpty || b.isEmpty || a.hasPrefix(b) || b.hasPrefix(a)
+    }
+
     private func listen() async {
         guard !typing, !dictation.isListening else { return }
-        if !dictation.transcript.isEmpty {
-            earlier = said
-        }
+        // Starting clears the transcript; the onChange above keeps what it held.
         do {
             try await dictation.start()
         } catch {
@@ -372,6 +408,7 @@ struct PantryVoiceView: View {
     }
 
     private func save() async {
+        wantsListening = false
         dictation.stop()
         parseTask?.cancel()
         guard !proposals.isEmpty else {

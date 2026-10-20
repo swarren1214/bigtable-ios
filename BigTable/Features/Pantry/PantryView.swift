@@ -7,6 +7,9 @@ import UIKit
 /// itself current from receipts, check-offs and cooked meals; people correct it by talking,
 /// a quick check, or editing an item.
 struct PantryView: View {
+    /// List or Pantry: the switch scrolls with the page, under the title.
+    @Binding var side: String
+
     @Environment(\.accent) private var accent
     @State private var kitchen = KitchenStore.shared
     @State private var placeID = PantryPlace.fridgeID
@@ -22,6 +25,7 @@ struct PantryView: View {
         let receipts = { _ = hearthTick; return kitchen.pendingReceipts() }()
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                GrocerySidePicker(side: $side)
                 if let first = receipts.first {
                     receiptCard(first)
                 }
@@ -252,13 +256,14 @@ struct PantryView: View {
             .scrollIndicators(.hidden)
             .padding(.horizontal, -16)
 
-            if rows.isEmpty {
-                Text("Nothing here yet. Say what's in the \(snapshot.places.first { $0.id == placeID }?.name.lowercased() ?? "place"), or put away a receipt.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 22, style: .continuous))
+            if rows.isEmpty, let place = snapshot.places.first(where: { $0.id == placeID }) {
+                PantryPlaceEmptyState(place: place) {
+                    showVoice = true
+                } onAdd: {
+                    showAdd = true
+                }
+                .id(place.id)
+                .transition(.opacity)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
@@ -317,26 +322,43 @@ struct PantryView: View {
             Text("Check things off at the store, mark meals cooked, or put away a receipt from Suffice, and BigTable keeps count. To start, tell it what you have.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            HStack(spacing: 10) {
-                Button {
-                    showVoice = true
-                } label: {
-                    Label("Tell the Pantry", systemImage: "mic.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 16)
-                        .frame(height: 40)
-                }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                Button("Add Something") { showAdd = true }
-                    .font(.subheadline.weight(.semibold))
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
+            // Side by side when they fit on one line each; stacked on narrow screens.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { emptyButtons }
+                VStack(alignment: .leading, spacing: 10) { emptyButtons }
             }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 22, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var emptyButtons: some View {
+        Button {
+            showVoice = true
+        } label: {
+            Label("Tell the Pantry", systemImage: "mic.fill")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 8)
+                .frame(height: 40)
+        }
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.capsule)
+        Button {
+            showAdd = true
+        } label: {
+            Text("Add Something")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 8)
+                .frame(height: 40)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
     }
 
     private func header(_ title: String, trailing: String?) -> some View {
@@ -348,5 +370,137 @@ struct PantryView: View {
             }
         }
         .padding(.horizontal, 4)
+    }
+}
+
+/// An empty place (the fridge, the freezer, the garage): a shelf drawn in the place's color,
+/// what usually goes there, and the two quickest ways to fill it.
+struct PantryPlaceEmptyState: View {
+    let place: PantryPlace
+    var onSay: () -> Void
+    var onAdd: () -> Void
+
+    private var title: String {
+        switch place.kind {
+        case .fridge: "The fridge is empty, for now"
+        case .freezer: "Nothing in the freezer yet"
+        case .pantry: "The pantry shelves are bare"
+        case .other: "Nothing in the \(place.name.lowercased()) yet"
+        }
+    }
+
+    private var detail: String {
+        switch place.kind {
+        case .fridge: "Milk, eggs, cheese, tonight's chicken. Say what's in there once, and shopping and cooking keep it current."
+        case .freezer: "Meat for later, frozen veggies, the waffles. Tell BigTable once and it counts down as you cook."
+        case .pantry: "Rice, pasta, cans and snacks. Say a few at a time, like “8 pounds of rice and 6 cans of beans.”"
+        case .other: "Bulk bags and backups live here. Name a container, like “the rice bucket is half full,” to track how full it is."
+        }
+    }
+
+    private var examples: [String] {
+        switch place.kind {
+        case .fridge: ["2 gallons of milk", "3 dozen eggs", "a pound of butter"]
+        case .freezer: ["4 lb ground beef", "2 bags of peas", "16 burritos"]
+        case .pantry: ["8 lb rice", "6 cans of beans", "4 boxes of pasta"]
+        case .other: ["25 lb oats", "the rice bucket is half full"]
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            shelf
+                .padding(.top, 8)
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.system(.title3, design: .serif, weight: .semibold))
+                    .multilineTextAlignment(.center)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            FlowingChips(examples: examples, color: place.color)
+            HStack(spacing: 10) {
+                Button(action: onSay) {
+                    Label("Say What's in It", systemImage: "mic.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 6)
+                        .frame(height: 40)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                Button(action: onAdd) {
+                    Label("Add", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 6)
+                        .frame(height: 40)
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 26, style: .continuous))
+    }
+
+    /// Three empty shelves in an open cabinet, the place's symbol on the middle one.
+    private var shelf: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(place.color.opacity(0.10))
+                .frame(width: 112, height: 112)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(place.color.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                .frame(width: 84, height: 88)
+            VStack(spacing: 20) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Capsule()
+                        .fill(place.color.opacity(0.28))
+                        .frame(width: 64, height: 3)
+                }
+            }
+            .offset(y: 4)
+            Image(systemName: place.kind.symbol)
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(place.color)
+                .frame(width: 48, height: 48)
+                .background(Color(.secondarySystemGroupedBackground), in: Circle())
+                .overlay(Circle().strokeBorder(place.color.opacity(0.35), lineWidth: 1.5))
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// Things you might say, as quiet chips that wrap.
+private struct FlowingChips: View {
+    let examples: [String]
+    let color: Color
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) { chips }
+            VStack(spacing: 6) { chips }
+        }
+    }
+
+    @ViewBuilder
+    private var chips: some View {
+        ForEach(examples, id: \.self) { example in
+            Text("“\(example)”")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .background(color.opacity(0.12), in: Capsule())
+        }
     }
 }

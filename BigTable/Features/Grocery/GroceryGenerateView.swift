@@ -115,7 +115,7 @@ struct GroceryGenerateView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton("Close") { dismiss() }
                         .disabled(isGenerating)
                 }
             }
@@ -257,7 +257,7 @@ struct GroceryPreviewView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save List", systemImage: "checkmark") {
+                SheetDoneButton("Save List") {
                     Task { await save() }
                 }
                 .disabled(isSaving)

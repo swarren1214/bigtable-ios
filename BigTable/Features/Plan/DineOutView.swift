@@ -82,7 +82,7 @@ struct PlanDineOutView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {

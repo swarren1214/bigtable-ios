@@ -188,7 +188,7 @@ struct PublicProfileView: View {
     private var toolbarContent: some ToolbarContent {
         if showsCloseButton {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Close", systemImage: "xmark") { dismiss() }
+                SheetCancelButton("Close") { dismiss() }
             }
         }
         if !isMe, detail != nil {

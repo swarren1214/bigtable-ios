@@ -36,26 +36,13 @@ struct GroceryView: View {
     var body: some View {
         Group {
             if side == "pantry" {
-                PantryView()
+                PantryView(side: $side)
             } else {
                 listSide
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { sidePicker }
         .navigationTitle(side == "pantry" ? "Pantry" : "Grocery")
         .navigationBarTitleDisplayMode(.large)
-    }
-
-    /// What you need (the list) or what you have (the pantry).
-    private var sidePicker: some View {
-        Picker("Show", selection: $side.animation(.snappy)) {
-            Text("List").tag("list")
-            Text("Pantry").tag("pantry")
-        }
-        .pickerStyle(.segmented)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color(.systemGroupedBackground))
     }
 
     private var listSide: some View {
@@ -116,13 +103,19 @@ struct GroceryView: View {
     private var content: some View {
         if !store.hasLoaded, let error = store.loadError {
             ScrollView {
-                RetryCard(message: error) { Task { await store.load() } }
-                    .padding(16)
+                VStack(spacing: 16) {
+                    GrocerySidePicker(side: $side)
+                    RetryCard(message: error) { Task { await store.load() } }
+                }
+                .padding(16)
             }
         } else if !store.hasLoaded {
             ScrollView {
-                LoadingCard(title: "Loading your list…")
-                    .padding(16)
+                VStack(spacing: 16) {
+                    GrocerySidePicker(side: $side)
+                    LoadingCard(title: "Loading your list…")
+                }
+                .padding(16)
             }
         } else {
             list
@@ -131,6 +124,12 @@ struct GroceryView: View {
 
     private var list: some View {
         List {
+            Section {
+                GrocerySidePicker(side: $side)
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+
             Section {
                 GroceryHeaderCard(store: store, isPro: isPro) {
                     openPaywall(Self.costFeature)
@@ -597,5 +596,20 @@ struct GroceryHeaderCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.tertiarySystemGroupedBackground), in: .rect(cornerRadius: 16))
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// What you need (the list) or what you have (the pantry). It sits at the top of each side's
+/// content, under the large title, and scrolls with the page.
+struct GrocerySidePicker: View {
+    @Binding var side: String
+
+    var body: some View {
+        Picker("Show", selection: $side.animation(.snappy)) {
+            Text("List").tag("list")
+            Text("Pantry").tag("pantry")
+        }
+        .pickerStyle(.segmented)
+        .controlSize(.large)
     }
 }

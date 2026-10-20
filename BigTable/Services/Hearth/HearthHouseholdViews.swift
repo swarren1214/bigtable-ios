@@ -44,6 +44,7 @@ struct HearthMemberAvatar: View {
 
 // MARK: - The household
 
+
 /// The household: everyone, grouped into parents and kids, with invitations, adding people and
 /// the privacy note. Push it from Profile or Family; it shows first-time setup when there's
 /// no household yet.
@@ -77,6 +78,18 @@ struct HearthHouseholdView: View {
             HearthInviteSheet(accent: accent)
         }
         .refreshable { await store.refresh() }
+        // The same person brought in twice (once from each app, or twice from one): fold them.
+        .task(id: store.people.count) { store.mergeDuplicates() }
+    }
+
+    /// An action row: the icon and the text in the app's color.
+    private func actionLabel(_ title: String, symbol: String) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: symbol)
+        }
+        .foregroundStyle(accent)
     }
 
     private var list: some View {
@@ -87,7 +100,7 @@ struct HearthHouseholdView: View {
             if store.me == nil && !store.people.isEmpty {
                 Section {
                     Button { picksMe = true } label: {
-                        Label { Text("Which one is you?").foregroundStyle(.primary) } icon: { Image.menuIcon("person.crop.circle.badge.questionmark") }
+                        actionLabel("Which one is you?", symbol: "person.crop.circle.badge.questionmark")
                     }
                 } footer: {
                     Text("So every Hearth app on this \(UIDevice.current.localizedModel) knows who's using it.")
@@ -125,11 +138,11 @@ struct HearthHouseholdView: View {
             if store.canEditEveryone {
                 Section {
                     Button { adding = true } label: {
-                        Label { Text("Add a Person").foregroundStyle(.primary) } icon: { Image.menuIcon("person.badge.plus") }
+                        actionLabel("Add a Person", symbol: "person.badge.plus")
                     }
                     if !store.isMember {
                         Button { inviting = true } label: {
-                            Label { Text("Invite to Household").foregroundStyle(.primary) } icon: { Image.menuIcon("square.and.arrow.up") }
+                            actionLabel("Invite to Household", symbol: "square.and.arrow.up")
                         }
                     }
                 }
@@ -158,9 +171,6 @@ struct HearthHouseholdView: View {
                         .foregroundStyle(.red)
                 }
             }
-        }
-        .navigationDestination(for: String.self) { id in
-            HearthPersonView(memberID: id, accent: accent)
         }
         .confirmationDialog("Which one is you?", isPresented: $picksMe, titleVisibility: .visible) {
             ForEach(store.people) { member in
@@ -202,7 +212,11 @@ struct HearthHouseholdView: View {
     }
 
     private func row(_ member: HearthMember) -> some View {
-        NavigationLink(value: member.id) {
+        // Pushes the page itself rather than a value: the apps push this screen with a view
+        // link, and mixing the two in one stack re-pushes the household instead of the person.
+        NavigationLink {
+            HearthPersonView(memberID: member.id, accent: accent)
+        } label: {
             HStack(spacing: 12) {
                 HearthMemberAvatar(member: member, size: 40)
                 VStack(alignment: .leading, spacing: 3) {
@@ -238,7 +252,7 @@ struct HearthHouseholdView: View {
     /// An invited person's name, or how they were invited.
     static func name(of participant: CKShare.Participant) -> String {
         if let components = participant.userIdentity.nameComponents {
-            let name = components.formatted(.name(style: .medium))
+            let name = PersonNameComponentsFormatter.localizedString(from: components, style: .medium)
             if !name.isEmpty { return name }
         }
         let lookup = participant.userIdentity.lookupInfo
@@ -255,6 +269,7 @@ struct HearthPersonView: View {
     @State private var store = HearthHouseholdStore.shared
     @State private var editing = false
     @State private var confirmsArchive = false
+    @State private var confirmsRemove = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -300,6 +315,16 @@ struct HearthPersonView: View {
             if let extras = personExtras {
                 extras(member)
             }
+            if store.canEdit(member) {
+                Section {
+                    Button { editing = true } label: {
+                        Label("Edit Details", systemImage: "pencil")
+                            .foregroundStyle(accent)
+                    }
+                } footer: {
+                    Text("Name, photo, birthday, role, color, allergies and food.")
+                }
+            }
             Section("Account") {
                 Text(accountLine(member))
                     .foregroundStyle(.secondary)
@@ -309,11 +334,18 @@ struct HearthPersonView: View {
             }
             if store.canEditEveryone && member.id != store.info?.organizerID {
                 Section {
-                    Button(member.isArchived ? "Restore \(member.firstName)" : "Archive \(member.firstName)", role: member.isArchived ? nil : .destructive) {
+                    Button {
                         if member.isArchived { store.archive(member.id, archived: false) } else { confirmsArchive = true }
+                    } label: {
+                        Label(member.isArchived ? "Restore \(member.firstName)" : "Archive \(member.firstName)", systemImage: member.isArchived ? "arrow.uturn.backward" : "archivebox")
+                            .foregroundStyle(member.isArchived ? accent : .red)
+                    }
+                    Button(role: .destructive) { confirmsRemove = true } label: {
+                        Label("Remove from Household", systemImage: "person.badge.minus")
+                            .foregroundStyle(.red)
                     }
                 } footer: {
-                    Text("Archiving hides \(member.firstName) in every Hearth app and keeps their history.")
+                    Text("Archiving hides \(member.firstName) in every Hearth app and keeps their history. Removing takes them out of the household for good.")
                 }
             }
         }
@@ -326,6 +358,15 @@ struct HearthPersonView: View {
         }
         .sheet(isPresented: $editing) {
             HearthPersonEditor(member: member, accent: accent)
+        }
+        .alert("Remove \(member.firstName)?", isPresented: $confirmsRemove) {
+            Button("Remove", role: .destructive) {
+                store.delete(member.id)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(member.firstName) will be taken out of the household in every Hearth app. This can't be undone. To keep their history, archive them instead.")
         }
         .alert("Archive \(member.firstName)?", isPresented: $confirmsArchive) {
             Button("Archive", role: .destructive) {

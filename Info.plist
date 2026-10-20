@@ -26,5 +26,10 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>Hearth/splash-bigtable</string>
+	</dict>
 </dict>
 </plist>

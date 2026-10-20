@@ -34,7 +34,7 @@ struct NotificationsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Close", systemImage: "xmark") { dismiss() }
+                SheetCancelButton("Close") { dismiss() }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

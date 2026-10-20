@@ -196,6 +196,8 @@ struct AppRoot: View {
         .environment(\.accent, accent)
         .preferredColorScheme(AppearanceOption(rawValue: appearance)?.colorScheme)
         .animation(.smooth, value: model.phase)
+        // The Hearth launch splash, held until the household has loaded (or 3 seconds).
+        .hearthSplash(.bigtable, isReady: model.phase != .launching && model.phase != .loading, isEnabled: !ScreenshotMode.isOn)
         .sheet(isPresented: $model.needsNewPassword) { NewPasswordView().tint(accent) }
         // Accounts made with an email are asked to add Sign in with Apple (email sign-in is
         // going away), once the app is ready and not over the tutorial or a password reset.

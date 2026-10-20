@@ -32,7 +32,7 @@ struct PlanDineOutDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton("Close") { dismiss() }
                 }
                 if canManage, dineOut != nil {
                     ToolbarItem(placement: .primaryAction) {

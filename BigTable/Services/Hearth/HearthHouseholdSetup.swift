@@ -37,18 +37,19 @@ nonisolated enum HearthHouseholdPlanner {
         }
     }
 
-    /// Same full name: the same person. A lone first name joins the one full name it starts
-    /// (when exactly one does). Each app appears at most once per person.
+    /// Same full name: the same person, even when one app lists them twice (the account owner
+    /// and a family member). A lone first name joins the one full name it starts (when exactly
+    /// one does); otherwise each app appears at most once per person.
     static func groups(_ sources: [Source]) -> [Group] {
         var groups: [Group] = []
-        func place(_ source: Source, where matches: (Group) -> Bool) -> Bool {
-            let candidates = groups.indices.filter { matches(groups[$0]) && !groups[$0].sources.contains { $0.app == source.app } }
+        func place(_ source: Source, allowSameApp: Bool = false, where matches: (Group) -> Bool) -> Bool {
+            let candidates = groups.indices.filter { matches(groups[$0]) && (allowSameApp || !groups[$0].sources.contains { $0.app == source.app }) }
             guard candidates.count == 1, let index = candidates.first else { return false }
             groups[index].sources.append(source)
             return true
         }
         for source in sources {
-            if place(source, where: { $0.sources.contains { $0.key == source.key } }) { continue }
+            if place(source, allowSameApp: true, where: { $0.sources.contains { $0.key == source.key } }) { continue }
             let first = HearthNames.firstName(source.key)
             let isLoneFirstName = !source.key.contains(" ")
             if place(source, where: { group in
@@ -118,7 +119,8 @@ nonisolated enum HearthHouseholdPlanner {
             }
         }
         var appIDs: [String: String] = [:]
-        for source in ordered { appIDs[source.app.rawValue] = source.member.id }
+        // One id per app: the first, when an app listed them twice.
+        for source in ordered where appIDs[source.app.rawValue] == nil { appIDs[source.app.rawValue] = source.member.id }
         return HearthMember(
             id: id,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),

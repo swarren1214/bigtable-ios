@@ -368,9 +368,9 @@ struct PantryAmountSheet: View {
             .navigationTitle(item.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", systemImage: "checkmark") {
+                    SheetDoneButton("Save") {
                         if let value = Ingredients.parseAmount(text), let base = PantryUnits.toBase(value, unit: unit, for: item) {
                             onSave(base)
                         }

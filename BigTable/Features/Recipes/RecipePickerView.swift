@@ -40,7 +40,7 @@ struct RecipePickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton { dismiss() }
                 }
             }
             .refreshable { await store.reload() }

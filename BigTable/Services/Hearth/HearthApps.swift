@@ -823,7 +823,7 @@ struct HearthAppSheet: View {
             .background(Color(.systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", systemImage: "xmark") { dismiss() }
+                    SheetCancelButton("Close") { dismiss() }
                 }
             }
         }

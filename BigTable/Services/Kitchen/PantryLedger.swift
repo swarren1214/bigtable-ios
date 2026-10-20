@@ -311,7 +311,7 @@ nonisolated enum PantryLedger {
         guard !gaps.isEmpty else { return nil }
         let gap = gaps.reduce(0, +) / Double(gaps.count)
         let out = last.addingTimeInterval(gap)
-        guard out < shop, out > .now else { return nil }
+        guard shop > out, out > Date.now else { return nil }
         return Shortfall(itemID: item.id, use: nil, missing: 0, date: ISODay.string(from: out, calendar: calendar), isGuess: true)
     }
 

@@ -483,7 +483,7 @@ struct RecipeDetailView: View {
     private var toolbarContent: some ToolbarContent {
         if showsCloseButton {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Close", systemImage: "xmark") { dismiss() }
+                SheetCancelButton("Close") { dismiss() }
             }
         }
         if let detail, RecipeFormat.isOwned(createdByProfileId: detail.createdByProfileId, sourceName: detail.sourceName) {

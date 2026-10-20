@@ -52,9 +52,9 @@ struct RecipeRefineView: View {
                 if model.isSaving {
                     ProgressView()
                 } else if model.canSave {
-                    Button("Save", systemImage: "checkmark", action: onSave)
+                    SheetDoneButton("Save", action: onSave)
                 } else {
-                    Button("Done") { dismiss() }
+                    SheetDoneButton { dismiss() }
                         .disabled(model.isRefining)
                 }
             }

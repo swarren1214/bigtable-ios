@@ -32,7 +32,7 @@ struct PantryCheckView: View {
             .navigationTitle("Quick Check")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Close", systemImage: "xmark") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { SheetCancelButton("Close") { dismiss() } }
                 if !done, !cards.isEmpty {
                     ToolbarItem(placement: .confirmationAction) { Button("Skip") { withAnimation(.snappy) { index += 1 } } }
                 }
@@ -224,9 +224,9 @@ struct PantryAddView: View {
             .navigationTitle("Add to Pantry")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add", systemImage: "checkmark", action: save)
+                    SheetDoneButton("Add", action: save)
                         .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
