@@ -291,7 +291,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
 				INFOPLIST_KEY_NSCameraUsageDescription = "BigTable uses the camera to photograph your dishes and scan recipes from cookbooks and cards.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Find restaurants near you when you plan a meal out.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "BigTable records you describing a recipe so it can write it up for you.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "BigTable listens while you describe a recipe or talk to it, so it can write the recipe up or do what you ask.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "BigTable uses your photos for recipe pictures and to read recipes from screenshots.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "BigTable turns what you say into text so you can dictate a recipe.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -333,7 +333,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
 				INFOPLIST_KEY_NSCameraUsageDescription = "BigTable uses the camera to photograph your dishes and scan recipes from cookbooks and cards.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Find restaurants near you when you plan a meal out.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "BigTable records you describing a recipe so it can write it up for you.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "BigTable listens while you describe a recipe or talk to it, so it can write the recipe up or do what you ask.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "BigTable uses your photos for recipe pictures and to read recipes from screenshots.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "BigTable turns what you say into text so you can dictate a recipe.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

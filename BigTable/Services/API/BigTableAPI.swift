@@ -336,6 +336,20 @@ nonisolated struct BigTableAPI: Sendable {
         let _: OKResponse = try await send("DELETE", "/v1/bigtable/blocks/\(profileId.pathEscaped)")
     }
 
+    /// Reports a published recipe or a profile to Hearth's moderators (`POST /v1/reports`,
+    /// shared by every Hearth app). Answers 201 with the report's id.
+    func report(_ kind: ReportKind, targetID: String, reason: ReportReason, details: String?) async throws {
+        let trimmed = details?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let body = ReportBody(
+            app: "bigtable",
+            kind: kind.rawValue,
+            targetId: targetID,
+            reason: reason.rawValue,
+            details: trimmed.isEmpty ? nil : String(trimmed.prefix(ReportReason.detailsLimit))
+        )
+        let _: ReportResponse = try await send("POST", "/v1/reports", body: body)
+    }
+
     func socialVisibility() async throws -> SocialVisibilityResponse {
         try await get("/v1/bigtable/me/social-visibility")
     }
@@ -392,6 +406,10 @@ nonisolated struct BigTableAPI: Sendable {
     nonisolated private struct FollowBody: Encodable { var followeeProfileId: String; var following: Bool }
     nonisolated private struct MarkReadBody: Encodable { var markAllRead: Bool?; var ids: [String]?; var markUnread: Bool? }
     nonisolated private struct PushBody: Encodable { var token: String; var enabled: Bool; var platform: String }
+    nonisolated private struct ReportBody: Encodable {
+        var app: String; var kind: String; var targetId: String; var reason: String; var details: String?
+    }
+    nonisolated private struct ReportResponse: Decodable, Sendable { var id: String? }
     nonisolated private struct RecipeImageBody: Encodable {
         var title: String; var description: String?; var tags: [String]; var ingredients: [String]; var instructions: [String]
     }

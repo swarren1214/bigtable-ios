@@ -70,6 +70,7 @@ struct RecipeDetailView: View {
     @State private var shareAfterPublish = false
     @State private var shareItem: RecipeShareItem?
     @State private var likePulse = 0
+    @State private var reporting: ReportTarget?
 
     private let api = BigTableAPI.shared
     private var library: RecipeLibrary { .shared }
@@ -144,6 +145,9 @@ struct RecipeDetailView: View {
             Text(notice ?? "")
         }
         .errorAlert($errorMessage)
+        .sheet(item: $reporting) { target in
+            ReportSheet(target: target)
+        }
     }
 
     // MARK: Content
@@ -514,6 +518,24 @@ struct RecipeDetailView: View {
                 .disabled(isWorking)
             }
         }
+        if let detail, isReportable(detail) {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Report…", menuIcon: "flag") {
+                        reporting = ReportTarget(kind: .recipe, targetID: detail.id)
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis")
+                }
+            }
+        }
+    }
+
+    /// Someone else's published recipe, which can be reported.
+    private func isReportable(_ detail: RecipeDetail) -> Bool {
+        guard AppConfig.socialEnabled, detail.status == .published,
+              let creator = detail.createdByProfileId?.recipeTrimmed, !creator.isEmpty else { return false }
+        return !RecipeFormat.isOwned(createdByProfileId: detail.createdByProfileId, sourceName: detail.sourceName)
     }
 
     // MARK: Ingredients

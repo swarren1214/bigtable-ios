@@ -308,13 +308,13 @@ enum ProfilePush {
     }
 }
 
-/// The web pages the Expo app linked to from Profile.
+/// Hearth's support, privacy and terms pages and support email, linked from Profile.
 enum ProfileLinks {
-    static let privacy = URL(string: "https://bigtableapp.com/privacy/")!
-    static let terms = URL(string: "https://bigtableapp.com/terms/")!
-    static let support = URL(string: "https://bigtableapp.com/support/")!
+    static let privacy = URL(string: "https://hearthapps.com/privacy")!
+    static let terms = URL(string: "https://hearthapps.com/terms")!
+    static let support = URL(string: "https://hearthapps.com/support")!
     static let manageSubscriptions = URL(string: "https://apps.apple.com/account/subscriptions")!
-    static let supportEmail = "bigtablemeals@gmail.com"
+    static let supportEmail = "support@hearthapps.com"
 
     static var feedbackMail: URL? {
         var components = URLComponents()

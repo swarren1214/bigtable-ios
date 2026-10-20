@@ -30,8 +30,9 @@
 // - The section sizes and clips the button (a 52 pt capsule), so pass the bare
 //   SignInWithAppleButton with its style for the color scheme (.white in dark, .black in light).
 // - `rows` is optional; each row is separated by a hairline. Use `HearthAccountRow` for the label.
-// - Leave `onDeleteAccount` nil for apps with no server account (Caloma, Hearken keep everything in
-//   iCloud), and `onSignOut` nil where signing out isn't offered.
+// - Pass `onDeleteAccount` whenever the person is signed in to a Hearth account (it calls the API's
+//   `DELETE /v1/me`, which deletes the account for every Hearth app). Leave it nil when there's no
+//   server account (Caloma, or an anonymous session), and `onSignOut` nil where signing out isn't offered.
 
 import SwiftUI
 import UIKit

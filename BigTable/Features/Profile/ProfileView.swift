@@ -91,14 +91,14 @@ struct ProfileView: View {
         } message: {
             Text("You'll need to sign in again to see your meal plans.")
         }
-        .alert("Delete your account?", isPresented: $showDeleteAccount) {
+        .alert("Delete your Hearth account?", isPresented: $showDeleteAccount) {
             TextField("DELETE", text: $deleteConfirmation)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
             Button("Delete Account", role: .destructive) { Task { await deleteAccount() } }
             Button("Cancel", role: .cancel) { deleteConfirmation = "" }
         } message: {
-            Text("This permanently erases your household, recipes and account. It can't be undone. A BigTable Plus or Hearth+ subscription is canceled separately in your Apple Account's subscriptions. Type DELETE to confirm.")
+            Text("This permanently deletes your Hearth account, the one every Hearth app uses, and everything stored with it on our servers, including your published recipes and community profile. You'll be signed out of every Hearth app. It can't be undone. A BigTable Plus or Hearth+ subscription is canceled separately in your Apple Account's subscriptions. Type DELETE to confirm.")
         }
         .errorAlert($errorMessage)
         .overlay {
@@ -538,6 +538,9 @@ struct ProfileView: View {
         if AppConfig.pushEnabled { await ProfilePush.disableServerTokens() }
         do {
             try await model.deleteAccount()
+        } catch let error as APIError where error.status == 409 {
+            // HOUSEHOLD_HAS_MEMBERS: the account is kept.
+            errorMessage = "Remove the other people from your household in BigTable first."
         } catch {
             errorMessage = error.localizedDescription
         }

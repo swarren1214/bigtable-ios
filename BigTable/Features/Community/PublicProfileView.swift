@@ -3,7 +3,7 @@ import UIKit
 
 /// Someone's public profile: their photo and name, when they joined, followers and following,
 /// Follow, and the recipes they've published. The More menu invites them to your household
-/// (organizers), cancels a pending invitation, or blocks and unblocks them.
+/// (organizers), cancels a pending invitation, reports them, or blocks and unblocks them.
 ///
 /// Callers push it or wrap it in a NavigationStack; recipes open by pushing their detail.
 struct PublicProfileView: View {
@@ -25,6 +25,7 @@ struct PublicProfileView: View {
     @State private var confirming: PublicProfileAction?
     @State private var working: String?
     @State private var notice: PublicProfileNotice?
+    @State private var reporting: ReportTarget?
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 14)]
 
@@ -102,6 +103,9 @@ struct PublicProfileView: View {
             Text(notice.message)
         }
         .errorAlert($community.errorMessage)
+        .sheet(item: $reporting) { target in
+            ReportSheet(target: target)
+        }
     }
 
     // MARK: - Header
@@ -205,6 +209,9 @@ struct PublicProfileView: View {
                     // Family joins through the Hearth household now (Profile › Household ›
                     // Invite), which shares the kitchen and the plan.
                     Divider()
+                    Button("Report…", menuIcon: "flag") {
+                        reporting = ReportTarget(kind: .profile, targetID: profileID)
+                    }
                     if isBlocked {
                         Button("Unblock \(name)", menuIcon: "person.crop.circle.badge.checkmark") {
                             confirming = .unblock
