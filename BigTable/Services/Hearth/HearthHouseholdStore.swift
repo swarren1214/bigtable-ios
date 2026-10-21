@@ -20,6 +20,7 @@
 // `receive(_:)` from its scene delegate, and shows `.hearthHouseholdInvitations()` at its root.
 
 import CloudKit
+import CryptoKit
 import Foundation
 import Observation
 import OSLog
@@ -33,6 +34,29 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
     nonisolated static let containerID = "iCloud.com.stephenwarren.hearth"
     nonisolated static let zoneName = "Household"
     private static let householdRecordName = "household"
+
+    /// Now, to the millisecond: what iCloud keeps, so a record this device saved comes back
+    /// from iCloud with exactly the same time.
+    nonisolated static var stamp: Date {
+        Date(timeIntervalSince1970: (Date.now.timeIntervalSince1970 * 1000).rounded(.down) / 1000)
+    }
+
+    /// `a` is newer than `b` by more than the copies' rounding (app-group copies keep whole
+    /// seconds): only then is one copy really later than the other.
+    nonisolated static func isNewer(_ a: Date, than b: Date) -> Bool {
+        a.timeIntervalSince(b) > 1
+    }
+
+    /// Adds the app links `from` has that `into` lacks. Returns whether any were added.
+    @discardableResult
+    nonisolated static func takeLinks(_ into: inout HearthMember, from other: HearthMember) -> Bool {
+        var added = false
+        for (app, id) in other.appIDs where into.appIDs[app] == nil {
+            into.appIDs[app] = id
+            added = true
+        }
+        return added
+    }
     private static let memberPrefix = "member-"
 
     enum Mode: Equatable {
@@ -69,6 +93,13 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
     }
     private var privateFetched = false
     private var sharedFetched = false
+    @ObservationIgnored private var fetchFailed = false
+    /// iCloud itself has answered for the database this device's household lives in (or there's
+    /// no iCloud account at all). Unlike `hasLoaded`, a household already on this device doesn't
+    /// count: cleanup that changes everyone's data waits for this.
+    var cloudLoaded: Bool {
+        account == .noAccount || (isMember ? sharedFetched : privateFetched)
+    }
     /// The household's share has been read from iCloud (it may be nil: never shared). Until
     /// then `participants` is unknown, not empty.
     private(set) var shareLoaded = false
@@ -87,6 +118,11 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
     @ObservationIgnored private var systemFields: [String: Data] = [:]
     @ObservationIgnored private var changeObserver: NSObjectProtocol?
     @ObservationIgnored private var accountObserver: NSObjectProtocol?
+    @ObservationIgnored private var foregroundObserver: NSObjectProtocol?
+    @ObservationIgnored private var accountRetry: Task<Void, Never>?
+    /// A household started before iCloud answered: created once it does, if the family's
+    /// household didn't arrive instead.
+    @ObservationIgnored private var pendingCreate: (name: String, members: [HearthMember], organizerID: String?, restrictions: [String])?
     @ObservationIgnored private var fieldsSaveTask: Task<Void, Never>?
     @ObservationIgnored private let sharingDelegate = HearthHouseholdSharingDelegate()
     @ObservationIgnored private let log = Logger(subsystem: "com.stephenwarren.hearth", category: "household")
@@ -211,6 +247,9 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         accountObserver = NotificationCenter.default.addObserver(forName: .CKAccountChanged, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { _ = Task { await HearthHouseholdStore.shared.refreshAccount() } }
         }
+        foregroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { HearthHouseholdStore.shared.cameToForeground() }
+        }
         Task {
             await refreshAccount()
             await refreshShare()
@@ -241,15 +280,77 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
             account = switch try await container.accountStatus() {
             case .available: .available
             case .noAccount: .noAccount
-            default: .unavailable
+            case .restricted: .unavailable
+            // iCloud is still starting (right after signing in, or on a new device): not an
+            // answer. Treating it as "no iCloud" would offer to start a second household.
+            default: .checking
             }
         } catch {
-            account = .unavailable
+            account = .checking
         }
         if account == .available, myUserID == nil {
             myUserID = try? await container.userRecordID().recordName
+            if let myUserID { forgetOtherAccountsHousehold(now: myUserID) }
             claimMyRecordIfNeeded()
         }
+        if account == .noAccount || account == .unavailable, let pending = pendingCreate {
+            // No iCloud after all: the household starts on this device.
+            pendingCreate = nil
+            if !exists { create(name: pending.name, members: pending.members, organizerID: pending.organizerID, restrictions: pending.restrictions) }
+        }
+        if account == .checking || (account == .available && myUserID == nil) {
+            accountRetry?.cancel()
+            accountRetry = Task {
+                try? await Task.sleep(for: .seconds(15))
+                guard !Task.isCancelled else { return }
+                await refreshAccount()
+            }
+        }
+    }
+
+    /// The iCloud account whose household this device holds (app group, for every app). Another
+    /// account signing in never gets the previous one's people.
+    private static let accountKey = "hearth.household.account"
+
+    private func forgetOtherAccountsHousehold(now userID: String) {
+        let previous = Self.groupDefaults.string(forKey: Self.accountKey)
+        Self.groupDefaults.set(userID, forKey: Self.accountKey)
+        guard let previous, previous != userID, exists else { return }
+        log.notice("A different iCloud account: this device's household belonged to the last one")
+        snapshot = HearthHouseholdSnapshot(info: nil, members: [], adoptedAt: .now)
+        publish()
+        setMemberOf(nil)
+        setLocalMe(nil)
+        mode = .owner
+        share = nil
+        systemFields = [:]
+        HearthHouseholdFiles.removeAll()
+        if let container {
+            privateEngine = makeEngine(database: container.privateCloudDatabase, state: nil)
+            sharedEngine = makeEngine(database: container.sharedCloudDatabase, state: nil)
+            privateFetched = false
+            sharedFetched = false
+            shareLoaded = false
+            zoneParticipant?.zoneAccountDidChange()
+            zoneParticipant?.zoneEngineReset(isShared: false)
+            zoneParticipant?.zoneEngineReset(isShared: true)
+        }
+    }
+
+    /// Back in the foreground: take in what other Hearth apps changed meanwhile (their
+    /// notification may have come while this app was suspended), and ask iCloud again if it
+    /// wasn't ready.
+    private func cameToForeground() {
+        otherAppChanged()
+        if account != .available || myUserID == nil { Task { await refreshAccount() } }
+        Task { await refresh() }
+    }
+
+    /// The latest of every Hearth app's copy on this device, before changing anything, so a
+    /// change never goes out on top of an older copy.
+    private func catchUpWithOtherApps() {
+        let merged = HearthHouseholdSnapshot.merged([snapshot] + Hearth.readAll(HearthHouseholdSnapshot.self).map(\.value))
+        if merged != snapshot, merged.info?.id == snapshot.info?.id { snapshot = merged }
     }
 
     /// Sends what's waiting and fetches the latest. For pull to refresh; never throws.
@@ -337,7 +438,15 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
     func create(name: String, members: [HearthMember], organizerID: String?, restrictions: [String] = []) {
         // Never over a household this account joined (its record is the family's).
         guard !isMember else { return }
-        let now = Date.now
+        // Never before iCloud has said whether the family's household is already there: two
+        // households in one account overwrite each other. It's created once iCloud answers.
+        if Self.isCloudEnabled, container != nil, account != .noAccount, account != .unavailable, !privateFetched {
+            pendingCreate = (name, members, organizerID, restrictions)
+            log.notice("Household setup waits for iCloud")
+            return
+        }
+        pendingCreate = nil
+        let now = Self.stamp
         var people = members
         for index in people.indices {
             people[index].sortOrder = index
@@ -356,10 +465,15 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
 
     /// Saves a new or changed person.
     func save(_ member: HearthMember) {
+        catchUpWithOtherApps()
         var updated = member
-        updated.updatedAt = .now
+        // Links other apps made meanwhile stay (the copy being saved may predate them).
+        if let latest = snapshot.members.first(where: { $0.id == member.id }) {
+            for (app, id) in latest.appIDs where updated.appIDs[app] == nil { updated.appIDs[app] = id }
+        }
+        updated.updatedAt = Self.stamp
         if let index = snapshot.members.firstIndex(where: { $0.id == member.id }) {
-            guard !snapshot.members[index].sameContent(as: member) else { return }
+            guard !snapshot.members[index].sameContent(as: updated) else { return }
             snapshot.members[index] = updated
         } else {
             updated.sortOrder = (snapshot.members.map(\.sortOrder).max() ?? -1) + 1
@@ -370,22 +484,55 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         queueSaves([Self.memberPrefix + member.id])
     }
 
+    // MARK: Photos (one per person, everywhere)
+
+    /// Someone's photo, the one every Hearth app and device shows for them.
+    func photo(for memberID: String?) -> Data? {
+        member(memberID)?.photo.flatMap(Hearth.photo(named:))
+    }
+
+    /// They chose a new photo (or removed it, with nil): it replaces the old one on every
+    /// device and in every app. Returns false when this person can't be changed here.
+    @discardableResult
+    func setPhoto(_ data: Data?, for memberID: String) -> Bool {
+        catchUpWithOtherApps()
+        guard var person = member(memberID), canEdit(person) else { return false }
+        if let data {
+            guard let name = HearthHouseholdPhotos.save(data, memberID: memberID) else { return false }
+            person.photo = name
+        } else {
+            person.photo = nil
+        }
+        save(person)
+        return true
+    }
+
+    /// A photo an app already had for someone (an older profile photo, from before photos
+    /// lived in the household). Used only when they have none here yet: the first photo
+    /// someone gave stays theirs until they choose a new one. Returns true when it was used.
+    @discardableResult
+    func adoptPhoto(_ data: Data, for memberID: String) -> Bool {
+        guard cloudLoaded, let person = member(memberID), person.photo == nil else { return false }
+        return setPhoto(data, for: memberID)
+    }
+
     /// Hides someone everywhere; their history stays in each app.
     func archive(_ id: String, archived: Bool = true) {
+        catchUpWithOtherApps()
         guard var member = member(id) else { return }
         member.isArchived = archived
         save(member)
     }
 
-    /// Removes someone for good: their record, photo and every app's link to them.
+    /// Removes someone for good: their details, photo and every app's link to them. Their
+    /// iCloud record stays as a marker ("deleted at"), so every device and app learns of the
+    /// deletion as ordinary data, and a copy that missed it can't bring them back.
     func delete(_ id: String) {
+        catchUpWithOtherApps()
         snapshot.members.removeAll { $0.id == id }
-        snapshot.deleted[id] = .now
+        snapshot.deleted[id] = Self.stamp
         publish()
-        let recordID = CKRecord.ID(recordName: Self.memberPrefix + id, zoneID: zoneID)
-        systemFields[recordID.recordName] = nil
-        activeEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
-        scheduleFieldsSave()
+        queueSaves([Self.memberPrefix + id])
     }
 
     /// Folds people who are plainly the same person into one: the same full name, both kids or
@@ -396,7 +543,9 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
     /// someone who can change everyone. Returns how many were folded in.
     @discardableResult
     func mergeDuplicates() -> Int {
-        guard exists, hasLoaded, canEditEveryone else { return 0 }
+        // Only once iCloud has answered, and ranked on what every device knows the same way,
+        // so every device and app picks the same person to keep.
+        guard exists, cloudLoaded, canEditEveryone else { return 0 }
         let groups = Dictionary(grouping: snapshot.members.filter { !$0.isArchived && !$0.trimmedName.isEmpty }) {
             HearthNames.normalized($0.name) + ($0.role == .kid ? "|kid" : "|adult")
         }
@@ -409,18 +558,19 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
                 return a != b ? a > b : lhs.id < rhs.id
             }
             var keep = ordered[0]
+            for other in ordered.dropFirst() { keep = Self.fold(other, into: keep) }
+            // The kept person first (with any photo taken from the others), then the others go.
+            save(keep)
             for other in ordered.dropFirst() {
-                keep = Self.fold(other, into: keep)
                 if snapshot.info?.organizerID == other.id {
                     snapshot.info?.organizerID = keep.id
-                    snapshot.info?.updatedAt = .now
+                    snapshot.info?.updatedAt = Self.stamp
                     queueSaves([Self.householdRecordName])
                 }
                 if localMeID == other.id { setLocalMe(keep.id) }
                 delete(other.id)
                 folded += 1
             }
-            save(keep)
         }
         if folded > 0 { log.notice("Folded \(folded) duplicate people") }
         return folded
@@ -431,7 +581,7 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         if member.id == info?.organizerID { rank += 100 }
         if member.appleUserID != nil { rank += 50 }
         if member.birthday != nil { rank += 4 }
-        if member.photo != nil { rank += 4 }
+        // Not the photo: a device may not have downloaded it yet, and every device must agree.
         rank += member.appIDs.count
         rank += min(member.allergies.count + member.diet.count + member.likes.count + member.dislikes.count, 3)
         return rank
@@ -459,6 +609,7 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
 
     /// Records the id an app uses for someone, so the app can find them again.
     func link(_ memberID: String, app: HearthApp, appID: String) {
+        catchUpWithOtherApps()
         guard var member = member(memberID), member.appIDs[app.rawValue] != appID else { return }
         member.appIDs[app.rawValue] = appID
         save(member)
@@ -505,13 +656,14 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
     }
 
     func updateInfo(name: String? = nil, restrictions: [String]? = nil, joinCode: String? = nil, appShare: (app: HearthApp, url: String)? = nil) {
+        catchUpWithOtherApps()
         guard var info = snapshot.info else { return }
         if let name { info.name = name }
         if let restrictions { info.restrictions = restrictions }
         if let joinCode { info.joinCode = joinCode }
         if let appShare { info.appShareURLs[appShare.app.rawValue] = appShare.url }
         guard info != snapshot.info else { return }
-        info.updatedAt = .now
+        info.updatedAt = Self.stamp
         snapshot.info = info
         publish()
         queueSaves([Self.householdRecordName])
@@ -523,7 +675,7 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         for (index, id) in ids.enumerated() {
             guard let at = snapshot.members.firstIndex(where: { $0.id == id }), snapshot.members[at].sortOrder != index else { continue }
             snapshot.members[at].sortOrder = index
-            snapshot.members[at].updatedAt = .now
+            snapshot.members[at].updatedAt = Self.stamp
             changed.append(id)
         }
         guard !changed.isEmpty else { return }
@@ -536,26 +688,62 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
     func claim(_ memberID: String) {
         setLocalMe(memberID)
         guard let myUserID else { return }
-        for other in snapshot.members where other.appleUserID == myUserID && other.id != memberID {
+        for other in snapshot.members where other.appleUserID == myUserID && other.id != memberID && canEdit(other) {
             var cleared = other
             cleared.appleUserID = nil
             save(cleared)
         }
-        guard var member = member(memberID), member.appleUserID != myUserID else { return }
+        // Kids (view only) can't write it; the pick on this device is enough for them.
+        guard var member = member(memberID), member.appleUserID != myUserID, canEdit(member) else { return }
         member.appleUserID = myUserID
         save(member)
     }
 
-    /// Once the iCloud account is known: the person picked on this device gets it.
+    /// People (and the household itself) this device has that iCloud doesn't: another Hearth app
+    /// on this device added them before it could reach iCloud, or an upload never went through.
+    /// Each app uploads only its own edits, so without this they'd stay on this one device and
+    /// every other device would see fewer people. Runs after each fetch from the household's
+    /// zone; a record iCloud already has is known by its cached system fields. A record that's
+    /// there but not cached here just comes back as a conflict, and the newer copy wins.
+    private func uploadWhatICloudLacks(isPrivate: Bool) {
+        // Only after a fetch that finished, so the account works and the cache is current.
+        guard isPrivate != isMember, exists, let engine = activeEngine else { return }
+        var missing: [String] = []
+        if !isMember, snapshot.info != nil, systemFields[Self.householdRecordName] == nil {
+            missing.append(Self.householdRecordName)
+        }
+        for person in snapshot.members where systemFields[Self.memberPrefix + person.id] == nil && canEdit(person) {
+            missing.append(Self.memberPrefix + person.id)
+        }
+        let pending = pendingSaves()
+        missing.removeAll { pending.contains($0) }
+        guard !missing.isEmpty else { return }
+        log.notice("Uploading \(missing.count) household records iCloud doesn't have yet")
+        if !isMember {
+            engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
+        }
+        queueSaves(missing)
+    }
+
+    /// Once the iCloud account is known: the person picked on this device gets it. Someone who
+    /// joined with an invitation made for one person is that person, with nothing to pick.
     private func claimMyRecordIfNeeded() {
-        guard exists, let myUserID, !people.contains(where: { $0.appleUserID == myUserID }),
-              let local = localMeID, member(local) != nil else { return }
-        claim(local)
+        guard exists, let myUserID, !people.contains(where: { $0.appleUserID == myUserID }) else { return }
+        if let local = localMeID, member(local) != nil {
+            claim(local)
+        } else if let invited = invitedMember() {
+            log.notice("Joined as the person the invitation was for")
+            claim(invited.id)
+        }
     }
 
     private func publish() {
         Hearth.publish(snapshot, from: app)
-        if snapshot.exists { HearthHouseholdPhotos.clean(keeping: Set(snapshot.members.compactMap(\.photo))) }
+        if snapshot.exists {
+            // Photos any Hearth app here still uses stay (another app may have just saved one).
+            let everyCopy = [snapshot] + Hearth.readAll(HearthHouseholdSnapshot.self).map(\.value)
+            HearthHouseholdPhotos.clean(keeping: Set(everyCopy.flatMap { $0.members.compactMap(\.photo) }))
+        }
     }
 
     private func queueSaves(_ recordNames: [String]) {
@@ -581,11 +769,27 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
             handleSent(sent, engine: syncEngine, isPrivate: isPrivate)
         case .sentDatabaseChanges(let sent):
             for failure in sent.failedZoneSaves { note(failure.error) }
-        case .willFetchChanges, .willSendChanges:
+        case .willFetchChanges:
             isSyncing = true
+            fetchFailed = false
+        case .willSendChanges:
+            isSyncing = true
+        case .didFetchRecordZoneChanges(let fetched):
+            // A household zone that doesn't exist yet is an answer ("none"); anything else isn't.
+            if fetched.zoneID.zoneName == Self.zoneName, let error = fetched.error, error.code != .zoneNotFound {
+                fetchFailed = true
+                note(error)
+            }
         case .didFetchChanges:
             isSyncing = false
+            guard !fetchFailed else { break }
             if isPrivate { privateFetched = true } else { sharedFetched = true }
+            if isPrivate, let pending = pendingCreate {
+                pendingCreate = nil
+                if !exists { create(name: pending.name, members: pending.members, organizerID: pending.organizerID, restrictions: pending.restrictions) }
+            }
+            uploadWhatICloudLacks(isPrivate: isPrivate)
+            mergeDuplicates()
         case .didSendChanges:
             isSyncing = false
         default:
@@ -638,6 +842,9 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         } else if name.hasPrefix(Self.memberPrefix), let member = member(String(name.dropFirst(Self.memberPrefix.count))) {
             record = cachedRecord(recordID) ?? CKRecord(recordType: "HouseholdMember", recordID: recordID)
             HearthHouseholdRecords.write(member, to: record)
+        } else if name.hasPrefix(Self.memberPrefix), let deletedAt = snapshot.deleted[String(name.dropFirst(Self.memberPrefix.count))] {
+            record = cachedRecord(recordID) ?? CKRecord(recordType: "HouseholdMember", recordID: recordID)
+            HearthHouseholdRecords.writeDeleted(at: deletedAt, to: record)
         } else {
             engine.state.remove(pendingRecordZoneChanges: [.saveRecord(recordID)])
             return nil
@@ -660,21 +867,76 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         guard !modifications.isEmpty || !deletions.isEmpty else { return }
 
         var next = snapshot
+        let pending = pendingSaves()
+        /// This device's copy is newer than iCloud's and isn't on its way: send it (an upload
+        /// that was lost when an engine started over, or never made).
+        var resend: [String] = []
+        var switchedHousehold = false
         for record in modifications {
             cache(record)
+            let name = record.recordID.recordName
             if record.recordType == "Household" {
                 let info = HearthHouseholdRecords.info(from: record)
-                if next.info == nil || info.updatedAt > (next.info?.updatedAt ?? .distantPast) || next.info?.id != info.id {
-                    if next.info?.id != info.id { next.adoptedAt = .now }
+                if next.info?.id != info.id {
+                    // The household in iCloud is the family's: it replaces whatever this device had.
+                    switchedHousehold = next.info != nil
+                    next.adoptedAt = .now
                     next.info = info
+                } else if let mine = next.info {
+                    // The newer one's details, and every app's share link from either.
+                    let theirsNewer = info.updatedAt > mine.updatedAt
+                    var merged = theirsNewer ? info : mine
+                    let other = theirsNewer ? mine : info
+                    for (app, url) in other.appShareURLs where merged.appShareURLs[app] == nil { merged.appShareURLs[app] = url }
+                    next.info = merged
+                    let iCloudLacks = merged.appShareURLs != info.appShareURLs || Self.isNewer(mine.updatedAt, than: info.updatedAt)
+                    if iCloudLacks, !isMember, !pending.contains(name) { resend.append(name) }
                 }
-            } else if record.recordType == "HouseholdMember", let incoming = HearthHouseholdRecords.member(from: record, existing: next.members) {
+            } else if record.recordType == "HouseholdMember", let deletedAt = HearthHouseholdRecords.deletedAt(record) {
+                let id = String(name.dropFirst(Self.memberPrefix.count))
+                if let index = next.members.firstIndex(where: { $0.id == id }) {
+                    if next.members[index].updatedAt < deletedAt {
+                        next.members.remove(at: index)
+                    } else if Self.isNewer(next.members[index].updatedAt, than: deletedAt), !pending.contains(name), canEdit(next.members[index]) {
+                        // Someone saved them after the deletion: they stay, and iCloud hears so.
+                        resend.append(name)
+                    }
+                }
+                if deletedAt > (next.deleted[id] ?? .distantPast) { next.deleted[id] = deletedAt }
+            } else if record.recordType == "HouseholdMember", var incoming = HearthHouseholdRecords.member(from: record, existing: next.members) {
                 if let index = next.members.firstIndex(where: { $0.id == incoming.id }) {
-                    if incoming.updatedAt > next.members[index].updatedAt { next.members[index] = incoming }
-                } else if incoming.updatedAt > (next.deleted[incoming.id] ?? .distantPast) {
+                    var mine = next.members[index]
+                    if incoming.updatedAt > mine.updatedAt {
+                        // Theirs is newer; links this device made that iCloud lacks stay.
+                        let keptLinks = Self.takeLinks(&incoming, from: mine)
+                        next.members[index] = incoming
+                        if keptLinks, canEdit(incoming), !pending.contains(name) { resend.append(name) }
+                    } else {
+                        // This device's is as new or newer: it takes iCloud's extra links, and
+                        // goes back up when it has something iCloud lacks.
+                        if Self.takeLinks(&mine, from: incoming) { next.members[index] = mine }
+                        let iCloudLacks = Self.isNewer(mine.updatedAt, than: incoming.updatedAt)
+                            || mine.appIDs.keys.contains { incoming.appIDs[$0] == nil }
+                        if iCloudLacks, !pending.contains(name), canEdit(mine) { resend.append(name) }
+                    }
+                } else if let deletedAt = next.deleted[incoming.id] {
+                    if incoming.updatedAt > deletedAt {
+                        next.members.append(incoming)
+                    } else if Self.isNewer(deletedAt, than: incoming.updatedAt), !pending.contains(name), canEditEveryone {
+                        // This device deleted them but iCloud never heard: send the deletion again.
+                        resend.append(name)
+                    }
+                } else {
                     next.members.append(incoming)
                 }
             }
+        }
+        if switchedHousehold {
+            // People from the household this device had before aren't the family's: only those
+            // iCloud has stay (the rest of the family's arrive with this fetch).
+            let before = next.members.count
+            next.members.removeAll { systemFields[Self.memberPrefix + $0.id] == nil }
+            log.notice("Switched to the household in iCloud; set aside \(before - next.members.count) people from this device's")
         }
         for deletion in deletions {
             systemFields[deletion.recordID.recordName] = nil
@@ -693,7 +955,18 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
             claimMyRecordIfNeeded()
             mergeDuplicates()
         }
+        if !resend.isEmpty { queueSaves(resend) }
         scheduleFieldsSave()
+    }
+
+    /// Record names with a save on its way for the household's zone.
+    private func pendingSaves() -> Set<String> {
+        guard let engine = activeEngine else { return [] }
+        let zone = zoneID
+        return Set(engine.state.pendingRecordZoneChanges.compactMap { change -> String? in
+            if case .saveRecord(let id) = change, id.zoneID == zone { return id.recordName }
+            return nil
+        })
     }
 
     private func handleDatabaseChanges(_ changes: CKSyncEngine.Event.FetchedDatabaseChanges, isPrivate: Bool) {
@@ -709,8 +982,14 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
                 systemFields = [:]
                 HearthHouseholdFiles.saveFields(systemFields)
                 share = nil
-                if deletion.reason == .encryptedDataReset, exists {
-                    // The iCloud keys were reset: put back what's on this device.
+                if deletion.reason == .purged {
+                    // They deleted this app's iCloud data in Settings: it goes here too.
+                    log.notice("The household's iCloud data was deleted")
+                    snapshot = HearthHouseholdSnapshot(info: nil, members: [], adoptedAt: .now)
+                    publish()
+                } else if exists {
+                    // The iCloud keys were reset, or the zone went missing: put back what's on
+                    // this device (no Hearth app deletes the household's zone).
                     privateEngine?.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
                     queueSaves([Self.householdRecordName] + snapshot.members.map { Self.memberPrefix + $0.id })
                 }
@@ -747,13 +1026,7 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
                 // Someone saved first. Theirs is newer only if its own clock says so.
                 if let server = failure.error.serverRecord {
                     cache(server)
-                    if server.recordType == "HouseholdMember", let theirs = HearthHouseholdRecords.member(from: server, existing: snapshot.members),
-                       let index = snapshot.members.firstIndex(where: { $0.id == theirs.id }),
-                       theirs.updatedAt > snapshot.members[index].updatedAt {
-                        snapshot.members[index] = theirs
-                        publish()
-                        continue
-                    }
+                    if resolveConflict(server) { continue }
                 }
                 retry.append(.saveRecord(recordID))
             case .zoneNotFound:
@@ -772,8 +1045,14 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
                 retry.append(.saveRecord(recordID))
             case .networkFailure, .networkUnavailable, .zoneBusy, .serviceUnavailable, .requestRateLimited, .notAuthenticated, .operationCancelled, .accountTemporarilyUnavailable:
                 break
-            default:
+            case .permissionFailure:
+                // Not this person's to change (a read-only member): iCloud's copy stands.
                 note(failure.error)
+            default:
+                // Anything else (quota, a photo that went missing): tried again in a minute,
+                // never silently dropped.
+                note(failure.error)
+                retryLater(recordID, engine: engine)
             }
         }
         if !retry.isEmpty { engine.state.add(pendingRecordZoneChanges: retry) }
@@ -781,13 +1060,84 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         scheduleFieldsSave()
     }
 
+    private func retryLater(_ recordID: CKRecord.ID, engine: CKSyncEngine) {
+        Task { [weak engine] in
+            try? await Task.sleep(for: .seconds(60))
+            engine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+        }
+    }
+
+    /// A save lost to a newer copy in iCloud: takes theirs when its clock is later than this
+    /// device's (a person, a deleted person, or the household). Returns true when theirs won and
+    /// nothing should be retried; false to save this device's copy over it.
+    private func resolveConflict(_ server: CKRecord) -> Bool {
+        let name = server.recordID.recordName
+        if server.recordType == "Household" {
+            let theirs = HearthHouseholdRecords.info(from: server)
+            guard let mine = snapshot.info else { return false }
+            if mine.id != theirs.id {
+                // iCloud already holds this account's household: it's the family's; this
+                // device's newer one never replaces it.
+                log.notice("Joined the household already in iCloud instead of starting another")
+                snapshot.info = theirs
+                snapshot.adoptedAt = .now
+                // This device's people were for its own household: those iCloud lacks never go up.
+                let strays = snapshot.members.filter { systemFields[Self.memberPrefix + $0.id] == nil }.map(\.id)
+                snapshot.members.removeAll { strays.contains($0.id) }
+                if let engine = activeEngine {
+                    engine.state.remove(pendingRecordZoneChanges: strays.map { .saveRecord(CKRecord.ID(recordName: Self.memberPrefix + $0, zoneID: zoneID)) })
+                }
+                publish()
+                return true
+            }
+            guard theirs.updatedAt > mine.updatedAt else { return false }
+            var merged = theirs
+            for (app, url) in mine.appShareURLs where merged.appShareURLs[app] == nil { merged.appShareURLs[app] = url }
+            snapshot.info = merged
+            publish()
+            if merged != theirs { queueSaves([Self.householdRecordName]) }
+            return true
+        }
+        guard server.recordType == "HouseholdMember", name.hasPrefix(Self.memberPrefix) else { return false }
+        let id = String(name.dropFirst(Self.memberPrefix.count))
+        let mineDate = member(id)?.updatedAt ?? snapshot.deleted[id] ?? .distantPast
+        if let deletedAt = HearthHouseholdRecords.deletedAt(server) {
+            guard deletedAt > mineDate else { return false }
+            snapshot.members.removeAll { $0.id == id }
+            snapshot.deleted[id] = deletedAt
+            publish()
+            return true
+        }
+        guard var theirs = HearthHouseholdRecords.member(from: server, existing: snapshot.members) else { return false }
+        guard theirs.updatedAt > mineDate else {
+            // Mine goes up, with iCloud's links added.
+            if let index = snapshot.members.firstIndex(where: { $0.id == id }),
+               Self.takeLinks(&snapshot.members[index], from: theirs) { publish() }
+            return false
+        }
+        if let index = snapshot.members.firstIndex(where: { $0.id == id }) {
+            let keptLinks = Self.takeLinks(&theirs, from: snapshot.members[index])
+            snapshot.members[index] = theirs
+            publish()
+            // Theirs wins, but links only this device had go back up.
+            return !keptLinks
+        } else {
+            snapshot.members.append(theirs)
+            snapshot.deleted[id] = nil
+        }
+        publish()
+        return true
+    }
+
     private func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange) {
         switch change.changeType {
         case .signIn:
             Task { await refreshAccount() }
         case .signOut, .switchAccounts:
-            // Someone else's household never stays on a device after its account leaves.
-            if isMember {
+            // Someone else's household never stays on a device after its account leaves, and a
+            // different account never gets this one's people.
+            let switched: Bool = if case .switchAccounts = change.changeType { true } else { false }
+            if isMember || switched {
                 snapshot = HearthHouseholdSnapshot(info: nil, members: [], adoptedAt: .now)
                 publish()
             }
@@ -834,23 +1184,333 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         return saved
     }
 
-    func refreshShare() async {
-        guard let container, exists || isMember else { return }
+    /// Reads the household's share from iCloud. False when iCloud couldn't be asked.
+    @discardableResult
+    func refreshShare() async -> Bool {
+        guard let container, exists || isMember else { return true }
         let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
         let database = isMember ? container.sharedCloudDatabase : container.privateCloudDatabase
         do {
             share = try await database.record(for: shareID) as? CKShare
             shareLoaded = true
+            claimMyRecordIfNeeded()
+            return true
         } catch let error as CKError where error.code == .unknownItem || error.code == .zoneNotFound {
             share = nil
             shareLoaded = true
+            return true
         } catch {
             log.error("Couldn't check the household share: \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 
+    // MARK: - Invitations, one person each
+
+    /// The keys on a person for their invitation (in `appIDs`, so they sync without a schema
+    /// change): a hash of who it went to (never the email or phone itself, which only the
+    /// share's participants carry), empty once canceled, and when.
+    nonisolated static let inviteKey = "_invite"
+    nonisolated static let invitedAtKey = "_invitedAt"
+
+    /// Where someone stands: joined on their own device, invited, or neither.
+    func inviteStatus(_ member: HearthMember) -> HearthInviteStatus {
+        if member.id == me?.id || member.id == info?.organizerID { return .joined }
+        let invitation = participant(for: member)
+        if invitation?.acceptanceStatus == .accepted { return .joined }
+        // Joined with their own Apple Account (before invitations were by name), and still on
+        // the share as far as this device knows.
+        if let appleUserID = member.appleUserID, !(shareLoaded && share != nil && !isMember && !isOnShare(appleUserID)) {
+            return .joined
+        }
+        guard let hash = member.appIDs[Self.inviteKey], !hash.isEmpty, invitation != nil || !shareLoaded else { return .notInvited }
+        let at = member.appIDs[Self.invitedAtKey].flatMap(Double.init).map { Date(timeIntervalSince1970: $0) }
+        return .invited(at)
+    }
+
+    /// The email or phone number someone was invited at, for showing (from the share).
+    func invitedContact(_ member: HearthMember) -> String? {
+        Self.inviteKey(of: participant(for: member)?.userIdentity.lookupInfo).map(Self.contact(fromKey:))
+    }
+
+    /// Only the owner of the household's share can add or remove people on it.
+    var canInvite: Bool { !isMember && account == .available && canEditEveryone }
+
+    /// The household's link: it opens only for the people invited to it.
+    var invitationURL: URL? { share?.url }
+
+    /// Invites someone as `member`: adds their Apple Account (by email or phone) to the
+    /// household's share, with what `role` may do there, and notes the invitation on them.
+    /// Returns the link, which only that Apple Account can open, however it's sent.
+    @discardableResult
+    func invite(_ memberID: String, contact: String, role: HearthRole) async -> URL? {
+        problem = nil
+        guard account == .available else {
+            problem = "Sign in to iCloud in Settings to invite your family."
+            return nil
+        }
+        guard let key = Self.inviteKey(forContact: contact) else {
+            problem = "Enter their email address, or their phone number with its country code."
+            return nil
+        }
+        guard canInvite, member(memberID) != nil else { return nil }
+        let hash = Self.inviteHash(key)
+        if let other = people.first(where: { $0.id != memberID && $0.appIDs[Self.inviteKey] == hash }) {
+            problem = "That Apple Account is already invited as \(other.firstName). Cancel that invitation first."
+            return nil
+        }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try? await privateEngine?.sendChanges()
+            // The share iCloud has, before making one: never a second.
+            guard await refreshShare() else { throw CKError(.networkFailure) }
+            if share == nil { _ = try await prepareShare() }
+            guard let share else { throw CKError(.internalError) }
+            let permission: CKShare.ParticipantPermission = role == .kid ? .readOnly : .readWrite
+            if let existing = participant(forKey: key) {
+                // Invited before (or already joined): the same invitation, with this role.
+                existing.permission = permission
+            } else {
+                let participant = try await shareParticipant(Self.lookupInfo(forKey: key))
+                participant.permission = permission
+                share.addParticipant(participant)
+            }
+            self.share = try await saveShare(share)
+            catchUpWithOtherApps()
+            guard var member = member(memberID) else { return self.share?.url }
+            if canEdit(member) { member.role = role }
+            member.appIDs[Self.inviteKey] = hash
+            member.appIDs[Self.invitedAtKey] = String(Int(Date.now.timeIntervalSince1970))
+            save(member)
+            return self.share?.url
+        } catch is HearthNoAppleAccount {
+            problem = "There's no Apple Account with that \(key.hasPrefix("email:") ? "email address" : "phone number"). Use the one they sign in to iCloud with."
+        } catch {
+            note(error)
+        }
+        return nil
+    }
+
+    /// Takes back someone's invitation: their link stops working. Their details stay.
+    func cancelInvite(_ memberID: String) async {
+        guard canInvite, let member = member(memberID), let hash = member.appIDs[Self.inviteKey], !hash.isEmpty else { return }
+        isWorking = true
+        defer { isWorking = false }
+        problem = nil
+        guard await withdraw(matching: hash, appleUserID: nil, includingJoined: false) else { return }
+        catchUpWithOtherApps()
+        guard var latest = self.member(memberID) else { return }
+        latest.appIDs[Self.inviteKey] = ""
+        latest.appIDs[Self.invitedAtKey] = ""
+        save(latest)
+    }
+
+    /// Before archiving or removing someone: takes them off the household's share, so their
+    /// invitation stops working and, if they'd joined, the household leaves their devices.
+    func withdrawAccess(_ memberID: String) async {
+        guard canInvite, let member = member(memberID) else { return }
+        let hash = member.appIDs[Self.inviteKey].flatMap { $0.isEmpty ? nil : $0 }
+        guard hash != nil || member.appleUserID != nil else { return }
+        isWorking = true
+        defer { isWorking = false }
+        _ = await withdraw(matching: hash, appleUserID: member.appleUserID, includingJoined: true)
+    }
+
+    /// Removes the participants for an invitation (and, with `includingJoined`, the Apple
+    /// Account that joined). True once iCloud agrees they're off the share.
+    private func withdraw(matching hash: String?, appleUserID: String?, includingJoined: Bool) async -> Bool {
+        guard await refreshShare() else {
+            problem = "Couldn't reach iCloud. Try again in a moment."
+            return false
+        }
+        guard let share else { return true }
+        let leaving = share.participants.filter { participant in
+            guard participant.role != .owner, participant.acceptanceStatus != .removed else { return false }
+            if !includingJoined && participant.acceptanceStatus == .accepted { return false }
+            if let hash, Self.inviteKey(of: participant.userIdentity.lookupInfo).map(Self.inviteHash) == hash { return true }
+            if let appleUserID, participant.userIdentity.userRecordID?.recordName == appleUserID { return true }
+            return false
+        }
+        guard !leaving.isEmpty else { return true }
+        leaving.forEach { share.removeParticipant($0) }
+        do {
+            self.share = try await saveShare(share)
+            return true
+        } catch {
+            note(error)
+            return false
+        }
+    }
+
+    /// An invitation link someone pasted (or scanned): asks to join, as tapping it would.
+    func openInvitation(_ url: URL) async {
+        problem = nil
+        guard let container else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            let metadata = try await shareMetadata(url, container: container)
+            if Self.handles(metadata) {
+                receive(metadata)
+            } else {
+                problem = "That link isn't a household invitation."
+            }
+        } catch {
+            log.error("Couldn't open the invitation link: \(error.localizedDescription, privacy: .public)")
+            problem = "That invitation couldn't be opened. Ask them for a new one."
+        }
+    }
+
+    /// The household an invitation is for, before joining.
+    var pendingHouseholdName: String? {
+        (pendingInvite?.share[CKShare.SystemFieldKey.title] as? String).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// Who the invitation was sent to (this person's email or phone), before joining.
+    var pendingInviteContact: String? {
+        Self.inviteKey(of: pendingInvite?.share.currentUserParticipant?.userIdentity.lookupInfo).map(Self.contact(fromKey:))
+    }
+
+    /// Whether the invitation lets them change things (parents and adults) or only see (kids).
+    var pendingInviteCanEdit: Bool { pendingInvite?.participantPermission == .readWrite }
+
+    /// The person this account's invitation was made for, once it has joined.
+    private func invitedMember() -> HearthMember? {
+        guard isMember, let myUserID, let share else { return nil }
+        let mine = share.participants.first { $0.userIdentity.userRecordID?.recordName == myUserID } ?? share.currentUserParticipant
+        guard let key = Self.inviteKey(of: mine?.userIdentity.lookupInfo) else { return nil }
+        let hash = Self.inviteHash(key)
+        let matches = people.filter { $0.appIDs[Self.inviteKey] == hash }
+        // Two people with one invitation can't be told apart: they pick.
+        return matches.count == 1 ? matches.first : nil
+    }
+
+    private func participant(for member: HearthMember) -> CKShare.Participant? {
+        guard let hash = member.appIDs[Self.inviteKey], !hash.isEmpty else { return nil }
+        return share?.participants.first { participant in
+            participant.role != .owner && participant.acceptanceStatus != .removed
+                && Self.inviteKey(of: participant.userIdentity.lookupInfo).map(Self.inviteHash) == hash
+        }
+    }
+
+    private func participant(forKey key: String) -> CKShare.Participant? {
+        share?.participants.first {
+            $0.role != .owner && $0.acceptanceStatus != .removed && Self.inviteKey(of: $0.userIdentity.lookupInfo) == key
+        }
+    }
+
+    private func isOnShare(_ appleUserID: String) -> Bool {
+        share?.participants.contains {
+            $0.acceptanceStatus == .accepted && $0.userIdentity.userRecordID?.recordName == appleUserID
+        } ?? false
+    }
+
+    private func saveShare(_ share: CKShare) async throws -> CKShare {
+        guard let container else { throw CKError(.notAuthenticated) }
+        let result = try await container.privateCloudDatabase.modifyRecords(saving: [share], deleting: [])
+        guard let saved = try result.saveResults[share.recordID]?.get() as? CKShare else { throw CKError(.internalError) }
+        return saved
+    }
+
+    /// The share participant for an Apple Account, found by email or phone.
+    private func shareParticipant(_ info: CKUserIdentity.LookupInfo) async throws -> CKShare.Participant {
+        guard let container else { throw CKError(.notAuthenticated) }
+        let box = HearthResultBox<CKShare.Participant>()
+        return try await withCheckedThrowingContinuation { continuation in
+            let operation = CKFetchShareParticipantsOperation(userIdentityLookupInfos: [info])
+            operation.perShareParticipantResultBlock = { _, result in box.result = result }
+            operation.fetchShareParticipantsResultBlock = { result in
+                switch result {
+                case .failure(let error as CKError) where error.code == .unknownItem || error.code == .partialFailure:
+                    continuation.resume(throwing: HearthNoAppleAccount())
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                case .success:
+                    switch box.result {
+                    case .success(let participant)?: continuation.resume(returning: participant)
+                    case .failure(let error as CKError)? where error.code != .unknownItem && error.code != .partialFailure:
+                        continuation.resume(throwing: error)
+                    default: continuation.resume(throwing: HearthNoAppleAccount())
+                    }
+                }
+            }
+            container.add(operation)
+        }
+    }
+
+    private func shareMetadata(_ url: URL, container: CKContainer) async throws -> CKShare.Metadata {
+        let box = HearthResultBox<CKShare.Metadata>()
+        return try await withCheckedThrowingContinuation { continuation in
+            let operation = CKFetchShareMetadataOperation(shareURLs: [url])
+            operation.perShareMetadataResultBlock = { _, result in box.result = result }
+            operation.fetchShareMetadataResultBlock = { result in
+                switch result {
+                case .failure(let error): continuation.resume(throwing: error)
+                case .success: continuation.resume(with: box.result ?? .failure(CKError(.unknownItem)))
+                }
+            }
+            container.add(operation)
+        }
+    }
+
+    /// One form for an email or phone number, the same from what someone typed (or picked in
+    /// Contacts) and from what iCloud reports: "email:ann@icloud.com" or "phone:15551234567"
+    /// (country code first). A number typed without "+" gets this device's country code. Nil
+    /// when it's neither.
+    nonisolated static func inviteKey(forContact text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.contains("@") {
+            let parts = trimmed.split(separator: "@")
+            guard parts.count == 2, parts[1].contains("."), !trimmed.contains(where: \.isWhitespace) else { return nil }
+            return "email:" + trimmed.lowercased()
+        }
+        guard !trimmed.contains(where: \.isLetter) else { return nil }
+        var digits = trimmed.filter { $0.isASCII && $0.isNumber }
+        if !trimmed.contains("+") {
+            // A national number: drop a trunk "0", add this device's country code.
+            guard let code = countryCallingCode else { return nil }
+            if digits.hasPrefix("0") { digits.removeFirst() }
+            if !(code == "1" && digits.count == 11 && digits.hasPrefix("1")) { digits = code + digits }
+        }
+        guard (8...15).contains(digits.count) else { return nil }
+        return "phone:" + digits
+    }
+
+    /// The same form, from what iCloud reports for a participant.
+    nonisolated static func inviteKey(of info: CKUserIdentity.LookupInfo?) -> String? {
+        if let email = info?.emailAddress, !email.isEmpty { return "email:" + email.lowercased() }
+        if let phone = info?.phoneNumber, !phone.isEmpty { return inviteKey(forContact: phone.hasPrefix("+") ? phone : "+" + phone) }
+        return nil
+    }
+
+    /// What's kept on the person: a hash of the key, so the household never stores who
+    /// someone's email or phone is.
+    nonisolated static func inviteHash(_ key: String) -> String {
+        "h:" + SHA256.hash(data: Data(key.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    nonisolated static func lookupInfo(forKey key: String) -> CKUserIdentity.LookupInfo {
+        if key.hasPrefix("email:") { return CKUserIdentity.LookupInfo(emailAddress: String(key.dropFirst(6))) }
+        return CKUserIdentity.LookupInfo(phoneNumber: "+" + String(key.dropFirst(6)))
+    }
+
+    nonisolated static func contact(fromKey key: String) -> String {
+        key.hasPrefix("email:") ? String(key.dropFirst(6)) : "+" + String(key.dropFirst(6))
+    }
+
+    /// This device's country calling code, for numbers typed without one.
+    nonisolated private static var countryCallingCode: String? {
+        let codes = ["US": "1", "CA": "1", "GB": "44", "AU": "61", "NZ": "64", "IE": "353", "IN": "91",
+                     "DE": "49", "FR": "33", "ES": "34", "IT": "39", "NL": "31", "MX": "52", "BR": "55",
+                     "JP": "81", "KR": "82", "PH": "63", "ZA": "27", "SG": "65", "SE": "46", "NO": "47",
+                     "DK": "45", "CH": "41", "AT": "43", "BE": "32", "PT": "351", "PL": "48"]
+        return Locale.current.region.flatMap { codes[$0.identifier] }
+    }
+
     /// Apple's sheet for inviting someone: `role` decides whether they can edit (parents and
-    /// adults) or only see (kids).
+    /// adults) or only see (kids). (The household screens invite one person at a time instead,
+    /// with `invite(_:contact:role:)`.)
     func presentInvite(as role: HearthRole) async {
         guard account == .available else {
             problem = "Sign in to iCloud in Settings to invite your family."
@@ -999,7 +1659,7 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
     }
 
     private func note(_ error: Error) {
-        log.error("Household sync: \(error.localizedDescription, privacy: .public)")
+        log.error("Household sync: \(String(describing: error), privacy: .public)")
         if let error = error as? CKError {
             switch error.code {
             case .networkUnavailable, .networkFailure, .operationCancelled:
@@ -1011,11 +1671,22 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
             case .participantMayNeedVerification:
                 problem = "Open the invitation in Messages or Mail on this device to verify it, then try again."
             default:
-                problem = error.localizedDescription
+                problem = Self.isUndeployedSchema(error)
+                    ? "Inviting isn't available yet. Your household is safe on this device; try again after the next update."
+                    : "Something went wrong with iCloud. Try again in a moment."
             }
         } else {
-            problem = error.localizedDescription
+            problem = "Something went wrong with iCloud. Try again in a moment."
         }
+    }
+
+    /// iCloud's Production database was never given a record type this build saves (like the
+    /// household's `cloudkit.share`). Only a developer can fix it, by deploying the
+    /// `iCloud.com.stephenwarren.hearth` schema to Production in the CloudKit Console; the log
+    /// above has the details.
+    nonisolated static func isUndeployedSchema(_ error: CKError) -> Bool {
+        let errors = [error] + (error.partialErrorsByItemID?.values.compactMap { $0 as? CKError } ?? [])
+        return errors.contains { $0.localizedDescription.localizedCaseInsensitiveContains("production schema") }
     }
 }
 
@@ -1062,21 +1733,48 @@ nonisolated enum HearthHouseholdRecords {
         record.encryptedValues["dislikes"] = member.dislikes as NSArray
         // The photo's file name is derived from its bytes, so every device stores it under
         // the same name and only downloads it once.
-        record["photoName"] = member.photo.map { $0 as NSString }
+        // The record here carries only iCloud's system fields, so a field left unset keeps
+        // iCloud's value.
         if let name = member.photo, let data = Hearth.photo(named: name) {
             let url = FileManager.default.temporaryDirectory.appending(path: "hearth-\(member.id).jpg", directoryHint: .notDirectory)
             try? data.write(to: url, options: .atomic)
+            record["photoName"] = name as NSString
             record["photo"] = CKAsset(fileURL: url)
-        } else {
+        } else if member.photo == nil {
+            record["photoName"] = nil
             record["photo"] = nil
         }
+        // Otherwise this device doesn't have the file: iCloud keeps the photo it has.
+    }
+
+    /// Marks a deleted person in `appIDs` (an existing field, so iCloud's schema doesn't change).
+    private static let deletedKey = "_deletedAt"
+
+    /// A deleted person: nothing but when. Archived and nameless, so builds from before markers
+    /// existed hide it.
+    static func writeDeleted(at date: Date, to record: CKRecord) {
+        let marker = [deletedKey: String(date.timeIntervalSince1970)]
+        record["appIDs"] = (try? String(data: JSONEncoder().encode(marker), encoding: .utf8)).map { $0 as NSString }
+        record["updatedAt"] = date as NSDate
+        record["isArchived"] = NSNumber(value: true)
+        record["name"] = "" as NSString
+        for key in ["appleUserID", "photoName", "photo"] { record[key] = nil }
+        for key in ["birthday", "allergies", "diet", "likes", "dislikes"] { record.encryptedValues[key] = nil }
+    }
+
+    /// When a person's record says they were deleted, or nil for a live person.
+    static func deletedAt(_ record: CKRecord) -> Date? {
+        guard let json = record["appIDs"] as? String, json.contains(deletedKey),
+              let map = try? JSONDecoder().decode([String: String].self, from: Data(json.utf8)),
+              let seconds = map[deletedKey].flatMap(Double.init) else { return nil }
+        return Date(timeIntervalSince1970: seconds)
     }
 
     /// A member from iCloud. Its photo is copied into the shared folder unless this device
     /// already has it.
     static func member(from record: CKRecord, existing: [HearthMember]) -> HearthMember? {
         let name = record.recordID.recordName
-        guard name.hasPrefix("member-") else { return nil }
+        guard name.hasPrefix("member-"), deletedAt(record) == nil else { return nil }
         let id = String(name.dropFirst("member-".count))
         var appIDs: [String: String] = [:]
         if let json = record["appIDs"] as? String, let data = json.data(using: .utf8) {
@@ -1173,6 +1871,21 @@ private final class HearthHouseholdSharingDelegate: NSObject, UICloudSharingCont
     func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
         HearthHouseholdStore.shared.sharingChanged()
     }
+}
+
+/// Where someone stands with the household: on their own device, invited, or neither.
+nonisolated enum HearthInviteStatus: Equatable, Sendable {
+    case joined
+    case invited(Date?)
+    case notInvited
+}
+
+/// No Apple Account has the email or phone number someone was invited at.
+nonisolated struct HearthNoAppleAccount: Error {}
+
+/// Carries one result out of a CloudKit operation's callbacks.
+nonisolated private final class HearthResultBox<Value>: @unchecked Sendable {
+    var result: Result<Value, Error>?
 }
 
 /// The scene delegate for apps that share nothing in iCloud of their own (BigTable, Sated):

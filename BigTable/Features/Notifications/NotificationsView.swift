@@ -224,9 +224,10 @@ struct NotificationsRow: View {
     }
 
     private var isUnread: Bool { notification.isUnread }
-    private var showsInvitationActions: Bool {
-        notification.kind == .householdInvitation && isUnread && NotificationText.invitationID(notification) != nil
-    }
+    /// Older household invitations (from Community) aren't answered here any more: family joins
+    /// through the Hearth household (Profile › Household › Invite), which shares the kitchen and
+    /// the organizer's plan.
+    private var showsInvitationActions: Bool { false }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {

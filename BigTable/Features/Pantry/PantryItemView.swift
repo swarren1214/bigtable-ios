@@ -154,11 +154,12 @@ struct PantryItemView: View {
                 kitchen.setAmount(base, of: item)
             }
         }
-        .confirmationDialog("Remove \(item.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
+        .alert("Remove \(item.name)?", isPresented: $confirmRemove) {
             Button("Remove", role: .destructive) {
                 kitchen.removeFromPantry(item)
                 dismiss()
             }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("BigTable stops counting it. Buying it again puts it back.")
         }

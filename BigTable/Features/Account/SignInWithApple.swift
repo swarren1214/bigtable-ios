@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import os
 import Security
 import SwiftUI
 
@@ -9,8 +10,6 @@ import SwiftUI
 /// identity token, along with the name Apple shares the first time.
 struct AccountAppleSignInButton: View {
     var label: SignInWithAppleButton.Label = .continue
-    /// Adds Apple to the signed-in account (one made with an email) instead of signing in.
-    var linksCurrentAccount = false
     var onError: (String) -> Void
     var onSuccess: () -> Void = {}
 
@@ -30,7 +29,7 @@ struct AccountAppleSignInButton: View {
                 finish(authorization)
             case .failure(let error):
                 if let appleError = error as? ASAuthorizationError, appleError.code == .canceled { return }
-                onError(error.localizedDescription)
+                onError(FriendlyError.message(error, fallback: "Sign in with Apple didn't go through. Try again."))
             }
         }
         .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
@@ -66,16 +65,12 @@ struct AccountAppleSignInButton: View {
         Task {
             defer { isSigningIn = false }
             do {
-                if linksCurrentAccount {
-                    try await AuthClient.shared.linkApple(idToken: identityToken, nonce: rawNonce)
-                } else {
-                    try await AuthClient.shared.signInWithApple(
-                        idToken: identityToken,
-                        nonce: rawNonce,
-                        fullName: fullName.isEmpty ? nil : fullName,
-                        fallbackName: sharedName
-                    )
-                }
+                try await AuthClient.shared.signInWithApple(
+                    idToken: identityToken,
+                    nonce: rawNonce,
+                    fullName: fullName.isEmpty ? nil : fullName,
+                    fallbackName: sharedName
+                )
                 if !ScreenshotMode.isOn {
                     HearthAccounts.saveAppleID(HearthSharedAppleID(
                         userID: appleUserID,
@@ -91,17 +86,21 @@ struct AccountAppleSignInButton: View {
         }
     }
 
-    /// Supabase's configuration errors, in words that say what to fix (as the Expo app did).
+    /// Supabase's configuration errors are logged with what to fix; people see plain words.
     private static func message(for error: Error) -> String {
         let text = error.localizedDescription
         if text.contains("is not enabled") && text.lowercased().contains("apple") {
-            return "Sign in with Apple isn't turned on for this BigTable server yet."
+            log.error("Sign in with Apple isn't enabled on the Supabase project")
+            return "Sign in with Apple isn't available right now. Try again later."
         }
         if text.contains("Unacceptable audience") {
-            return "The server doesn't accept Sign in with Apple from this app yet (add com.stephenwarren.bigtable to Supabase's Apple client IDs)."
+            log.error("Supabase rejected the audience: add com.stephenwarren.bigtable to its Apple client IDs")
+            return "Sign in with Apple isn't available right now. Try again later."
         }
-        return text
+        return FriendlyError.message(error, fallback: "Sign in with Apple didn't go through. Try again.")
     }
+
+    private static let log = Logger(subsystem: "com.stephenwarren.bigtable", category: "auth")
 }
 
 /// The nonce for Sign in with Apple.

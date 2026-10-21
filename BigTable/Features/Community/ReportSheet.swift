@@ -130,7 +130,7 @@ struct ReportSheet: View {
         } catch let error as APIError where error.kind == .signedOut {
             errorMessage = "Sign in to BigTable to send a report."
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 }

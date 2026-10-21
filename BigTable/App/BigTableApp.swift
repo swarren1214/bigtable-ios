@@ -12,6 +12,8 @@ struct BigTableApp: App {
     init() {
         // Debug: marketing screenshots (scripts/screenshots.sh). Does nothing otherwise.
         ScreenshotMode.prepareLaunch()
+        // Alerts use the system label color rather than the accent. Destructive buttons stay red.
+        UIView.appearance(whenContainedInInstancesOf: [UIAlertController.self]).tintColor = .label
     }
 
     var body: some Scene {
@@ -121,13 +123,10 @@ final class AppRouter {
         self.sheet = sheet
     }
 
-    /// bigtable://plan, bigtable://grocery, bigtable://recipes, bigtable://recipe/<id>,
-    /// bigtable://auth (email links), and https://bigtableapp.com/r/<id> shared recipes.
+    /// bigtable://plan, bigtable://grocery, bigtable://recipes, bigtable://recipe/<id>, and
+    /// https://bigtableapp.com/r/<id> shared recipes. (bigtable://auth email links are gone with
+    /// email sign-in.)
     func open(_ url: URL) {
-        if url.scheme == "bigtable", url.host() == "auth" {
-            Task { await AppModel.shared.handleAuthRedirect(url) }
-            return
-        }
         let parts = url.pathComponents.filter { $0 != "/" }
         if url.scheme == "https" {
             // The Expo app's share link: https://bigtableapp.com/recipe?id=<id>.
@@ -156,9 +155,9 @@ struct AppRoot: View {
     @Environment(AppModel.self) private var model
     @AppStorage(SettingsKey.appearance) private var appearance = AppearanceOption.system.rawValue
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showTutorial = false
-    @State private var showAppleLink = false
     @State private var purchases = HearthPurchases.shared
+    /// First run on this install (BigTableOnboarding.swift).
+    @State private var showsOnboarding = false
 
     private var accent: Color { Brand.defaultAccent }
 
@@ -167,10 +166,8 @@ struct AppRoot: View {
         @Bindable var model = model
         Group {
             switch model.phase {
-            case .launching, .loading:
-                LaunchView(error: model.loadError) { Task { await model.reload() } }
-            case .signedOut:
-                AuthView()
+            case .launching:
+                LaunchView()
             case .needsHousehold:
                 KitchenSetupView()
             case .ready:
@@ -180,14 +177,16 @@ struct AppRoot: View {
                             .tint(accent)
                             .environment(\.accent, accent)
                     }
-                    .sheet(isPresented: $showTutorial) {
-                        TutorialView { model.markTutorialComplete() }
-                            .tint(accent)
-                            .environment(\.accent, accent)
-                    }
                     .task {
-                        // The tour is for the organizer setting things up, as in the Expo app.
-                        showTutorial = model.isOrganizer && model.me?.profile?.tutorialComplete == false
+                        // The tour is for the organizer setting things up, once per account.
+                        // Onboarding offers it itself (and marks it seen), so not while it's up.
+                        if model.isOrganizer && model.me?.profile?.tutorialComplete != true && !ScreenshotMode.isOn {
+                            try? await Task.sleep(for: .milliseconds(600))
+                            if !showsOnboarding && UserDefaults.standard.bool(forKey: BigTableOnboarding.doneKey) {
+                                HearthTour.shared.startIfNew()
+                                model.markTutorialComplete()
+                            }
+                        }
                         await model.refreshUnreadCount()
                     }
             }
@@ -197,33 +196,40 @@ struct AppRoot: View {
         .preferredColorScheme(AppearanceOption(rawValue: appearance)?.colorScheme)
         .animation(.smooth, value: model.phase)
         // The Hearth launch splash, held until the household has loaded (or 3 seconds).
-        .hearthSplash(.bigtable, isReady: model.phase != .launching && model.phase != .loading, isEnabled: !ScreenshotMode.isOn)
-        .sheet(isPresented: $model.needsNewPassword) { NewPasswordView().tint(accent) }
-        // Accounts made with an email are asked to add Sign in with Apple (email sign-in is
-        // going away), once the app is ready and not over the tutorial or a password reset.
-        .sheet(isPresented: $showAppleLink) { AppleLinkView().tint(accent).environment(\.accent, accent) }
-        .task(id: AppleLinkCheck(phase: model.phase, needsLink: model.session?.user.needsAppleLink == true)) {
-            guard model.phase == .ready, model.session?.user.needsAppleLink == true,
-                  !AppleLinkPrompt.isSnoozed, !model.needsNewPassword, !ScreenshotMode.isOn else { return }
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled, !showTutorial else { return }
-            showAppleLink = true
+        .hearthSplash(.bigtable, isReady: model.phase != .launching, isEnabled: !ScreenshotMode.isOn)
+        // Community, AI and the like ask for Sign in with Apple when they're first used.
+        .sheet(item: $model.signInReason) { reason in
+            SignInSheet(reason: reason)
+                .tint(accent)
+                .environment(\.accent, accent)
+        }
+        // A new install: BigTable's onboarding, once, over everything.
+        .fullScreenCover(isPresented: $showsOnboarding) {
+            BigTableOnboarding { showsOnboarding = false }
+                .environment(\.accent, accent)
+        }
+        .onChange(of: model.phase, initial: true) { _, phase in
+            if phase != .launching, !showsOnboarding, BigTableOnboarding.isNeeded(model) { showsOnboarding = true }
+        }
+        .onChange(of: model.me?.profile?.tutorialComplete) { _, _ in
+            if model.phase != .launching, !showsOnboarding, BigTableOnboarding.isNeeded(model) { showsOnboarding = true }
         }
         // The Hearth household and the kitchen in iCloud: invitations, sharing the kitchen with
         // the family, and the one-time move of what the server kept.
         .hearthHouseholdInvitations()
         // Someone set up before households (or who left one) gets the household step.
-        .hearthHouseholdRequired(isActive: model.phase == .ready && !ScreenshotMode.isOn, accent: accent)
+        .hearthHouseholdRequired(isActive: model.phase == .ready && !showsOnboarding && !ScreenshotMode.isOn, accent: accent)
         .task {
             guard !ScreenshotMode.isOn else { return }
             KitchenStore.shared.prepare()
             HearthHouseholdStore.shared.start(app: .bigtable)
         }
         // Not a .task(id:): these change the household themselves, which would cancel them.
-        .onChange(of: KitchenCheck(phase: model.phase, household: HearthHouseholdStore.shared.snapshot, account: HearthHouseholdStore.shared.account), initial: true) { _, _ in
+        .onChange(of: KitchenCheck(phase: model.phase, userID: model.userID, household: HearthHouseholdStore.shared.snapshot, account: HearthHouseholdStore.shared.account), initial: true) { _, _ in
             guard !ScreenshotMode.isOn else { return }
             KitchenStore.shared.prepare()
             KitchenStore.shared.refreshLocation()
+            model.householdChanged()
             Task {
                 await KitchenMove.runIfNeeded(model: model)
                 await KitchenSharing.update()
@@ -239,6 +245,12 @@ struct AppRoot: View {
                 try? await Task.sleep(for: .seconds(5))
                 await model.refreshUsage()
             }
+        }
+        // Joined or left the organizer's plan (HearthKit keeps that in step with the household):
+        // what this account can do, and its plan, come from the server.
+        .onReceive(NotificationCenter.default.publisher(for: HearthHouseholdServer.membershipChanged)) { _ in
+            guard model.phase == .ready else { return }
+            Task { await model.reload() }
         }
         .onChange(of: scenePhase) { _, phase in
             // Another Hearth app may have signed in, out, or as someone else meanwhile.
@@ -259,7 +271,10 @@ struct AppRoot: View {
     private func sheetContent(_ sheet: AppSheet) -> some View {
         switch sheet {
         case .profile: NavigationStack { ProfileView() }
-        case .notifications: NavigationStack { NotificationsView() }
+        case .notifications:
+            NavigationStack {
+                if model.isSignedIn { NotificationsView() } else { SignInPrompt(reason: .notifications) }
+            }
         case .newRecipe: RecipeEditorView(mode: .create)
         case .aiPlan: AIPlanView()
         case .recipe(let id, let version): NavigationStack { RecipeDetailView(recipeID: id, versionID: version) }
@@ -269,44 +284,24 @@ struct AppRoot: View {
     }
 }
 
-/// The first moment after launch, and what shows if the household can't be loaded.
+/// The first moment after launch, while the saved sign-in is read.
 struct LaunchView: View {
-    var error: String?
-    var retry: () -> Void
-
     var body: some View {
         VStack(spacing: 18) {
             AppIconBadge(size: 84)
-            if let error {
-                Text(error)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-                Button("Try Again", action: retry)
-                    .buttonStyle(.glassProminent)
-                Button("Sign Out") { Task { await AppModel.shared.signOut() } }
-                    .font(.footnote)
-                    .tint(.primary)
-            } else {
-                ProgressView()
-            }
+            ProgressView()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
     }
 }
 
-/// What decides whether to ask an email account to add Sign in with Apple.
-private struct AppleLinkCheck: Equatable {
-    var phase: AppModel.Phase
-    var needsLink: Bool
-}
-
 /// Re-runs the kitchen's sharing and move when the app becomes ready, the household changes or
 /// iCloud becomes available.
 private struct KitchenCheck: Equatable {
     var phase: AppModel.Phase
+    /// Signing in can start the one-time move of what the server kept.
+    var userID: String?
     var household: HearthHouseholdSnapshot
     var account: HearthHouseholdStore.Account
 }

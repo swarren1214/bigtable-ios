@@ -42,6 +42,7 @@ nonisolated enum HearthPlanCopy {
         case .sated: "Coach, label scanning, restaurant menus"
         case .caloma: "Wall display, Home Control and Home Care"
         case .hearken: "Listen, study groups and every game"
+        case .trove: "Unlimited assets and the emergency packet"
         }
     }
 
@@ -53,6 +54,7 @@ nonisolated enum HearthPlanCopy {
         case .sated: ["Coach, private on your device", "Scan nutrition labels and log by voice", "Restaurant menus and all-time trends"]
         case .caloma: ["The family wall display on iPad", "Home Control and Home Care", "The Pencil whiteboard"]
         case .hearken: ["Listen to any chapter", "Study groups and every game mode", "Import your own books and PDFs"]
+        case .trove: ["Unlimited homes, vehicles and other assets", "The emergency packet for someone you trust", "Custom reminder times for every document"]
         }
     }
 

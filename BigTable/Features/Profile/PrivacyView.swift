@@ -137,7 +137,7 @@ struct PrivacyView: View {
             }
         } catch {
             isVisible = previous
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
             await loadVisibility()
         }
     }
@@ -161,7 +161,7 @@ struct PrivacyView: View {
             blocked = people
             blockedLoaded = true
         } catch {
-            blockedError = error.localizedDescription
+            blockedError = FriendlyError.message(error)
         }
     }
 
@@ -171,7 +171,7 @@ struct PrivacyView: View {
             blocked.removeAll { $0.id == person.id }
             statusMessage = "\(person.name) is unblocked."
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 }

@@ -147,7 +147,7 @@ struct NotificationSettingsView: View {
             prefs = try await model.api.notificationPrefs()
             prefsLoaded = true
         } catch {
-            prefsError = error.localizedDescription
+            prefsError = FriendlyError.message(error)
         }
     }
 
@@ -160,7 +160,7 @@ struct NotificationSettingsView: View {
             prefs = try await model.api.setNotificationPrefs([type.rawValue: on])
         } catch {
             prefs[type.rawValue] = previous
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 }

@@ -176,6 +176,39 @@ extension HearthHouseholdInfo {
 
 // MARK: - The copy each app keeps in the app group
 
+extension HearthRole {
+    /// A role from a newer app this one doesn't know reads as an adult, instead of making the
+    /// whole household unreadable.
+    nonisolated init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = HearthRole(rawValue: raw) ?? .adult
+    }
+}
+
+extension HearthMember {
+    /// Fields added later are optional when reading older copies.
+    nonisolated init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try c.decode(String.self, forKey: .id),
+            name: try c.decodeIfPresent(String.self, forKey: .name) ?? "",
+            role: try c.decodeIfPresent(HearthRole.self, forKey: .role) ?? .adult,
+            colorHex: try c.decodeIfPresent(UInt32.self, forKey: .colorHex) ?? 0x0A7AFF,
+            photo: try c.decodeIfPresent(String.self, forKey: .photo),
+            birthday: try c.decodeIfPresent(String.self, forKey: .birthday),
+            allergies: try c.decodeIfPresent([String].self, forKey: .allergies) ?? [],
+            diet: try c.decodeIfPresent([String].self, forKey: .diet) ?? [],
+            likes: try c.decodeIfPresent([String].self, forKey: .likes) ?? [],
+            dislikes: try c.decodeIfPresent([String].self, forKey: .dislikes) ?? [],
+            appleUserID: try c.decodeIfPresent(String.self, forKey: .appleUserID),
+            appIDs: try c.decodeIfPresent([String: String].self, forKey: .appIDs) ?? [:],
+            isArchived: try c.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false,
+            sortOrder: try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0,
+            updatedAt: try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast
+        )
+    }
+}
+
 nonisolated struct HearthHouseholdSnapshot: HearthPublication, Hashable {
     static let kind = "household"
     static let version = 1
@@ -192,6 +225,24 @@ nonisolated struct HearthHouseholdSnapshot: HearthPublication, Hashable {
     var adoptedAt: Date = .distantPast
 
     static let empty = HearthHouseholdSnapshot(info: nil, members: [])
+
+    init(info: HearthHouseholdInfo?, members: [HearthMember], deleted: [String: Date] = [:], isShared: Bool = false, adoptedAt: Date = .distantPast) {
+        self.info = info
+        self.members = members
+        self.deleted = deleted
+        self.isShared = isShared
+        self.adoptedAt = adoptedAt
+    }
+
+    /// Fields added later are optional when reading older copies.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        info = try c.decodeIfPresent(HearthHouseholdInfo.self, forKey: .info)
+        members = try c.decodeIfPresent([HearthMember].self, forKey: .members) ?? []
+        deleted = try c.decodeIfPresent([String: Date].self, forKey: .deleted) ?? [:]
+        isShared = try c.decodeIfPresent(Bool.self, forKey: .isShared) ?? false
+        adoptedAt = try c.decodeIfPresent(Date.self, forKey: .adoptedAt) ?? .distantPast
+    }
 
     var exists: Bool { info != nil }
     var people: [HearthMember] { members.filter { !$0.isArchived } }
@@ -223,11 +274,23 @@ nonisolated struct HearthHouseholdSnapshot: HearthPublication, Hashable {
         var deleted: [String: Date] = [:]
         var isShared = false
         for copy in copies {
-            if let candidate = copy.info, candidate.updatedAt > (info?.updatedAt ?? .distantPast) {
-                info = candidate
+            if let candidate = copy.info {
+                // Newest wins, but each app's share link stays whichever copy has it.
+                var newer = candidate.updatedAt > (info?.updatedAt ?? .distantPast) ? candidate : (info ?? candidate)
+                let older = newer == candidate ? info : candidate
+                for (app, url) in older?.appShareURLs ?? [:] where newer.appShareURLs[app] == nil { newer.appShareURLs[app] = url }
+                info = newer
             }
-            for member in copy.members where member.updatedAt > (byID[member.id]?.updatedAt ?? .distantPast) {
-                byID[member.id] = member
+            for member in copy.members {
+                guard let existing = byID[member.id] else {
+                    byID[member.id] = member
+                    continue
+                }
+                // Newest wins, but every app's link to them stays.
+                var newer = member.updatedAt > existing.updatedAt ? member : existing
+                let older = member.updatedAt > existing.updatedAt ? existing : member
+                for (app, id) in older.appIDs where newer.appIDs[app] == nil { newer.appIDs[app] = id }
+                byID[member.id] = newer
             }
             for (id, date) in copy.deleted where date > (deleted[id] ?? .distantPast) {
                 deleted[id] = date
@@ -300,6 +363,9 @@ nonisolated enum HearthHouseholdPhotos {
             } catch {
                 return nil
             }
+        } else {
+            // Chosen again: it's in use from now, so no app's cleanup takes it.
+            try? FileManager.default.setAttributes([.modificationDate: Date.now], ofItemAtPath: url.path(percentEncoded: false))
         }
         return name
     }
@@ -316,12 +382,16 @@ nonisolated enum HearthHouseholdPhotos {
         return name
     }
 
-    /// Removes household photos no one uses any more.
-    static func clean(keeping names: Set<String>) {
+    /// Removes household photos no one uses any more, once they're a day old (one app may have
+    /// saved a photo another app hasn't heard about yet).
+    static func clean(keeping names: Set<String>, now: Date = .now) {
         guard let folder = Hearth.photosDirectory,
               let files = try? FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false)) else { return }
         for file in files where file.hasPrefix("household-") && !names.contains(file) {
-            try? FileManager.default.removeItem(at: folder.appending(path: file, directoryHint: .notDirectory))
+            let url = folder.appending(path: file, directoryHint: .notDirectory)
+            let made = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            guard now.timeIntervalSince(made) > 86_400 else { continue }
+            try? FileManager.default.removeItem(at: url)
         }
     }
 

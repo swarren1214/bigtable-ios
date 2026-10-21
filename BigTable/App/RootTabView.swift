@@ -44,6 +44,11 @@ struct RootTabView: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
+        // The tour (HearthTour.swift): Welcome, then one step per tab. BigTableApp starts it for
+        // a new organizer; Profile › Take the Tour runs it again.
+        .hearthTour(app: .bigtable, steps: BigTableTour.steps, finishTitle: "Got It", autoStart: false) { step in
+            router.tab = BigTableTour.tab(for: step)
+        }
         // Debug: marketing screenshots (scripts/screenshots.sh). Does nothing otherwise.
         .screenshotStage(recipesPath: $recipesPath, communityPath: $communityPath)
     }
@@ -90,7 +95,8 @@ private struct BigTableToolbar: ViewModifier {
                     .tint(overHeader ? .white : nil)
                 }
             }
-            if AppConfig.socialEnabled {
+            // Notifications are the Hearth account's: only when signed in.
+            if AppConfig.socialEnabled && model.isSignedIn {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         router.present(.notifications)
@@ -102,13 +108,12 @@ private struct BigTableToolbar: ViewModifier {
                     .tint(overHeader ? .white : nil)
                 }
             }
+            // The profile photo, always last: the shared Hearth profile button (HearthProfile.swift),
+            // the same in every Hearth app. BigTable presents Profile through its router.
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
+                HearthProfileButton(overHeader: overHeader) {
                     router.present(.profile)
-                } label: {
-                    MemberAvatar(name: model.me?.myMember?.name ?? model.householdName, color: PersonColor.forIndex(0).color, url: ProfileAvatar.url(for: model.me?.myMember?.avatarUrl), size: 30, hearthName: model.me?.myMember?.name)
                 }
-                .accessibilityLabel("Profile and household")
             }
         }
     }

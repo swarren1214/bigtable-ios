@@ -82,7 +82,7 @@ BigTable/
                   (shared HearthKit code, incl. HearthPurchases/HearthPaywall), OnDevice (Apple Maps search, recipe parsing, link import,
                   transcription, grocery lists,
                   scanning, meal planning)
-  Features/       Account, Profile, Tutorial, Plan, AIPlan, Recipes, Grocery,
+  Features/       Account, Onboarding, Profile, Plan, AIPlan, Recipes, Grocery,
                   Community, Notifications (each with its own @Observable store)
 BigTableTests/    Swift Testing: ingredient parsing, dates, API decoding
 docs/             PORTING_GUIDE.md (how the port is organized)

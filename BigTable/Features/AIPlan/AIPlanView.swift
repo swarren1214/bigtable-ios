@@ -29,7 +29,9 @@ struct AIPlanView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if model.canUseAIPlan && model.canManagePlan {
+                if !model.isSignedIn {
+                    SignInPrompt(reason: .aiPlan)
+                } else if model.canUseAIPlan && model.canManagePlan {
                     form
                 } else {
                     notAllowed
@@ -46,7 +48,7 @@ struct AIPlanView: View {
             .navigationDestination(isPresented: $showsPreview) {
                 AIPlanPreviewView(store: store, onApplied: { dismiss() }, onRegenerate: { Task { await generate() } })
             }
-            .task { await model.refreshUsage() }
+            .task(id: model.isSignedIn) { await model.refreshUsage() }
             .task(id: "\(store.startISO)|\(store.endISO)") { await store.loadBaselines() }
             .task {
                 // Screenshot mode (Debug): a filled-in request, and for -Screen aipreview, its preview.
@@ -85,8 +87,8 @@ struct AIPlanView: View {
             VStack(spacing: 16) {
                 EmptyCard(
                     symbol: "person.badge.key",
-                    title: "Ask your organizer",
-                    message: "\(model.householdName.isEmpty ? "Your household organizer" : model.householdName) hasn't turned on AI meal planning for you. They can allow it in Household › Members."
+                    title: "Ask a parent",
+                    message: "Kids in \(model.householdName.isEmpty ? "the household" : model.householdName) don't plan with AI. A parent can change your role in Profile › Household."
                 )
             }
             .padding(16)

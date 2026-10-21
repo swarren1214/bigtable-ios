@@ -237,6 +237,27 @@ final class KitchenStore: HearthZoneParticipant {
         revision += 1
     }
 
+    /// Whether this device can erase the kitchen: only someone's own kitchen, never another
+    /// family's they joined (leaving the household is how a member clears it).
+    var canErase: Bool { location == .personal }
+
+    /// Profile › Erase BigTable Data: deletes every recipe, plan, grocery list, tag and pantry
+    /// item from this device and from iCloud (and so from everyone the kitchen is shared with).
+    /// What's on the Hearth server (published recipes, favorites, the community profile) stays;
+    /// Delete Account removes that.
+    func eraseEverything() {
+        guard canErase else { return }
+        let names = allRecordNames
+        log.notice("Erasing the kitchen: \(names.count) records")
+        state = KitchenState()
+        loadedChecks = [:]
+        for name in names { systemFields[name] = nil }
+        queue(names.map { .deleteRecord(recordID($0)) })
+        persistNow()
+        revision += 1
+        pantryChanged()
+    }
+
     private func changed(_ recordName: String) {
         queue([.saveRecord(recordID(recordName))])
         scheduleSave()
@@ -258,8 +279,9 @@ final class KitchenStore: HearthZoneParticipant {
         household.queueZoneChanges(changes, isShared: zone.isShared)
     }
 
-    private func queueEverything() {
-        let names = state.recipes.keys.map(KitchenRecords.recipeName)
+    /// Every record the kitchen has now.
+    private var allRecordNames: [String] {
+        state.recipes.keys.map(KitchenRecords.recipeName)
             + state.slots.keys.map(KitchenRecords.slotName)
             + state.groceries.keys.map(KitchenRecords.groceryName)
             + state.tags.keys.map(KitchenRecords.tagName)
@@ -269,6 +291,10 @@ final class KitchenStore: HearthZoneParticipant {
             + (state.pantry?.changes.keys.map(KitchenRecords.pantryChangeName) ?? [])
             + (state.pantry?.swaps.keys.map(KitchenRecords.pantrySwapName) ?? [])
             + (state.settings.updatedAt > .distantPast ? [KitchenRecords.settingsName] : [])
+    }
+
+    private func queueEverything() {
+        let names = allRecordNames
         queue(names.map { .saveRecord(recordID($0)) })
     }
 

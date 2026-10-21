@@ -3,7 +3,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 /// What BigTable shares with the other Hearth apps on this device: the planned meals and the
-/// household. See `HearthShared.swift`.
+/// grocery list. See `HearthShared.swift`. (The household itself is HearthKit's, in iCloud.)
 @MainActor
 enum HearthPublisher {
     /// How far back and ahead the shared plan reaches.
@@ -16,14 +16,6 @@ enum HearthPublisher {
     private static var latestWeeks: [String: PlannerResponse] = [:]
     private static var recipeTask: Task<Void, Never>?
 
-    /// The household last shared, so it can be shared again once photos download.
-    private static var latestFamily: (me: MeResponse, householdName: String?, userID: String?)?
-    private static var photoTask: Task<Void, Never>?
-    /// Avatar URLs that couldn't be downloaded this launch (not tried again until next launch).
-    private static var failedPhotoURLs: Set<String> = []
-    /// Shared photos by member id: [the avatar URL it came from, the shared file name]. Kept
-    /// across launches so unchanged photos aren't downloaded again.
-    private static let photoSourcesKey = "hearth.bigtable.photoSources"
 
     /// Shares the loaded weeks' meals, keeping days already shared that aren't loaded now.
     /// Recipes not loaded yet load in the background, and the plan is shared again with them.
@@ -74,141 +66,16 @@ enum HearthPublisher {
         Hearth.publish(HearthGroceries(list: list), from: .bigtable)
     }
 
-    /// Shares the household: its name, people, their photos, who "me" is, and dietary
-    /// restrictions. Photos not downloaded yet download in the background, and the household
-    /// is shared again with them.
-    static func publishFamily(_ me: MeResponse, householdName: String?, userID: String?) {
-        guard !ScreenshotMode.isOn else { return }
-        latestFamily = (me, householdName, userID)
-        let previousPhotos = sharedPhotoNames()
-        let sources = photoSources
-        var pending: [(memberID: String, url: String)] = []
-        var members: [HearthFamily.Member] = []
-        for (index, member) in me.householdMembers.enumerated() {
-            let id = member.id ?? "member-\(index)"
-            var photo: String?
-            if let url = ProfileAvatar.url(for: member.avatarUrl) {
-                if let source = sources[id], source.count == 2, source[0] == url, photoExists(source[1]) {
-                    photo = source[1]
-                } else if !failedPhotoURLs.contains(url) {
-                    pending.append((id, url))
-                    // The photo shared before stays until the new one has downloaded.
-                    photo = previousPhotos[id]
-                }
-            }
-            members.append(HearthFamily.Member(
-                id: id,
-                name: member.name,
-                role: nil,
-                colorHex: nil,
-                birthday: member.dateOfBirth,
-                likes: member.likes.isEmpty ? nil : member.likes,
-                dislikes: member.dislikes.isEmpty ? nil : member.dislikes,
-                photo: photo
-            ))
-        }
-        let restrictions = me.dietaryRestrictions.map(\.value).filter { !$0.isEmpty }
-        Hearth.publish(
-            HearthFamily(
-                name: householdName,
-                members: members,
-                dietaryRestrictions: restrictions.isEmpty ? nil : restrictions,
-                me: myMemberID(in: me, members: members, userID: userID)
-            ),
-            from: .bigtable
-        )
-        let inUse = Set(members.compactMap(\.photo))
-        Hearth.removePhotos(from: .bigtable, except: inUse)
-        let pendingIDs = Set(pending.map { $0.memberID })
-        let kept = photoSources.filter { entry in inUse.contains(entry.value.last ?? "") || pendingIDs.contains(entry.key) }
-        if kept != photoSources { photoSources = kept }
-        loadPhotos(pending)
-    }
-
-    /// The member who is the signed-in person: the one linked to their account, or (for the
-    /// organizer, whose own row isn't linked) the one named as them, else the first person.
-    private static func myMemberID(in me: MeResponse, members: [HearthFamily.Member], userID: String?) -> String? {
-        let people = me.householdMembers
-        if let userID, let index = people.firstIndex(where: { $0.linkedProfileId?.trimmingCharacters(in: .whitespaces) == userID }) {
-            return members[index].id
-        }
-        guard (me.membership?.role ?? .organizer) == .organizer else { return nil }
-        let unlinked = people.indices.filter { (people[$0].linkedProfileId ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
-        if let mine = me.myMember?.name, !mine.trimmingCharacters(in: .whitespaces).isEmpty,
-           let index = unlinked.first(where: { HouseholdDraft.sameName(people[$0].name, mine) }) {
-            return members[index].id
-        }
-        return unlinked.first.map { members[$0].id }
-    }
-
     /// Signed out: nothing of this account stays shared.
     static func clear() {
         recipeTask?.cancel()
         recipeTask = nil
         latestWeeks = [:]
         HearthRecipeCache.shared.removeAll()
-        photoTask?.cancel()
-        photoTask = nil
-        latestFamily = nil
-        failedPhotoURLs = []
-        UserDefaults.standard.removeObject(forKey: photoSourcesKey)
         Hearth.remove(HearthMealPlan.self, from: .bigtable)
         Hearth.remove(HearthFamily.self, from: .bigtable)
         Hearth.remove(HearthGroceries.self, from: .bigtable)
         Hearth.removePhotos(from: .bigtable, except: [])
-    }
-
-    // MARK: Photos
-
-    private static var photoSources: [String: [String]] {
-        get { UserDefaults.standard.dictionary(forKey: photoSourcesKey) as? [String: [String]] ?? [:] }
-        set { UserDefaults.standard.set(newValue, forKey: photoSourcesKey) }
-    }
-
-    /// The photo file names BigTable shared last time, by member id.
-    private static func sharedPhotoNames() -> [String: String] {
-        var names: [String: String] = [:]
-        for member in Hearth.read(HearthFamily.self, from: .bigtable)?.value.members ?? [] {
-            if let photo = member.photo { names[member.id] = photo }
-        }
-        return names
-    }
-
-    private static func photoExists(_ name: String) -> Bool {
-        guard !name.contains("/"), let folder = Hearth.photosDirectory else { return false }
-        return FileManager.default.fileExists(atPath: folder.appending(path: name, directoryHint: .notDirectory).path(percentEncoded: false))
-    }
-
-    /// Downloads the members' photos, one at a time, then shares the household again. Changes
-    /// made meanwhile are picked up when it finishes.
-    private static func loadPhotos(_ pending: [(memberID: String, url: String)]) {
-        guard photoTask == nil, !pending.isEmpty else { return }
-        photoTask = Task {
-            // A replaced photo keeps its file name, so the family may not change: announce it.
-            var replaced = false
-            for item in pending {
-                guard let link = URL(string: item.url) else {
-                    HearthPublisher.failedPhotoURLs.insert(item.url)
-                    continue
-                }
-                let jpeg = await HearthPhotoDownloader.smallJPEG(from: link)
-                guard !Task.isCancelled else { return }
-                let before = HearthPublisher.sharedPhotoNames()[item.memberID].flatMap { Hearth.photo(named: $0) }
-                if let jpeg, let name = Hearth.savePhoto(jpeg, memberID: item.memberID, from: .bigtable) {
-                    if let before, before != jpeg { replaced = true }
-                    var sources = HearthPublisher.photoSources
-                    sources[item.memberID] = [item.url, name]
-                    HearthPublisher.photoSources = sources
-                } else {
-                    HearthPublisher.failedPhotoURLs.insert(item.url)
-                }
-            }
-            HearthPublisher.photoTask = nil
-            if let latest = HearthPublisher.latestFamily {
-                HearthPublisher.publishFamily(latest.me, householdName: latest.householdName, userID: latest.userID)
-            }
-            if replaced { Hearth.postChange() }
-        }
     }
 
     private static func meal(_ slot: PlannerSlot, slot type: MealSlotType, date: String) -> HearthMealPlan.Meal? {

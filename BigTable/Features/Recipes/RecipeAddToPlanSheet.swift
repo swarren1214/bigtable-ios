@@ -267,7 +267,7 @@ struct RecipeAddToPlanSheet: View {
         } catch is CancellationError {
             return
         } catch {
-            planError = "Couldn't check what's planned: \(error.localizedDescription)"
+            planError = FriendlyError.message(error, fallback: "Couldn't check what's planned. Try again.")
         }
         isLoadingPlan = false
         if isPast(day), let firstOpen = DayOfWeek.allCases.first(where: { !isPast($0) }) {
@@ -330,7 +330,7 @@ struct RecipeAddToPlanSheet: View {
             savedCount += 1
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 }

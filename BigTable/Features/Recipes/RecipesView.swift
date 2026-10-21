@@ -18,6 +18,7 @@ struct RecipesView: View {
             .pickerStyle(.segmented)
 
             RecipeQuickFilterBar(selection: $store.quickFilter)
+                .hearthTourTarget(BigTableTour.recipes)
 
             RecipeLibraryResults(store: store, emptyState: emptyState)
         }

@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 
 /// Someone's public profile: their photo and name, when they joined, followers and following,
-/// Follow, and the recipes they've published. The More menu invites them to your household
-/// (organizers), cancels a pending invitation, reports them, or blocks and unblocks them.
+/// Follow, and the recipes they've published. The More menu reports them, or blocks and unblocks
+/// them. (Family joins through the Hearth household, not here.)
 ///
 /// Callers push it or wrap it in a NavigationStack; recipes open by pushing their detail.
 struct PublicProfileView: View {
@@ -42,13 +42,18 @@ struct PublicProfileView: View {
     }
 
     private var isBlocked: Bool { community.isBlocked(profileID) }
-    /// They've joined your household.
-    private var isJoinedMember: Bool { model.members.contains { $0.linkedProfileId == profileID } }
+    /// Their person in the Hearth household, when their Hearth account is linked to one.
+    private var householdPerson: HearthMember? {
+        HearthHouseholdStore.shared.people.first { $0.appIDs[HearthHouseholdServer.accountKey]?.lowercased() == profileID.lowercased() }
+    }
+    /// They're in your household.
+    private var isJoinedMember: Bool { householdPerson != nil }
     /// They're the organizer of the household you joined.
-    private var isMyOrganizer: Bool { !model.isOrganizer && model.membership?.organizerProfileId == profileID }
-    private var hasHouseholdRelationship: Bool { isJoinedMember || isMyOrganizer }
-    private var pendingInvitation: HouseholdInvitation? { community.pendingInvitation(for: profileID) }
-    private var canInvite: Bool { model.isOrganizer && !isJoinedMember && !isBlocked && pendingInvitation == nil }
+    private var isMyOrganizer: Bool {
+        let household = HearthHouseholdStore.shared
+        return household.isMember && householdPerson != nil && householdPerson?.id == household.info?.organizerID
+    }
+    private var hasHouseholdRelationship: Bool { isJoinedMember }
 
     var body: some View {
         ScrollView {
@@ -200,11 +205,6 @@ struct PublicProfileView: View {
                 Menu {
                     if isJoinedMember {
                         Label { Text("In your household") } icon: { Image.menuIcon("house") }
-                    } else if let pendingInvitation {
-                        Label { Text("Invite Pending") } icon: { Image.menuIcon("clock") }
-                        Button("Cancel Invitation", menuIcon: "xmark.circle", role: .destructive) {
-                            confirming = .cancelInvitation(pendingInvitation)
-                        }
                     }
                     // Family joins through the Hearth household now (Profile › Household ›
                     // Invite), which shares the kitchen and the plan.
@@ -251,37 +251,18 @@ struct PublicProfileView: View {
             return
         } catch {
             if detail == nil {
-                loadError = "We couldn't load this profile right now. \(error.localizedDescription)"
+                loadError = FriendlyError.message(error, fallback: "We couldn't load this profile right now. Try again.")
             } else {
-                community.errorMessage = error.localizedDescription
+                community.errorMessage = FriendlyError.message(error)
             }
         }
         if !community.blockedLoaded { await community.loadBlocked() }
-        if model.isOrganizer { await community.loadInvitations() }
         if !isMe { await community.resolveFollowing(profileID) }
     }
 
     private func perform(_ action: PublicProfileAction) async {
         let name = self.name
         switch action {
-        case .invite:
-            working = "Sending invitation…"
-            defer { working = nil }
-            do {
-                try await community.invite(profileID)
-                notice = PublicProfileNotice(title: "Invitation sent", message: "\(name) has been invited to join your household.")
-            } catch {
-                notice = PublicProfileNotice(title: "Couldn't send the invitation", message: error.localizedDescription)
-            }
-        case .cancelInvitation(let invitation):
-            working = "Cancelling invitation…"
-            defer { working = nil }
-            do {
-                try await community.cancelInvitation(invitation)
-                notice = PublicProfileNotice(title: "Invitation cancelled", message: "Your household invitation to \(name) has been cancelled.")
-            } catch {
-                notice = PublicProfileNotice(title: "Couldn't cancel the invitation", message: error.localizedDescription)
-            }
         case .block:
             working = "Blocking…"
             defer { working = nil }
@@ -289,7 +270,7 @@ struct PublicProfileView: View {
                 try await community.block(profileID)
                 dismiss()
             } catch {
-                community.errorMessage = error.localizedDescription
+                community.errorMessage = FriendlyError.message(error)
             }
         case .unblock:
             working = "Unblocking…"
@@ -297,7 +278,7 @@ struct PublicProfileView: View {
             do {
                 try await community.unblock(profileID)
             } catch {
-                community.errorMessage = error.localizedDescription
+                community.errorMessage = FriendlyError.message(error)
             }
         }
     }
@@ -305,15 +286,11 @@ struct PublicProfileView: View {
 
 /// What the More menu is asking to confirm.
 enum PublicProfileAction: Identifiable {
-    case invite
-    case cancelInvitation(HouseholdInvitation)
     case block
     case unblock
 
     var id: String {
         switch self {
-        case .invite: "invite"
-        case .cancelInvitation(let invitation): "cancel-\(invitation.id)"
         case .block: "block"
         case .unblock: "unblock"
         }
@@ -321,8 +298,6 @@ enum PublicProfileAction: Identifiable {
 
     var title: String {
         switch self {
-        case .invite: "Invite to household?"
-        case .cancelInvitation: "Cancel invitation?"
         case .block: "Block this person?"
         case .unblock: "Unblock this person?"
         }
@@ -330,8 +305,6 @@ enum PublicProfileAction: Identifiable {
 
     func message(name: String) -> String {
         switch self {
-        case .invite: "Invite \(name) to join your household? They'll be able to see your meal plan and grocery list."
-        case .cancelInvitation: "Cancel your household invitation to \(name)?"
         case .block: "If you block \(name), they won't be able to view your profile or follow you. You can unblock them later in Profile › Privacy."
         case .unblock: "If you unblock \(name), they can view your profile and follow you again."
         }
@@ -339,27 +312,22 @@ enum PublicProfileAction: Identifiable {
 
     var confirmLabel: String {
         switch self {
-        case .invite: "Invite"
-        case .cancelInvitation: "Cancel Invitation"
         case .block: "Block"
         case .unblock: "Unblock"
         }
     }
 
-    var cancelLabel: String {
-        if case .cancelInvitation = self { return "Keep" }
-        return "Cancel"
-    }
+    var cancelLabel: String { "Cancel" }
 
     var isDestructive: Bool {
         switch self {
-        case .cancelInvitation, .block: true
-        case .invite, .unblock: false
+        case .block: true
+        case .unblock: false
         }
     }
 }
 
-/// A short message after an action ("Invitation sent").
+/// A short message after an action.
 struct PublicProfileNotice: Identifiable {
     let id = UUID()
     var title: String

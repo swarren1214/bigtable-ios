@@ -276,7 +276,7 @@ final class RecipeLibrary {
         if let api = error as? APIError, api.status == 409 {
             return "You already have a tag called “\(label.uppercased())”. Pick a different name."
         }
-        return error.localizedDescription
+        return FriendlyError.message(error)
     }
 
     private func upsert(_ tag: CustomTag) {
@@ -377,7 +377,7 @@ final class RecipeStore {
             // A newer load replaced this one.
         } catch {
             guard token == generation else { return }
-            loadError = error.localizedDescription
+            loadError = FriendlyError.message(error, fallback: "Your recipes couldn't load. Try again.")
         }
         if token == generation { isLoading = false }
     }
@@ -404,7 +404,7 @@ final class RecipeStore {
                 hasMore = page.pagination?.hasMore ?? false
             }
         } catch {
-            if token == generation { loadError = error.localizedDescription }
+            if token == generation { loadError = FriendlyError.message(error, fallback: "Your recipes couldn't load. Try again.") }
         }
         isLoadingMore = false
     }

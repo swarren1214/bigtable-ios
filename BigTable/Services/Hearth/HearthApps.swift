@@ -78,10 +78,12 @@ nonisolated struct HearthAppInfo: Sendable {
         case .sated: sated
         case .caloma: caloma
         case .hearken: hearken
+        case .trove: trove
         }
     }
 
-    /// The apps in the order the family is always shown.
+    /// The apps in the order the family is always shown. Trove joins the page once it has a
+    /// public TestFlight (add it here and give it a `.testFlight` link).
     static let order: [HearthApp] = [.bigtable, .suffice, .sated, .caloma, .hearken]
 
     // MARK: Together
@@ -258,6 +260,27 @@ nonisolated struct HearthAppInfo: Sendable {
         availability: .testFlight(URL(string: "https://testflight.apple.com/join/bSxK5KSt")!),
         symbol: "book",
         colorHex: 0x0A7AFF, inkHex: 0x0060D6, liteHex: 0x5AA9FF
+    )
+
+    private static let trove = HearthAppInfo(
+        app: .trove,
+        category: "Important documents",
+        tagline: "Your family’s important papers, and where the originals are.",
+        headline: "Know where everything is. Before you need it.",
+        blurb: "Passports, licenses, titles, warranties and policies, tied to the people and things they belong to. Trove keeps the scans, reminds you before anything expires, and remembers where the paper original is kept.",
+        features: [
+            Feature(symbol: "doc.viewfinder", title: "Scan once", detail: "Trove reads the type, owner and dates on your iPhone, and keeps the original photo."),
+            Feature(symbol: "mappin.and.ellipse", title: "Where the original is", detail: "The fire safe, the safe deposit box, the attorney’s office. Never hunt for a birth certificate again."),
+            Feature(symbol: "calendar.badge.exclamationmark", title: "Before it expires", detail: "Passports nine months ahead, registrations six weeks ahead, with what renewing takes."),
+            Feature(symbol: "faceid", title: "Locked and private", detail: "Numbers stay hidden until Face ID. Everything is encrypted in your family’s iCloud."),
+        ],
+        platforms: "iPhone · iPad",
+        note: "Coming soon. No account needed.",
+        scheme: "trove",
+        // Not on TestFlight yet: the page doesn't list Trove (see `order`).
+        availability: .testFlight(URL(string: "https://hearthapps.com")!),
+        symbol: "archivebox",
+        colorHex: 0x38C2E9, inkHex: 0x0F7A9C, liteHex: 0x6FD6F2
     )
 }
 

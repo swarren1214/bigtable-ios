@@ -377,12 +377,12 @@ final class AIPlanStore {
                 showsPaywall = true
             } else {
                 // Pro, but this month's AI requests are used up.
-                self.error = apiError.localizedDescription
+                self.error = FriendlyError.message(apiError)
                 Task { await AppModel.shared.refreshUsage() }
             }
             return
         }
-        self.error = error.localizedDescription
+        self.error = FriendlyError.message(error)
     }
 
     /// Lines up each chosen day and meal with what's planned now and what the AI picked.

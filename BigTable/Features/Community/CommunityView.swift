@@ -31,15 +31,24 @@ struct CommunityView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .hearthTourTarget(BigTableTour.community)
 
-            content
+            if model.isSignedIn {
+                content
+            } else {
+                // The Community is the Hearth account's: sign in with Apple to see it.
+                SignInPrompt(reason: .community)
+                    .padding(.top, 40)
+            }
         }
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: searchPrompt)
         .refreshable {
+            guard model.isSignedIn else { return }
             await store.loadBlocked()
             await store.load(mode)
         }
         .task(id: "\(model.userID ?? "")|\(mode.rawValue)") {
+            guard model.isSignedIn else { return }
             store.prepare()
             if !store.blockedLoaded { await store.loadBlocked() }
             if !page.loaded || store.stale.contains(mode) { await store.load(mode) }
@@ -47,6 +56,7 @@ struct CommunityView: View {
         .onAppear {
             // Coming back from a profile, or from unblocking someone in Profile › Privacy.
             Task {
+                guard model.isSignedIn else { return }
                 if store.blockedLoaded { await store.loadBlocked() }
                 if page.loaded, store.stale.contains(mode) { await store.load(mode) }
             }

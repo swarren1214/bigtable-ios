@@ -118,9 +118,11 @@ struct HearthHouseholdView: View {
                     ForEach(store.kids) { row($0) }
                 }
             }
-            if !store.pendingParticipants.isEmpty {
+            // Invitations sent before invitations belonged to a person (each person's row says
+            // where they stand now).
+            if !Self.unmatched(store.pendingParticipants, in: store).isEmpty {
                 Section("Invited") {
-                    ForEach(store.pendingParticipants, id: \.self) { participant in
+                    ForEach(Self.unmatched(store.pendingParticipants, in: store), id: \.self) { participant in
                         HStack(spacing: 12) {
                             Image(systemName: "person.crop.circle.badge.clock")
                                 .font(.title2)
@@ -142,9 +144,9 @@ struct HearthHouseholdView: View {
                     Button { adding = true } label: {
                         actionLabel("Add a Person", symbol: "person.badge.plus")
                     }
-                    if !store.isMember {
+                    if store.canInvite {
                         Button { inviting = true } label: {
-                            actionLabel("Invite to Household", symbol: "square.and.arrow.up")
+                            actionLabel("Invite Someone", symbol: "envelope")
                         }
                     }
                 }
@@ -248,7 +250,17 @@ struct HearthHouseholdView: View {
         if member.id == store.info?.organizerID { parts.append("Organizer") } else if member.role != .kid { parts.append(member.role.label) }
         if let age = member.age() { parts.append("\(age)") }
         if member.id == store.me?.id { parts.append("You") }
+        if let line = store.inviteLine(member) { parts.append(line) }
         return parts.joined(separator: " · ")
+    }
+
+    /// Pending participants no person's invitation accounts for.
+    static func unmatched(_ participants: [CKShare.Participant], in store: HearthHouseholdStore) -> [CKShare.Participant] {
+        let invited = Set(store.people.compactMap { $0.appIDs[HearthHouseholdStore.inviteKey] }.filter { !$0.isEmpty })
+        return participants.filter { participant in
+            guard let key = HearthHouseholdStore.inviteKey(of: participant.userIdentity.lookupInfo) else { return true }
+            return !invited.contains(HearthHouseholdStore.inviteHash(key))
+        }
     }
 
     /// An invited person's name, or how they were invited.
@@ -327,6 +339,7 @@ struct HearthPersonView: View {
                     Text("Name, photo, birthday, role, color, allergies and food.")
                 }
             }
+            HearthPersonInviteSection(member: member, accent: accent)
             Section("Account") {
                 Text(accountLine(member))
                     .foregroundStyle(.secondary)
@@ -366,7 +379,12 @@ struct HearthPersonView: View {
         }
         .alert("Remove \(member.firstName)?", isPresented: $confirmsRemove) {
             Button("Remove", role: .destructive) {
-                store.delete(member.id)
+                let id = member.id
+                Task {
+                    // Off the household's share first: their invitation or access ends too.
+                    await store.withdrawAccess(id)
+                    store.delete(id)
+                }
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}
@@ -375,12 +393,16 @@ struct HearthPersonView: View {
         }
         .alert("Archive \(member.firstName)?", isPresented: $confirmsArchive) {
             Button("Archive", role: .destructive) {
-                store.archive(member.id)
+                let id = member.id
+                Task {
+                    await store.withdrawAccess(id)
+                    store.archive(id)
+                }
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("They'll be hidden in every Hearth app. Their history stays.")
+            Text("They'll be hidden in every Hearth app, and their invitation or access to the household ends. Their history stays.")
         }
     }
 
@@ -726,101 +748,7 @@ struct HearthChoiceTokens: View {
 
 // MARK: - Inviting
 
-struct HearthInviteSheet: View {
-    var accent: Color
-    @State private var store = HearthHouseholdStore.shared
-    @State private var role: HearthRole = .adult
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    VStack(spacing: 10) {
-                        HStack(spacing: -12) {
-                            ForEach(store.people.prefix(3)) { member in
-                                HearthMemberAvatar(member: member, size: 48, ring: false)
-                                    .overlay(Circle().strokeBorder(Color(.systemGroupedBackground), lineWidth: 3))
-                            }
-                            Image(systemName: "plus")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(accent)
-                                .frame(width: 48, height: 48)
-                                .background(accent.opacity(0.14), in: .circle)
-                                .overlay(Circle().strokeBorder(Color(.systemGroupedBackground), lineWidth: 3))
-                        }
-                        Text("Invite someone to \(store.info?.name ?? "your household")")
-                            .font(.title3.bold())
-                            .multilineTextAlignment(.center)
-                        Text("They'll see the household in every Hearth app they use, with the same names, photos and allergies.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
-                }
-                Section {
-                    ForEach(HearthRole.allCases) { option in
-                        Button { role = option } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(option == .kid ? "Kid with an iPhone" : option.label)
-                                        .font(.body.weight(.semibold))
-                                        .foregroundStyle(.primary)
-                                    Text(option.note)
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: 8)
-                                if role == option {
-                                    Image(systemName: "checkmark")
-                                        .font(.body.weight(.semibold))
-                                        .foregroundStyle(.primary)
-                                }
-                            }
-                        }
-                        .accessibilityAddTraits(role == option ? .isSelected : [])
-                    }
-                } header: {
-                    Text("They'll join as")
-                } footer: {
-                    Text("Kids without their own Apple Account don't need an invitation. Add them as a person instead.")
-                }
-                if let problem = store.problem {
-                    Section { Text(problem).foregroundStyle(.red).font(.footnote) }
-                }
-            }
-            .navigationTitle("Invite")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    SheetCancelButton("Close") { dismiss() }
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                Button {
-                    Task { await store.presentInvite(as: role) }
-                } label: {
-                    HStack {
-                        if store.isWorking { ProgressView().tint(.white) }
-                        Text("Send Invitation")
-                    }
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                .tint(accent)
-                .disabled(store.isWorking)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-            }
-        }
-    }
-}
-
-// MARK: - Invitations
+// MARK: - Extras and the Household row
 
 /// An app's own sections on a person's page, after Food. Set once on the root view:
 /// `.environment(\.hearthPersonExtras) { member in AnyView(PointsSection(member)) }`.
@@ -844,27 +772,4 @@ struct HearthHouseholdLabel: View {
 
     static let symbol = "house.lodge"
     static let title = "Household"
-}
-
-extension View {
-    /// Asks before joining a household someone shared. Put it on each app's root view.
-    func hearthHouseholdInvitations() -> some View {
-        modifier(HearthHouseholdInvitationAlert())
-    }
-}
-
-private struct HearthHouseholdInvitationAlert: ViewModifier {
-    @State private var store = HearthHouseholdStore.shared
-
-    func body(content: Content) -> some View {
-        content.alert(
-            "Join \(store.inviterName)'s Household?",
-            isPresented: Binding(get: { store.pendingInvite != nil }, set: { if !$0 { store.pendingInvite = nil } })
-        ) {
-            Button("Join") { Task { await store.acceptInvite() } }
-            Button("Not Now", role: .cancel) { store.pendingInvite = nil }
-        } message: {
-            Text("Every Hearth app on this device will use their household: the same people, and the family's recipes, chores and budget. What you have now stays in your iCloud and comes back if you leave.")
-        }
-    }
 }

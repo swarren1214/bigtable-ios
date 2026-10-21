@@ -10,7 +10,7 @@ nonisolated enum PlanOpenFoodFacts {
 
     nonisolated struct SearchError: LocalizedError, Sendable {
         var status: Int
-        var errorDescription: String? { "Food search isn't working right now (\(status)). Try again in a moment." }
+        var errorDescription: String? { "Food search isn't working right now. Try again in a moment." }
     }
 
     static let pageSize = 24

@@ -137,9 +137,9 @@ final class GroceryStore {
         } catch {
             Self.log.error("Couldn't load the grocery list: \(error.localizedDescription, privacy: .public)")
             if hasLoaded {
-                errorMessage = error.localizedDescription
+                errorMessage = FriendlyError.message(error)
             } else {
-                loadError = error.localizedDescription
+                loadError = FriendlyError.message(error, fallback: "The grocery list couldn't load. Try again.")
             }
         }
     }
@@ -343,7 +343,7 @@ final class GroceryStore {
             return
         } catch {
             Self.log.error("Couldn't save the grocery list: \(error.localizedDescription, privacy: .public)")
-            errorMessage = "Your grocery list couldn't be saved. \(error.localizedDescription)"
+            errorMessage = FriendlyError.message(error, fallback: "Your grocery list couldn't be saved. Try again.")
         }
     }
 
@@ -378,7 +378,7 @@ final class GroceryStore {
             ))
             upsert(saved)
         } catch {
-            errorMessage = "That list couldn't be restored. \(error.localizedDescription)"
+            errorMessage = FriendlyError.message(error, fallback: "That list couldn't be restored. Try again.")
         }
         lastSaved = signature
     }

@@ -962,8 +962,6 @@ nonisolated enum ISODay {
 
 // MARK: - Kitchen in iCloud
 
-nonisolated struct JoinCodeResponse: Decodable, Sendable { var code: String }
-nonisolated struct JoinHouseholdResponse: Decodable, Sendable { var organizerProfileId: String }
 nonisolated struct DisplayNameBody: Encodable, Sendable { var displayName: String? }
 nonisolated struct DisplayNameResponse: Decodable, Sendable { var displayName: String? }
 nonisolated struct KitchenMovedResponse: Decodable, Sendable { var movedAt: String? }

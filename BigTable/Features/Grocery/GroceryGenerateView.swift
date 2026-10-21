@@ -173,10 +173,10 @@ struct GroceryGenerateView: View {
             } else if error.code == "PLAN_EMPTY" {
                 message = "No meals are planned for those days. Plan some meals, then make your grocery list."
             } else {
-                message = error.localizedDescription
+                message = FriendlyError.message(error)
             }
         } catch {
-            message = error.localizedDescription
+            message = FriendlyError.message(error)
         }
     }
 }
@@ -294,7 +294,7 @@ struct GroceryPreviewView: View {
             try await store.publish(preview)
             onSaved()
         } catch {
-            self.error = error.localizedDescription
+            self.error = FriendlyError.message(error)
         }
     }
 }

@@ -55,6 +55,7 @@ struct PlanView: View {
                     selectedDay = PlanDates.day(for: .now)
                 }
             )
+            .hearthTourTarget(BigTableTour.plan)
 
             if let planner {
                 dayContent(planner)

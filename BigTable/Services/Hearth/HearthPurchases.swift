@@ -5,7 +5,7 @@
 //
 // Canonical copy: ~/Developer/hearthkit/HearthPurchases.swift. Don't edit the copies inside the
 // apps; edit this one and run ~/Developer/hearthkit/sync.sh. Needs HearthShared.swift (for
-// `HearthApp`, `HearthAccounts`) and the RevenueCat package. How it all fits: MONETIZATION.md.
+// `HearthApp`, `HearthAccounts`), HearthHouseholdServer.swift and the RevenueCat package. How it all fits: MONETIZATION.md.
 //
 // Using it
 // - At launch: `HearthPurchases.shared.configure(app: .suffice, apiKey: AppConfig.revenueCatAPIKey,
@@ -44,6 +44,7 @@ nonisolated enum HearthEntitlement {
         case .sated: "sated_plus"
         case .caloma: "caloma_plus"
         case .hearken: "hearken_plus"
+        case .trove: "trove_plus"
         }
     }
 }
@@ -215,6 +216,52 @@ final class HearthPurchases {
             await refresh()
             await loadPlans()
         }
+        HearthHouseholdServer.start()
+    }
+
+    // MARK: The Hearth API
+
+    /// Whether this app talks to the Hearth API (and so can keep the household's plan in step).
+    var hasHearthAPI: Bool { apiBaseURL != nil && accessToken != nil && !previewUnlocked }
+
+    /// Calls the Hearth API as the signed-in account (and only as `account`, when given): the
+    /// status and body, or nil when nobody's signed in (or someone else is), the app has no API,
+    /// or there was no answer.
+    func callHearthAPI(_ method: String, _ path: String, body: [String: Any]? = nil, as account: String? = nil) async -> (status: Int, data: Data)? {
+        guard let token = await signedInToken(), let apiBaseURL else { return nil }
+        if let account, HearthAccounts.userID(ofAccessToken: token)?.lowercased() != account.lowercased() { return nil }
+        var request = URLRequest(url: apiBaseURL.appending(path: path))
+        request.httpMethod = method
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 15
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            return ((response as? HTTPURLResponse)?.statusCode ?? 0, data)
+        } catch {
+            Self.log.error("Hearth API \(method, privacy: .public) \(path, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    /// The app's token, only when it's the shared sign-in's account (never an anonymous session,
+    /// or the account from before another app switched).
+    private func signedInToken() async -> String? {
+        guard apiBaseURL != nil, let accessToken, let account = HearthAccounts.session()?.userID,
+              let token = await accessToken() else { return nil }
+        guard HearthAccounts.userID(ofAccessToken: token)?.lowercased() == account.lowercased() else {
+            Self.log.notice("The app's token isn't the shared sign-in's account; skipping the call")
+            return nil
+        }
+        return token
+    }
+
+    /// This account joined or left an organizer's plan.
+    func householdMembershipChanged() async {
+        await refreshHousehold(force: true)
     }
 
     // MARK: Who's signed in
@@ -305,13 +352,29 @@ final class HearthPurchases {
 
     /// Members of a household get the organizer's plan, whatever the household's size.
     private func refreshHousehold(force: Bool) async {
-        guard let apiBaseURL, let accessToken, isSignedIn else {
+        guard let apiBaseURL, isSignedIn, accessToken != nil else {
             householdMembership = nil
             recompute()
             return
         }
         if !force, let last = lastHouseholdCheck, Date.now.timeIntervalSince(last) < 600 { return }
-        guard let token = await accessToken() else { return }
+        guard let accessToken, let account = HearthAccounts.session()?.userID else { return }
+        guard let token = await accessToken() else {
+            // No token right now (Caloma and Trove only borrow the shared one while it's good):
+            // the household's plan as last seen for this account, until it expires.
+            if householdMembership == nil, let cached = Self.cachedHousehold(for: account) {
+                householdMembership = cached
+                recompute()
+            }
+            return
+        }
+        guard HearthAccounts.userID(ofAccessToken: token)?.lowercased() == account.lowercased() else {
+            // The app's token is another account's (anonymous, or from before a switch): no
+            // household plan until it follows the shared sign-in.
+            householdMembership = nil
+            recompute()
+            return
+        }
         var request = URLRequest(url: apiBaseURL.appending(path: "v1/me/entitlements"))
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 15
@@ -333,10 +396,43 @@ final class HearthPurchases {
                     isTrial: false
                 )
             }
+            Self.cacheHousehold(householdMembership, for: account)
             recompute()
         } catch {
             Self.log.error("Household plan check failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    // The household's plan as last seen, per account, for when there's no token to ask with.
+
+    private static let householdCacheKey = "hearth.purchases.householdPlan"
+
+    private static func cacheHousehold(_ membership: HearthMembership?, for account: String) {
+        guard let membership else {
+            UserDefaults.standard.removeObject(forKey: householdCacheKey)
+            return
+        }
+        // [account, "hearthPlus" | "app", expiry (seconds since 1970, or empty)]
+        UserDefaults.standard.set([
+            account.lowercased(),
+            membership.kind == .hearthPlus ? "hearthPlus" : "app",
+            membership.expiresAt.map { String($0.timeIntervalSince1970) } ?? "",
+        ], forKey: householdCacheKey)
+    }
+
+    private static func cachedHousehold(for account: String) -> HearthMembership? {
+        guard let saved = UserDefaults.standard.stringArray(forKey: householdCacheKey), saved.count == 3,
+              saved[0] == account.lowercased() else { return nil }
+        let expiresAt = Double(saved[2]).map { Date(timeIntervalSince1970: $0) }
+        if let expiresAt, expiresAt < .now { return nil }
+        return HearthMembership(
+            kind: saved[1] == "hearthPlus" ? .hearthPlus : .app,
+            term: nil,
+            source: .household,
+            expiresAt: expiresAt,
+            willRenew: true,
+            isTrial: false
+        )
     }
 
     private nonisolated static func date(fromISO text: String) -> Date? {
@@ -453,11 +549,41 @@ final class HearthPurchases {
             switch error {
             case .purchaseCancelledError: return .cancelled
             case .paymentPendingError: return .pending
-            default: return .failed(error.localizedDescription)
+            default:
+                Self.log.error("Purchase failed: \(error.localizedDescription, privacy: .public)")
+                return .failed(Self.friendly(error, buying: true))
             }
         } catch {
-            return .failed(error.localizedDescription)
+            Self.log.error("Purchase failed: \(error.localizedDescription, privacy: .public)")
+            return .failed(Self.friendly(error, buying: true))
         }
+    }
+
+    /// What a purchase or restore error means for the person, never the store's raw text.
+    nonisolated static func friendly(_ error: any Error, buying: Bool) -> String {
+        let again = buying ? "Your card wasn’t charged. Try again in a moment." : "Try again in a moment."
+        if let code = error as? ErrorCode {
+            switch code {
+            case .networkError, .offlineConnectionError:
+                return "You’re offline. Check your connection, then try again."
+            case .purchaseNotAllowedError:
+                return "Purchases aren’t allowed on this device. Check Screen Time › Content & Privacy Restrictions in Settings."
+            case .productNotAvailableForPurchaseError, .productAlreadyPurchasedError:
+                return buying ? "This plan can’t be bought right now. If you already have it, tap Restore Purchases." : again
+            case .receiptAlreadyInUseError:
+                return "This purchase belongs to a different Hearth account. Sign in with that account, or contact support@hearthapps.com."
+            case .invalidCredentialsError, .invalidAppUserIdError:
+                return "Couldn’t reach your Apple Account. Sign in to the App Store in Settings, then try again."
+            case .storeProblemError:
+                return "The App Store isn’t responding. \(again)"
+            default:
+                return buying ? "The purchase didn’t go through. \(again)" : "Couldn’t restore your purchases. \(again)"
+            }
+        }
+        if let url = error as? URLError, [.notConnectedToInternet, .networkConnectionLost, .timedOut].contains(url.code) {
+            return "You’re offline. Check your connection, then try again."
+        }
+        return buying ? "The purchase didn’t go through. \(again)" : "Couldn’t restore your purchases. \(again)"
     }
 
     func restore() async -> RestoreOutcome {
@@ -466,7 +592,8 @@ final class HearthPurchases {
             await refreshHousehold(force: true)
             return isUnlocked ? .restored : .nothing
         } catch {
-            return .failed(error.localizedDescription)
+            Self.log.error("Restore failed: \(error.localizedDescription, privacy: .public)")
+            return .failed(Self.friendly(error, buying: false))
         }
     }
 

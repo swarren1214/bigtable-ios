@@ -15,11 +15,18 @@ extension KitchenStore {
     func recipes(query: String? = nil, quickFilter: String? = nil, collection: String? = nil, limit: Int = 20, offset: Int = 0) async throws -> RecipeListResponse {
         let removed = collection == "removed"
         let own = ownSummaries(query: query, quickFilter: quickFilter, removed: removed)
-        if collection == "my" || removed {
+        func ownPage() -> RecipeListResponse {
             let page = Array(own.dropFirst(offset).prefix(limit))
             return RecipeListResponse(recipes: page, pagination: Pagination(limit: limit, offset: offset, hasMore: offset + page.count < own.count, nextOffset: offset + page.count, totalCount: own.count))
         }
-        let server = try await api.recipes(query: query, quickFilter: quickFilter, collection: nil, limit: limit, offset: offset)
+        if collection == "my" || removed { return ownPage() }
+        let server: RecipeListResponse
+        do {
+            server = try await api.recipes(query: query, quickFilter: quickFilter, collection: nil, limit: limit, offset: offset)
+        } catch let error as APIError where error.kind == .needsSignIn {
+            // Signed out: the family's own recipes (Community's need the Hearth account).
+            return ownPage()
+        }
         let mine = Set(state.recipes.keys)
         let published = server.recipes.filter { !mine.contains($0.id) }
         return RecipeListResponse(
@@ -195,8 +202,13 @@ extension KitchenStore {
     // MARK: - Favorites (the family's own are marked here; published ones on the server)
 
     func favoriteRecipes() async throws -> RecipeListResponse {
-        let server = try await api.favoriteRecipes()
         let own = ownSummaries().filter(\.isFavorite)
+        let server: RecipeListResponse
+        do {
+            server = try await api.favoriteRecipes()
+        } catch let error as APIError where error.kind == .needsSignIn {
+            return RecipeListResponse(recipes: own, pagination: nil)
+        }
         let ownIDs = Set(own.map(\.id))
         return RecipeListResponse(recipes: own + server.recipes.filter { !ownIDs.contains($0.id) }, pagination: server.pagination)
     }

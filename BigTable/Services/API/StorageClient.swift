@@ -33,7 +33,7 @@ nonisolated struct StorageClient: Sendable {
     }
 
     private func userID() async throws -> String {
-        guard let id = await auth.currentSession?.user.id else { throw APIError.signedOut }
+        guard let id = await auth.currentSession?.user.id else { throw APIError.needsSignIn }
         return id
     }
 

@@ -3,7 +3,7 @@ import OSLog
 
 /// What went wrong talking to the BigTable API, in terms the app can act on.
 nonisolated struct APIError: Error, LocalizedError, Equatable, Sendable {
-    nonisolated enum Kind: Equatable, Sendable { case offline, timedOut, signedOut, server, rejected }
+    nonisolated enum Kind: Equatable, Sendable { case offline, timedOut, signedOut, needsSignIn, server, rejected }
 
     var kind: Kind
     var status: Int
@@ -14,6 +14,8 @@ nonisolated struct APIError: Error, LocalizedError, Equatable, Sendable {
     static let offline = APIError(kind: .offline, status: 0)
     static let timedOut = APIError(kind: .timedOut, status: 408)
     static let signedOut = APIError(kind: .signedOut, status: 401)
+    /// Nobody's signed in: the call needs the Hearth account (Sign in with Apple).
+    static let needsSignIn = APIError(kind: .needsSignIn, status: 401)
 
     /// Over the free AI allowance, or the household organizer hasn't allowed it.
     /// The AI endpoints answer 403 with code LIMIT_REACHED when the free allowance is used up.
@@ -25,6 +27,7 @@ nonisolated struct APIError: Error, LocalizedError, Equatable, Sendable {
         case .offline: "You appear to be offline. Connect to the internet and try again."
         case .timedOut: "This is taking longer than expected. Try again in a moment."
         case .signedOut: "Your session expired. Sign in again."
+        case .needsSignIn: "Sign in with Apple to use this. It's at the top of Profile."
         case .server: "Something went wrong on our side. Try again shortly."
         case .rejected:
             if let message, !message.trimmingCharacters(in: .whitespaces).isEmpty { message }
@@ -195,19 +198,6 @@ nonisolated struct BigTableAPI: Sendable {
     }
 
     // MARK: - Household (subscription sharing)
-
-    /// The organizer's join code, kept (encrypted) in the Hearth household so the family can
-    /// join their subscription.
-    func householdJoinCode(rotate: Bool = false) async throws -> String {
-        let response: JoinCodeResponse = try await send("POST", "/v1/bigtable/household/join-code", body: ["rotate": rotate])
-        return response.code
-    }
-
-    /// Joins the organizer's membership (their Pro plan) with the code from the household.
-    func joinHousehold(code: String) async throws -> String {
-        let response: JoinHouseholdResponse = try await send("POST", "/v1/bigtable/household/join", body: ["code": code])
-        return response.organizerProfileId
-    }
 
     /// The name shown on recipes this person publishes.
     func setDisplayName(_ name: String?) async throws {
@@ -448,6 +438,7 @@ nonisolated struct BigTableAPI: Sendable {
             }
         }
         #endif
+        guard await auth.currentSession != nil else { throw APIError.needsSignIn }
         var token: String
         do {
             token = try await auth.accessToken()

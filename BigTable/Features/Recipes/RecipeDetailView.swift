@@ -590,9 +590,9 @@ struct RecipeDetailView: View {
             loadError = versionID != nil ? "This saved version of the recipe isn't available to you anymore." : "This recipe isn't available to you anymore."
         } catch {
             if detail == nil {
-                loadError = error.localizedDescription
+                loadError = FriendlyError.message(error, fallback: "This recipe couldn't load. Try again.")
             } else {
-                errorMessage = error.localizedDescription
+                errorMessage = FriendlyError.message(error)
             }
         }
     }
@@ -606,7 +606,7 @@ struct RecipeDetailView: View {
             try await library.setFavorite(id: recipe.id, saved: next)
         } catch {
             if detail?.id == recipe.id { detail?.isFavorite = !next }
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 
@@ -622,7 +622,7 @@ struct RecipeDetailView: View {
                 detail?.isLiked = recipe.isLiked
                 detail?.likeCount = previousCount
             }
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 
@@ -710,7 +710,7 @@ struct RecipeDetailView: View {
                 $0.status = previousStatus
                 $0.publishedAt = previousPublishedAt
             }
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 
@@ -723,7 +723,7 @@ struct RecipeDetailView: View {
             library.remove(recipe.id)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 
@@ -752,7 +752,7 @@ struct RecipeDetailView: View {
             library.changed()
             notice = "A draft copy of “\(recipe.title)” is in My Recipes."
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 

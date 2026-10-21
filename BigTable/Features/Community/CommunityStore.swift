@@ -33,8 +33,6 @@ final class CommunityStore {
     private(set) var followBusy: Set<String> = []
     private(set) var blocked: Set<String> = []
     private(set) var blockedLoaded = false
-    /// Pending household invitations this person (an organizer) has sent.
-    private(set) var sentInvitations: [HouseholdInvitation] = []
     var errorMessage: String?
 
     private let api = BigTableAPI.shared
@@ -55,7 +53,6 @@ final class CommunityStore {
         followBusy = []
         blocked = []
         blockedLoaded = false
-        sentInvitations = []
         followingResolved = false
     }
 
@@ -63,10 +60,6 @@ final class CommunityStore {
 
     func isFollowing(_ profileID: String) -> Bool { following[profileID] ?? false }
     func isBlocked(_ profileID: String) -> Bool { blocked.contains(profileID) }
-
-    func pendingInvitation(for profileID: String) -> HouseholdInvitation? {
-        sentInvitations.first { $0.inviteeProfileId == profileID && $0.status == .pending }
-    }
 
     // MARK: - Lists
 
@@ -92,9 +85,9 @@ final class CommunityStore {
             Self.log.error("Couldn't load \(mode.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             var page = pages[mode] ?? Page()
             if page.loaded {
-                errorMessage = error.localizedDescription
+                errorMessage = FriendlyError.message(error)
             } else {
-                page.error = error.localizedDescription
+                page.error = FriendlyError.message(error, fallback: "Community couldn't load. Try again.")
             }
             pages[mode] = page
         }
@@ -117,7 +110,7 @@ final class CommunityStore {
         } catch is CancellationError {
             return
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 
@@ -174,7 +167,7 @@ final class CommunityStore {
         } catch {
             following[profileID] = was
             adjustFollowerCount(profileID, by: next ? -1 : 1)
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
             return nil
         }
     }
@@ -212,37 +205,11 @@ final class CommunityStore {
                 pages[mode] = page
             }
         }
-        await loadInvitations()
     }
 
     func unblock(_ profileID: String) async throws {
         try await api.unblock(profileID)
         blocked.remove(profileID)
-    }
-
-    // MARK: - Household invitations
-
-    func loadInvitations() async {
-        guard AppModel.shared.isOrganizer else {
-            sentInvitations = []
-            return
-        }
-        if let response = try? await api.householdInvitations() {
-            sentInvitations = response.sent.filter { $0.status == .pending }
-        }
-    }
-
-    func invite(_ profileID: String) async throws {
-        let invitation = try await api.sendHouseholdInvitation(to: profileID)
-        sentInvitations.removeAll { $0.id == invitation.id }
-        sentInvitations.append(invitation)
-        await loadInvitations()
-    }
-
-    func cancelInvitation(_ invitation: HouseholdInvitation) async throws {
-        _ = try await api.cancelInvitation(invitation.id)
-        sentInvitations.removeAll { $0.id == invitation.id }
-        await loadInvitations()
     }
 }
 

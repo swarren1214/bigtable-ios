@@ -396,7 +396,7 @@ struct PlanDineOutView: View {
             return
         } catch {
             results = []
-            message = error.localizedDescription
+            message = FriendlyError.message(error)
         }
     }
 

@@ -75,9 +75,9 @@ nonisolated struct RecipeEditorNotice: Identifiable {
     /// An AI or upload failure, offering Pro when the free allowance ran out.
     static func failure(_ error: Error, title: String) -> RecipeEditorNotice {
         if let api = error as? APIError, api.isLimitReached || api.isForbidden {
-            return RecipeEditorNotice(title: "BigTable Plus", message: api.localizedDescription, offersUpgrade: true)
+            return RecipeEditorNotice(title: "BigTable Plus", message: FriendlyError.message(api), offersUpgrade: true)
         }
-        return RecipeEditorNotice(title: title, message: error.localizedDescription)
+        return RecipeEditorNotice(title: title, message: FriendlyError.message(error))
     }
 }
 

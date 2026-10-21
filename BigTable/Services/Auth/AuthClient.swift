@@ -2,8 +2,8 @@ import Foundation
 import OSLog
 import Security
 
-/// A signed-in Supabase session: the same accounts the Expo app used (email and password, or
-/// Sign in with Apple), so beta users sign in and find their household.
+/// A signed-in Supabase session: the Hearth account, signed in with Apple (the same account in
+/// every Hearth app). Email and password sign-in is gone.
 nonisolated struct AuthSession: Codable, Sendable, Equatable {
     var accessToken: String
     var refreshToken: String
@@ -25,9 +25,9 @@ nonisolated struct AuthUser: Codable, Sendable, Equatable {
     /// kept this; it's loaded at launch.
     var providers: [String]? = nil
 
-    /// An account made with an email and password that hasn't added Sign in with Apple yet.
-    /// Email sign-in is going away, so these are asked to add Apple (keeping the account).
-    var needsAppleLink: Bool {
+    /// An account made with an email and password (never Sign in with Apple). Email accounts
+    /// are gone: a saved session for one is dropped.
+    var isEmailOnly: Bool {
         guard let providers, isAnonymous != true else { return false }
         return !providers.contains("apple")
     }
@@ -37,9 +37,6 @@ nonisolated enum AuthError: Error, LocalizedError, Equatable, Sendable {
     case offline
     case unreachable
     case invalidCredentials
-    case emailNotConfirmed
-    case userExists
-    case weakPassword(String)
     case rateLimited
     case rejected(String)
     case signedOut
@@ -48,10 +45,7 @@ nonisolated enum AuthError: Error, LocalizedError, Equatable, Sendable {
         switch self {
         case .offline: "You're offline. Connect to the internet and try again."
         case .unreachable: "BigTable can't reach its server right now. Try again in a moment."
-        case .invalidCredentials: "That email and password don't match. Try again or reset your password."
-        case .emailNotConfirmed: "Check your email and tap the confirmation link, then sign in."
-        case .userExists: "There's already an account with that email. Sign in instead."
-        case .weakPassword(let message): message
+        case .invalidCredentials: "Sign in with Apple didn't go through. Try again."
         case .rateLimited: "Too many tries just now. Wait a minute and try again."
         case .rejected(let message): message
         case .signedOut: "Your session ended. Sign in again."
@@ -88,8 +82,13 @@ actor AuthClient {
 
     /// The user whose session BigTable last saw in (or saved to) the shared sign-in. Only then
     /// does a missing shared session mean "signed out in another app" (and not, say, a shared
-    /// Keychain that isn't working).
-    private var sharedUserID: String?
+    /// Keychain that isn't working). Kept across launches, so a sign-out in another app while
+    /// BigTable wasn't running is followed at the next launch (not undone by sharing it again).
+    private var sharedUserID: String? {
+        get { UserDefaults.standard.string(forKey: Self.sharedUserIDKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.sharedUserIDKey) }
+    }
+    nonisolated private static let sharedUserIDKey = "hearth.bigtable.sharedSessionUserID"
     /// The session came from another app, which doesn't share the user's name: load it.
     private var needsUserDetails = false
     private var hearthObserver: (any NSObjectProtocol)?
@@ -104,16 +103,26 @@ actor AuthClient {
             session = ScreenshotMode.session
             return
         }
-        let local = store.load()
+        var local = store.load()
         let shared = HearthAccounts.session()
+        // Signed out in another app since BigTable last ran: follow it.
+        if shared == nil, let id = local?.user.id,
+           UserDefaults.standard.string(forKey: Self.sharedUserIDKey) == id {
+            store.delete()
+            UserDefaults.standard.removeObject(forKey: Self.sharedUserIDKey)
+            local = nil
+        }
         let resolved = Self.reconcile(local: local, shared: shared)
         session = resolved
         if let resolved {
             if resolved != local { store.save(resolved) }
-            if resolved.user.id != local?.user.id || resolved.user.providers == nil { needsUserDetails = true }
+            if resolved.user.id != local?.user.id || resolved.user.providers == nil || resolved.user.isEmailOnly { needsUserDetails = true }
             // Shares BigTable's session when there's none yet (or this one is newer).
             Self.share(resolved)
-            if HearthAccounts.session()?.userID == resolved.user.id { sharedUserID = resolved.user.id }
+            if HearthAccounts.session()?.userID == resolved.user.id {
+                // The init can't use the actor's computed properties: write the key itself.
+                UserDefaults.standard.set(resolved.user.id, forKey: Self.sharedUserIDKey)
+            }
         }
     }
 
@@ -155,6 +164,14 @@ actor AuthClient {
         defer { refreshTask = nil }
         do {
             let fresh = try await task.value
+            // Another app signed in as someone else (or out) while this was on its way: follow
+            // it, never write the old account back over theirs.
+            let shared = HearthAccounts.session()
+            if !ScreenshotMode.isOn, (shared.map { $0.userID != fresh.user.id } ?? (sharedUserID == fresh.user.id)) {
+                set(fresh, share: false)
+                Task { await self.followSharedSession() }
+                return fresh
+            }
             set(fresh)
             return fresh
         } catch AuthError.invalidCredentials {
@@ -163,36 +180,18 @@ actor AuthClient {
                 set(adopted, share: false)
                 return adopted
             }
-            // Supabase rejected the refresh token: the session is over.
+            // Supabase rejected the refresh token: the session is over, in every app.
+            if !ScreenshotMode.isOn { HearthAccounts.discardSession(ifRefreshToken: refreshToken) }
             set(nil)
             throw AuthError.signedOut
         } catch let error as AuthError where error == .signedOut {
+            if !ScreenshotMode.isOn { HearthAccounts.discardSession(ifRefreshToken: refreshToken) }
             set(nil)
             throw error
         }
     }
 
     // MARK: Signing in
-
-    func signIn(email: String, password: String) async throws {
-        let session = try await tokenRequest(grant: "password", body: ["email": email, "password": password])
-        set(session)
-    }
-
-    /// Adds Sign in with Apple to the signed-in account (one made with an email and password),
-    /// so it keeps its recipes, household and plan and can sign in with Apple from now on, in
-    /// every Hearth app. Needs manual identity linking turned on in Supabase.
-    func linkApple(idToken: String, nonce: String?) async throws {
-        let token = try await accessToken()
-        var components = URLComponents(url: baseURL.appending(path: "token"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "grant_type", value: "id_token")]
-        var body: [String: Any] = ["provider": "apple", "id_token": idToken, "link_identity": true]
-        if let nonce { body["nonce"] = nonce }
-        let data = try await send(url: components.url!, method: "POST", json: body, bearer: token)
-        var linked = try Self.decodeSession(data)
-        if linked.user.fullName == nil { linked.user.fullName = session?.user.fullName }
-        set(linked)
-    }
 
     /// Sign in with Apple: the identity token from AuthenticationServices, and the raw nonce
     /// whose SHA-256 went in the request. `fallbackName` is the name another Hearth app got from
@@ -212,33 +211,6 @@ actor AuthClient {
             session.user.fullName = fullName
             set(session)
         }
-    }
-
-    func sendPasswordReset(email: String) async throws {
-        var components = URLComponents(url: baseURL.appending(path: "recover"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "redirect_to", value: AppConfig.authRedirect)]
-        _ = try await send(url: components.url!, method: "POST", json: ["email": email])
-    }
-
-    /// bigtable://auth#access_token=…&refresh_token=…&type=recovery|signup, from the emails.
-    /// Returns the link's type ("recovery" means: ask for a new password).
-    func handleRedirect(_ url: URL) async throws -> String? {
-        let fragment = url.fragment ?? url.query ?? ""
-        var values: [String: String] = [:]
-        for pair in fragment.split(separator: "&") {
-            let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
-            if parts.count == 2 { values[parts[0]] = parts[1].removingPercentEncoding ?? parts[1] }
-        }
-        if let message = values["error_description"] { throw AuthError.rejected(message.replacingOccurrences(of: "+", with: " ")) }
-        guard let access = values["access_token"], let refreshToken = values["refresh_token"] else { return nil }
-        let expiresIn = Double(values["expires_in"] ?? "3600") ?? 3600
-        let user = try await fetchUser(accessToken: access)
-        set(AuthSession(accessToken: access, refreshToken: refreshToken, expiresAt: Date.now.timeIntervalSince1970 + expiresIn, user: user))
-        return values["type"]
-    }
-
-    func updatePassword(_ password: String) async throws {
-        try await updateUser(["password": password])
     }
 
     func updateFullName(_ name: String) async throws {
@@ -284,7 +256,13 @@ actor AuthClient {
     /// `Hearth.didChange` and when the app becomes active. BigTable's own writes post the same
     /// notification, so this only acts on a difference.
     func followSharedSession() async {
-        guard !ScreenshotMode.isOn, refreshTask == nil else { return }
+        guard !ScreenshotMode.isOn else { return }
+        // A refresh is on its way: look again once it's done, so a change isn't missed.
+        if let pending = refreshTask {
+            _ = try? await pending.value
+            // Only a newer refresh started meanwhile means this look is someone else's to do.
+            if let current = refreshTask, current != pending { return }
+        }
         let shared = HearthAccounts.session()
         guard let current = session else {
             // Signed out here, signed in elsewhere: use that account.
@@ -330,6 +308,12 @@ actor AuthClient {
         guard let token = try? await accessToken(),
               let user = try? await fetchUser(accessToken: token),
               var current = session, current.user.id == user.id else { return }
+        if user.isEmailOnly {
+            // An email-and-password account: those are gone, so sign out of it everywhere.
+            Self.log.notice("Dropping a session for an email-only account")
+            clear(everywhere: true)
+            return
+        }
         guard current.user != user else { return }
         current.user = user
         set(current, share: false)
@@ -459,13 +443,6 @@ actor AuthClient {
         case (429, _): return .rateLimited
         case (_, "invalid_credentials"), (_, "invalid_grant"), (_, "refresh_token_not_found"), (_, "refresh_token_already_used"):
             return .invalidCredentials
-        case (_, "email_not_confirmed"): return .emailNotConfirmed
-        case (_, "user_already_exists"), (_, "email_exists"): return .userExists
-        case (_, "weak_password"): return .weakPassword(message)
-        case (_, "identity_already_exists"):
-            return .rejected("This Apple ID already has its own BigTable account. To use that one instead, sign out and choose Continue with Apple.")
-        case (_, "manual_linking_disabled"):
-            return .rejected("Adding Sign in with Apple isn't turned on yet. Try again a little later.")
         default:
             if message.lowercased().contains("invalid login") { return .invalidCredentials }
             return .rejected(message)

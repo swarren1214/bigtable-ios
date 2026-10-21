@@ -117,8 +117,15 @@ in a household sees the same data and the older Expo app keeps working. Don't mo
 
 When an action needs confirming (deleting, erasing, signing out, leaving), always use a native
 alert (`.alert` with a `role: .destructive` button and a Cancel button) rather than a native
-popup or popover (`.confirmationDialog`, action sheet, `.popover`), unless explicitly told
-otherwise.
+popup or popover (`.confirmationDialog`, action sheet, `.popover`, a custom card or sheet),
+unless explicitly told otherwise.
+
+- **Alert button colors:** every button in an alert uses the standard text color (black in
+  Light Mode, white in Dark Mode), never the app's color. Only a destructive action's button
+  is different: the standard red, from `role: .destructive`. The app sets this once at launch
+  with `UIView.appearance(whenContainedInInstancesOf: [UIAlertController.self]).tintColor =
+  .label`; don't tint alert buttons yourself, and don't color a destructive button any other
+  way than its role.
 
 ## Hearth household
 

@@ -46,18 +46,36 @@ struct HearthHouseholdOnboarding: View {
     @State private var waitsForInvite = false
     /// They chose Not Now: a household of just them was started for them.
     @State private var setUpLater = false
+    /// They set one up, or joined one, on this screen. Otherwise a household that's here was
+    /// made in another Hearth app, and this step just shows it.
+    @State private var actedHere = false
+    @State private var showsHousehold = false
+    /// They tapped Join on an invitation here: the join card stays, showing "You're in".
+    @State private var joinedByInvite = false
+
+    /// Another Hearth app already made the household: show it, nothing to type.
+    private var isFound: Bool { store.exists && !actedHere }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 header
-                if store.exists {
+                if joinedByInvite || store.pendingInvite != nil {
+                    // The join sheet can't show over this screen, so the same card is here.
+                    HearthJoinView(accent: accent, isInline: true, onJoin: {
+                        joinedByInvite = true
+                        actedHere = true
+                    }, onFinish: {
+                        joinedByInvite = false
+                    })
+                    .padding(20)
+                    .background(Color(.secondarySystemBackground).opacity(0.5), in: .rect(cornerRadius: 22))
+                } else if isFound {
+                    foundCard
+                } else if store.exists {
                     if setUpLater { laterCard } else { joinedCard }
-                } else if store.pendingInvite != nil {
-                    // The invitation alert can't show over this screen, so it's here.
-                    invitationCard
                 } else if waitsForInvite {
-                    inviteSteps
+                    HearthJoinWaitingView(accent: accent) { waitsForInvite = false }
                 } else {
                     explainer
                     choices
@@ -69,7 +87,24 @@ struct HearthHouseholdOnboarding: View {
             .frame(maxWidth: .infinity)
         }
         .safeAreaInset(edge: .bottom) {
-            if store.exists {
+            if isFound {
+                VStack(spacing: 6) {
+                    Button(action: onContinue) {
+                        Text("Looks Right")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(accent)
+                    Button("Edit Household") { showsHousehold = true }
+                        .font(.body.weight(.medium))
+                        .tint(.primary)
+                        .frame(minHeight: 44)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+                .frame(maxWidth: 520)
+            } else if store.exists {
                 Button(action: onContinue) {
                     Text("Continue")
                         .font(.headline)
@@ -80,7 +115,7 @@ struct HearthHouseholdOnboarding: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 12)
                 .frame(maxWidth: 520)
-            } else if store.pendingInvite == nil && !waitsForInvite {
+            } else if store.pendingInvite == nil && !waitsForInvite && !joinedByInvite {
                 Button(action: startJustMe) {
                     Text("Not Now")
                         .font(.headline)
@@ -106,20 +141,42 @@ struct HearthHouseholdOnboarding: View {
             }
             .tint(accent)
         }
+        .sheet(isPresented: $showsHousehold) {
+            NavigationStack {
+                HearthHouseholdView(accent: accent)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            SheetDoneButton { showsHousehold = false }
+                        }
+                    }
+            }
+            .tint(accent)
+        }
         .onChange(of: store.exists) { _, exists in
             if exists { showsSetup = false }
         }
+        .onChange(of: showsSetup) { _, shows in
+            if shows { actedHere = true }
+        }
+        .onChange(of: waitsForInvite) { _, waits in
+            if waits { actedHere = true }
+        }
         .animation(.smooth, value: store.exists)
         .animation(.smooth, value: waitsForInvite)
+        .onAppear { HearthJoinPresentation.shared.inlineScreens += 1 }
+        .onDisappear { HearthJoinPresentation.shared.inlineScreens -= 1 }
     }
 
     private var header: some View {
         VStack(spacing: 14) {
             HearthLogo(size: 76)
                 .padding(.bottom, 2)
-            Text("Your Household")
+            Text(isFound ? "Your household is already here" : "Your Household")
                 .font(.largeTitle.bold())
-            Text("\(store.app.displayName) is one of the Hearth apps for family life. Your household is who you share them with, set up once for all of them.")
+                .multilineTextAlignment(.center)
+            Text(isFound
+                 ? "You set it up in \(foundSource.map(\.displayName) ?? "another Hearth app"). \(store.app.displayName) uses the same people, so there’s nothing to type."
+                 : "\(store.app.displayName) is one of the Hearth apps for family life. Your household is who you share them with, set up once for all of them.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -143,6 +200,7 @@ struct HearthHouseholdOnboarding: View {
             : HearthHouseholdPlanner.member(from: mine, sortOrder: 0)
         me.role = .parent
         let first = mine.isEmpty ? "" : me.firstName
+        actedHere = true
         setUpLater = true
         store.create(
             name: first.isEmpty ? "My Household" : "\(first)'s Household",
@@ -153,12 +211,8 @@ struct HearthHouseholdOnboarding: View {
 
     /// Where Household is in each app, for "when you're ready".
     static func householdLocation(in app: HearthApp) -> String {
-        switch app {
-        case .bigtable, .suffice: "tap your picture at the top of the screen, then Household"
-        case .sated: "tap the person button at the top of Today, then Household"
-        case .caloma: "tap Family at the top of Home, then Household"
-        case .hearken: "tap the person button at the top of Today and look under Household"
-        }
+        // Every app's main screens have the profile photo at the top right (HearthProfile.swift).
+        "tap your photo at the top right, then Household"
     }
 
     private var laterCard: some View {
@@ -218,6 +272,7 @@ struct HearthHouseholdOnboarding: View {
         case .sated: "The coach keeps your household’s allergies and diets, and your own likes, in mind."
         case .caloma: "Chores, rewards and the family calendar, for each person in it."
         case .hearken: "Your reading stays yours, and Caloma can show whose reading is whose on the family calendar."
+        case .trove: "Keep each person’s passport, license and birth certificate together, and share the family’s papers with the other adults."
         }
     }
 
@@ -258,34 +313,75 @@ struct HearthHouseholdOnboarding: View {
         .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 22))
     }
 
-    private var invitationCard: some View {
+    /// The Hearth app the household most likely came from: the first other app that knows
+    /// someone in it, else the first other one installed.
+    private var foundSource: HearthApp? {
+        let others = HearthApp.allCases.filter { $0 != store.app }
+        if let known = others.first(where: { app in store.people.contains { $0.appIDs[app.rawValue] != nil } }) { return known }
+        let installed = HearthInstalledApps.current(including: store.app)
+        return others.first { installed.contains($0) }
+    }
+
+    /// Another Hearth app already made the household: where it came from, and who's in it.
+    private var foundCard: some View {
         VStack(spacing: 14) {
-            Text("Join \(store.inviterName)'s Household?")
-                .font(.title3.bold())
-                .multilineTextAlignment(.center)
-            Text("Every Hearth app on this device will use their household: the same people, and the family's recipes, chores and budget.")
-                .font(.subheadline)
+            HStack(spacing: 12) {
+                if let source = foundSource {
+                    HearthAppIcon(app: source, size: 40)
+                        .clipShape(.rect(cornerRadius: 9, style: .continuous))
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(foundSource.map { "From \($0.displayName)" } ?? (store.info?.name ?? "Your household"))
+                        .font(.headline)
+                    Text("\(store.people.count == 1 ? "1 person" : "\(store.people.count) people"), with birthdays, photos and allergies")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "checkmark")
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(accent)
+                    .accessibilityHidden(true)
+            }
+            .padding(14)
+            .background(accent.opacity(0.16), in: .rect(cornerRadius: 18, style: .continuous))
+            .accessibilityElement(children: .combine)
+
+            VStack(spacing: 0) {
+                ForEach(store.people.filter { !$0.isArchived }) { person in
+                    if person.id != store.people.first(where: { !$0.isArchived })?.id {
+                        Divider().padding(.leading, 68)
+                    }
+                    HStack(spacing: 12) {
+                        HearthMemberAvatar(member: person, size: 40, ring: false)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(person.trimmedName).font(.headline)
+                            Text(person.id == store.me?.id ? "You · \(person.role.label)" : person.role.label)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        if let allergy = person.allergies.first {
+                            Text(person.allergies.count > 1 ? "\(allergy) +\(person.allergies.count - 1)" : allergy)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color(red: 1, green: 0.71, blue: 0.67))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.red.opacity(0.16), in: .capsule)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 22, style: .continuous))
+
+            Text(Self.purpose(in: store.app))
+                .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button {
-                Task { await store.acceptInvite() }
-            } label: {
-                Group {
-                    if store.isWorking { ProgressView() } else { Text("Join") }
-                }
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 50)
-            }
-            .buttonStyle(.glassProminent)
-            .tint(accent)
-            .disabled(store.isWorking)
-            Button("Not Now") { store.pendingInvite = nil }
-                .tint(.primary)
-                .disabled(store.isWorking)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 22))
     }
 
     private var choices: some View {
@@ -300,26 +396,6 @@ struct HearthHouseholdOnboarding: View {
                 waitsForInvite = true
             }
         }
-    }
-
-    private var inviteSteps: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            step("1", "They open Household in any Hearth app and tap Invite to Household.")
-            step("2", "They send it to you in Messages or Mail.")
-            step("3", "You open it on this device. This screen moves on by itself.")
-            HStack {
-                ProgressView()
-                Text(store.isWorking ? "Joining…" : "Waiting for the invitation…")
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 4)
-            Button("Back") { waitsForInvite = false }
-                .tint(.primary)
-                .padding(.top, 4)
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 22))
     }
 
     private func choice(symbol: String, title: String, detail: String, action: @escaping () -> Void) -> some View {
@@ -349,15 +425,6 @@ struct HearthHouseholdOnboarding: View {
             .contentShape(.rect(cornerRadius: 22))
         }
         .buttonStyle(.plain)
-    }
-
-    private func step(_ number: String, _ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(number)
-                .font(.headline)
-                .foregroundStyle(.secondary)
-            Text(text)
-        }
     }
 }
 

@@ -96,7 +96,7 @@ struct DeletedRecipesView: View {
         } catch is CancellationError {
             return
         } catch {
-            loadError = error.localizedDescription
+            loadError = FriendlyError.message(error, fallback: "Deleted recipes couldn't load. Try again.")
         }
         isLoading = false
     }
@@ -110,7 +110,7 @@ struct DeletedRecipesView: View {
             RecipeLibrary.shared.changed()
             restored = recipe
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 }

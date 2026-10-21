@@ -29,9 +29,6 @@ nonisolated enum AppConfig {
     static let publishingEnabled = true
     static let pushEnabled = true
 
-    /// Where sign-up confirmation and password-reset emails send people (as in the Expo app).
-    static let authRedirect = "bigtable://auth"
-
     static var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "2.0"
     }

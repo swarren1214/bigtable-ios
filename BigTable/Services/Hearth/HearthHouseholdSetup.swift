@@ -143,6 +143,7 @@ nonisolated enum HearthHouseholdPlanner {
         case .suffice: 2
         case .hearken: 3
         case .sated: 4
+        case .trove: 5
         }
     }
 }
@@ -317,6 +318,7 @@ struct HearthHouseholdSetupView: View {
         case .sated: Color(red: 0.94, green: 0.54, blue: 0.14)
         case .caloma: Color(red: 0.85, green: 0.34, blue: 0.48)
         case .hearken: Color(red: 0.23, green: 0.45, blue: 0.85)
+        case .trove: Color(red: 0.12, green: 0.43, blue: 0.38)
         }
     }
 }

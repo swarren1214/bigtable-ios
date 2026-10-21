@@ -400,6 +400,8 @@ struct GroceryView: View {
     private func openGenerate() {
         guard canGenerate else { return }
         addFieldFocused = false
+        // AI lists need the Hearth account.
+        guard model.requireSignIn(.aiGrocery) else { return }
         if isPro {
             showGenerate = true
         } else {

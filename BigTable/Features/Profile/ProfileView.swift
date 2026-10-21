@@ -1,26 +1,17 @@
 import AuthenticationServices
 import Foundation
-import StoreKit
 import SwiftUI
 import UIKit
 
-/// Profile: who's signed in, the household and the people who share it, invitations,
-/// the plan (BigTable Plus or Hearth+) and AI usage, settings, and the account itself. The sheet behind the avatar in every tab's
-/// toolbar (the caller provides the NavigationStack).
+/// Profile: the Hearth account (Sign in with Apple, optional), the plan (BigTable Plus or
+/// Hearth+) and AI usage, settings, and the account itself. The household is HearthKit's
+/// Household row. The sheet behind the avatar in every tab's toolbar (the caller provides the
+/// NavigationStack).
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
-    @Environment(\.requestReview) private var requestReview
     @AppStorage(SettingsKey.appearance) private var appearance = AppearanceOption.system.rawValue
 
-    @State private var invitations: HouseholdInvitationsResponse?
-    @State private var showPaywall = false
     @State private var mealTimesSummary = HearthMealTimes.current.summary
-    @State private var showTutorial = false
-    @State private var joinedHouseholdName: String?
-    @State private var showMembershipInfo = false
-    @State private var confirmLeave = false
     @State private var confirmSignOut = false
     @State private var showDeleteAccount = false
     @State private var deleteConfirmation = ""
@@ -30,66 +21,37 @@ struct ProfileView: View {
     @State private var purchases = HearthPurchases.shared
 
     var body: some View {
-        BigTableScreen(title: "Profile") {
-            accountSection
-            membershipCard
-
-            householdSection
-
-            proSection
-            settingsSection
-            recipesSection
-            ProfileInviteFriendCard()
-            hearthSection
-            helpSection
-
-            Text("BigTable \(AppConfig.version)")
-                .font(.footnote)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity)
-        }
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Group {
-                    Button("Close", systemImage: "xmark") { dismiss() }
-                }
-                // White over the color header.
-                .tint(.white)
+        // The shared Hearth Profile (HearthProfile.swift), with BigTable's own sections in the
+        // middle. BigTable syncs through the Hearth API and its kitchen, so there's no iCloud
+        // Sync row.
+        HearthProfileView(
+            app: .bigtable,
+            profile: model.isSignedIn ? accountProfile : nil,
+            erase: erase
+        ) {
+            Section {
+                accountSection
+                    .hearthAccountSectionRow()
             }
+        } settings: {
+            bigTableSections
+        } data: {
+        } about: {
         }
         .refreshable {
             await model.reload()
-            await loadInvitations()
             await model.refreshUsage()
             await purchases.refresh()
         }
         .task {
-            await loadInvitations()
             await model.refreshUsage()
             await purchases.refresh()
-        }
-        .hearthPaywall(isPresented: $showPaywall, startWith: .app)
-        .sheet(isPresented: $showTutorial) { TutorialView {} }
-        .sheet(isPresented: $showMembershipInfo) {
-            ProfileJoinedHouseholdInfoView(householdName: model.householdName)
-        }
-        .sheet(item: Binding(
-            get: { joinedHouseholdName.map(ProfileJoinedName.init) },
-            set: { joinedHouseholdName = $0?.name }
-        )) { joined in
-            ProfileJoinedHouseholdInfoView(householdName: joined.name)
-        }
-        .alert("Leave household?", isPresented: $confirmLeave) {
-            Button("Leave", role: .destructive) { Task { await leaveHousehold() } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Leave \(model.householdName)? You'll go back to your own household, and may need to set it up again.")
         }
         .alert("Sign out of BigTable?", isPresented: $confirmSignOut) {
             Button("Sign Out", role: .destructive) { Task { await signOut() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("You'll need to sign in again to see your meal plans.")
+            Text("Your kitchen, recipes and plan stay. Community and AI need you to sign in again.")
         }
         .alert("Delete your Hearth account?", isPresented: $showDeleteAccount) {
             TextField("DELETE", text: $deleteConfirmation)
@@ -129,27 +91,40 @@ struct ProfileView: View {
         return isPro ? "BigTable Plus" : nil
     }
 
-    /// The shared Hearth account section (HearthAccount.swift). BigTable always has someone
-    /// signed in, so it never shows the Sign in with Apple pitch.
-    private var accountSection: some View {
-        let user = model.session?.user
-        let signedInWithApple = user?.providers?.contains("apple") ?? true
-        return HearthAccountSection(
+    /// Erase BigTable Data, for someone in their own kitchen. A member of another family's
+    /// household clears it by leaving the household (Profile › Household), so they get no Erase row.
+    private var erase: HearthProfileErase? {
+        guard KitchenStore.shared.canErase else { return nil }
+        let shared = HearthHouseholdStore.shared.people.count > 1
+        return HearthProfileErase(
             app: .bigtable,
-            profile: HearthAccountProfile(
-                name: displayName,
-                email: user?.email,
-                detail: model.householdName.isEmpty ? nil : model.householdName,
-                photoURL: ProfileAvatar.url(for: model.me?.myMember?.avatarUrl).flatMap { URL(string: $0) },
-                method: planLabel.map { signedInWithApple ? "\($0) · Signed in with Apple" : $0 } ?? (signedInWithApple ? "Signed in with Apple" : "Signed in with email")
-            )
+            message: "This deletes every recipe, meal plan, grocery list, tag and pantry item from this \(UIDevice.current.localizedModel) and your iCloud\(shared ? ", and from everyone in your household" : ""). Recipes you published, your favorites and your community profile stay; Delete Account removes those. Your Hearth account and household aren't affected. This can't be undone.",
+            footer: "Your kitchen lives in your iCloud and is shared with your household's adults."
+        ) {
+            KitchenStore.shared.eraseEverything()
+            await model.reload()
+        }
+    }
+
+    /// Who's signed in (always with Apple).
+    private var accountProfile: HearthAccountProfile {
+        let user = model.session?.user
+        return HearthAccountProfile(
+            name: displayName,
+            email: user?.email,
+            detail: model.householdName.isEmpty ? nil : model.householdName,
+            photoURL: ProfileAvatar.url(for: model.me?.myMember?.avatarUrl).flatMap { URL(string: $0) }
+        )
+    }
+
+    /// The shared Hearth account section (HearthAccount.swift), on Profile › Hearth Account.
+    private var accountSection: some View {
+        HearthAccountSection(
+            app: .bigtable,
+            profile: model.isSignedIn ? accountProfile : nil,
+            pitch: "Sign in with Apple for the Community, AI meal plans and grocery lists, and your household's plan. Your kitchen works either way."
         ) {
             AccountAppleSignInButton(label: .signIn) { message in errorMessage = message }
-        } rows: {
-            // Get Hearth+, or manage BigTable Plus or Hearth+ (HearthPaywall.swift).
-            HearthMembershipRow()
-                .padding(.horizontal, 14)
-                .frame(minHeight: 48)
         } onSignOut: {
             confirmSignOut = true
         } onDeleteAccount: {
@@ -158,141 +133,75 @@ struct ProfileView: View {
         }
     }
 
+    /// BigTable's own sections: AI requests, settings and recipes.
     @ViewBuilder
-    private var membershipCard: some View {
-        if !model.isOrganizer {
-            Card {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        IconTile(symbol: "person.2.fill", color: PersonColor.teal.color, size: 40)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Member of \(model.householdName.isEmpty ? "a household" : model.householdName)")
-                                .font(.headline)
-                            Text("You share their meal plan, grocery list and recipes.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                        Button("What this means", systemImage: "info.circle") { showMembershipInfo = true }
-                            .labelStyle(.iconOnly)
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .frame(minWidth: 44, minHeight: 44)
-                    }
-                    ProfileSecondaryButton(title: "Leave Household", systemImage: "door.left.hand.open", role: .destructive) {
-                        confirmLeave = true
-                    }
-                }
+    private var bigTableSections: some View {
+        if let usage = model.usage {
+            Section {
+                usageView(usage)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+            } header: {
+                Text(planLabel ?? "Starter")
+            } footer: {
+                Text(proSummary)
             }
         }
-    }
 
-    // MARK: Household
-
-    private var joinedPeople: [HouseholdMember] {
-        model.members.filter { !($0.linkedProfileId ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
-    }
-
-    private var householdSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionTitle("Household")
-            ProfileCard {
+        Section("BigTable") {
+            if model.isSignedIn {
                 NavigationLink {
-                    // People and their food details live in the Hearth household, the same in
-                    // every Hearth app (and it sets one up when there's none).
-                    HearthHouseholdView(accent: Brand.defaultAccent)
+                    NotificationSettingsView()
                 } label: {
-                    ProfileRow(
-                        symbol: HearthHouseholdLabel.symbol,
-                        color: Brand.recipeTile,
-                        title: HearthHouseholdLabel.title,
-                        detail: householdDetail
-                    )
-                }
-                .buttonStyle(.plain)
-
-
-                if model.isOrganizer {
-                    ForEach(Array(joinedPeople.enumerated()), id: \.offset) { _, member in
-                        if let profileID = member.linkedProfileId {
-                            let color = model.color(forMember: member.name)
-                            ProfileDivider()
-                            NavigationLink {
-                                ProfileJoinedMemberView(profileID: profileID, name: member.name, avatarURL: ProfileAvatar.url(for: member.avatarUrl), color: color)
-                            } label: {
-                                HStack(spacing: 14) {
-                                    MemberAvatar(name: member.name, color: color, url: ProfileAvatar.url(for: member.avatarUrl), size: 34, hearthName: member.name)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(member.name).font(.body)
-                                        Text("Joined · Permissions")
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer(minLength: 8)
-                                    Image(systemName: "chevron.right")
-                                        .font(.footnote.weight(.bold))
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 11)
-                                .contentShape(.rect)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    HearthProfileRow("Notifications", systemImage: "bell")
                 }
             }
-            if model.isOrganizer && AppConfig.socialEnabled {
-                Text("To add someone with their own BigTable account, find them in Community and invite them to your household.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+            if AppConfig.socialEnabled && model.isSignedIn {
+                NavigationLink {
+                    PrivacyView()
+                } label: {
+                    HearthProfileRow("Privacy", systemImage: "hand.raised", value: "Community")
+                }
+            }
+            NavigationLink {
+                MealTimesView(app: .bigtable)
+            } label: {
+                HearthProfileRow("Meal Times", systemImage: "clock", value: mealTimesSummary)
+            }
+            .onAppear { mealTimesSummary = HearthMealTimes.current.summary }
+            Picker(selection: $appearance) {
+                ForEach(AppearanceOption.allCases) { option in
+                    Text(option.label).tag(option.rawValue)
+                }
+            } label: {
+                Label {
+                    Text("Appearance")
+                } icon: {
+                    Image(systemName: "circle.lefthalf.filled").foregroundStyle(.primary)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        .tint(.primary)
+
+        Section("Recipes") {
+            NavigationLink {
+                ManageTagsView()
+            } label: {
+                HearthProfileRow("Manage Tags", systemImage: "tag")
+            }
+            NavigationLink {
+                DeletedRecipesView()
+            } label: {
+                HearthProfileRow("Deleted Recipes", systemImage: "trash")
             }
         }
-    }
+        .tint(.primary)
 
-    private var householdDetail: String {
-        let household = HearthHouseholdStore.shared
-        let count = household.people.count
-        let people = count == 1 ? "1 person" : "\(count) people"
-        return [household.info?.name, people].compactMap { $0 }.joined(separator: " · ")
-    }
-
-    // MARK: Pro
-
-    private var proSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionTitle("Your Plan") {
-                HearthMemberBadge()
-            }
-            Card {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        IconTile(symbol: "sparkles", color: PersonColor.purple.color, size: 40, filled: isPro)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(planLabel ?? "Starter").font(.headline)
-                            Text(proSummary)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    if let usage = model.usage {
-                        usageView(usage)
-                    }
-                    if model.isOrganizer && !isPro {
-                        // The paywall also restores purchases and redeems codes.
-                        Button {
-                            showPaywall = true
-                        } label: {
-                            Label("See Plans", systemImage: "sparkles")
-                                .frame(maxWidth: .infinity, minHeight: 36)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .controlSize(.large)
-                    }
-                }
+        if model.isSignedIn {
+            Section {
+                ProfileInviteFriendCard()
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
             }
         }
     }
@@ -346,180 +255,9 @@ struct ProfileView: View {
             }
         }
         .padding(12)
-        .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 14))
-    }
-
-    // MARK: Settings
-
-    private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionTitle("Settings")
-            ProfileCard {
-                NavigationLink {
-                    NotificationSettingsView()
-                } label: {
-                    ProfileRow(symbol: "bell.fill", color: Brand.allergy, title: "Notifications")
-                }
-                .buttonStyle(.plain)
-                if AppConfig.socialEnabled {
-                    ProfileDivider()
-                    NavigationLink {
-                        PrivacyView()
-                    } label: {
-                        ProfileRow(symbol: "hand.raised.fill", color: PersonColor.blue.color, title: "Privacy", detail: "Community profile and blocked people")
-                    }
-                    .buttonStyle(.plain)
-                }
-                ProfileDivider()
-                NavigationLink {
-                    MealTimesView(app: .bigtable)
-                } label: {
-                    ProfileRow(symbol: "clock.fill", color: PersonColor.orange.color, title: "Meal Times", detail: mealTimesSummary)
-                }
-                .buttonStyle(.plain)
-                .onAppear { mealTimesSummary = HearthMealTimes.current.summary }
-                ProfileDivider()
-                HStack(spacing: 14) {
-                    IconTile(symbol: "circle.lefthalf.filled", color: PersonColor.indigo.color)
-                    Text("Appearance")
-                    Spacer(minLength: 8)
-                    Picker("Appearance", selection: $appearance) {
-                        ForEach(AppearanceOption.allCases) { option in
-                            Text(option.label).tag(option.rawValue)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .tint(.primary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .frame(minHeight: 56)
-            }
-        }
-    }
-
-    // MARK: Hearth
-
-    private var hearthSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionTitle("Hearth")
-            ProfileCard {
-                NavigationLink {
-                    HearthAppsView(current: .bigtable)
-                } label: {
-                    HStack(spacing: 14) {
-                        HearthAppsRowLabel(current: .bigtable)
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.right")
-                            .font(.footnote.weight(.bold))
-                            .foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 11)
-                    .frame(minHeight: 56)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    // MARK: Recipes, help
-
-    private var recipesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionTitle("Recipes")
-            ProfileCard {
-                NavigationLink {
-                    ManageTagsView()
-                } label: {
-                    ProfileRow(symbol: "tag.fill", color: PersonColor.green.color, title: "Manage Tags")
-                }
-                .buttonStyle(.plain)
-                ProfileDivider()
-                NavigationLink {
-                    DeletedRecipesView()
-                } label: {
-                    ProfileRow(symbol: "trash.fill", color: Color(hex: 0x8E8E93), title: "Deleted Recipes")
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private var helpSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionTitle("Help")
-            ProfileCard {
-                Button {
-                    showTutorial = true
-                } label: {
-                    ProfileRow(symbol: "play.fill", color: PersonColor.orange.color, title: "Take the Tour", showsChevron: false)
-                }
-                .buttonStyle(.plain)
-                ProfileDivider()
-                Button {
-                    requestReview()
-                } label: {
-                    ProfileRow(symbol: "star.fill", color: Color(hex: 0xC77700), title: "Rate BigTable", showsChevron: false)
-                }
-                .buttonStyle(.plain)
-                if let mail = ProfileLinks.feedbackMail {
-                    ProfileDivider()
-                    Button {
-                        openURL(mail)
-                    } label: {
-                        ProfileRow(symbol: "envelope.fill", color: PersonColor.blue.color, title: "Send Feedback", showsChevron: false)
-                    }
-                    .buttonStyle(.plain)
-                }
-                ProfileDivider()
-                linkRow("Support", symbol: "questionmark.circle.fill", url: ProfileLinks.support)
-                ProfileDivider()
-                linkRow("Privacy Policy", symbol: "hand.raised.fill", url: ProfileLinks.privacy)
-                ProfileDivider()
-                linkRow("Terms of Use", symbol: "doc.text.fill", url: ProfileLinks.terms)
-            }
-        }
-    }
-
-    private func linkRow(_ title: String, symbol: String, url: URL) -> some View {
-        Button {
-            openURL(url)
-        } label: {
-            ProfileRow(symbol: symbol, color: Color(hex: 0x6C6C70), title: title, showsChevron: false, trailingText: nil)
-                .overlay(alignment: .trailing) {
-                    Image(systemName: "arrow.up.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .padding(.trailing, 16)
-                        .accessibilityHidden(true)
-                }
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens in Safari")
     }
 
     // MARK: Actions
-
-    private func loadInvitations() async {
-        invitations = try? await model.api.householdInvitations()
-    }
-
-    private func leaveHousehold() async {
-        guard let userID = model.userID else { return }
-        isWorking = true
-        defer { isWorking = false }
-        do {
-            _ = try await model.api.removeHouseholdMember(userID)
-            await model.reload()
-            await loadInvitations()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
 
     private func signOut() async {
         isWorking = true
@@ -542,17 +280,11 @@ struct ProfileView: View {
             try await model.deleteAccount()
         } catch let error as APIError where error.status == 409 {
             // HOUSEHOLD_HAS_MEMBERS: the account is kept.
-            errorMessage = "Remove the other people from your household in BigTable first."
+            errorMessage = "Remove everyone else from Profile › Household first, then try again."
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
-}
-
-/// The household someone just joined, as a sheet item.
-private struct ProfileJoinedName: Identifiable {
-    var name: String
-    var id: String { name }
 }
 
 /// Invite a friend to BigTable by email (the API sends the invitation).
@@ -635,7 +367,7 @@ struct ProfileInviteFriendCard: View {
             sentTo = trimmed
             email = ""
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 }

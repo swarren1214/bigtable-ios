@@ -349,7 +349,7 @@ struct PantryVoiceView: View {
         do {
             try await dictation.start()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 

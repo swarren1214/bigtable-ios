@@ -144,7 +144,7 @@ struct RecipeFavoriteButton: View {
                 do {
                     try await RecipeLibrary.shared.setFavorite(id: recipe.id, saved: next)
                 } catch {
-                    onError(error.localizedDescription)
+                    onError(FriendlyError.message(error))
                 }
             }
         } label: {

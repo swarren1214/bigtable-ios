@@ -6,12 +6,15 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
-/// Who's signed in and their household, shared by every screen: the session from
-/// `AuthClient`, `/v1/bigtable/me` (the household, its people and restrictions, and the membership),
-/// this person's permissions, and AI usage.
+/// Who's signed in, shared by every screen: the session from `AuthClient` (optional: the kitchen,
+/// recipes, plan and grocery list work signed out), `/v1/bigtable/me` when signed in (the
+/// community profile), and AI usage.
 ///
-/// The organizer owns the household; members who joined see the organizer's plan and grocery
-/// list and can do what the organizer allowed (`permissions`).
+/// The household is HearthKit's (`HearthHouseholdStore`, in iCloud), the same in every Hearth
+/// app. Its organizer owns the kitchen; everyone else's role decides what they can do with the
+/// organizer's plan: parents everything, adults the meal plan and AI, kids neither. The server
+/// follows the same roles (`HearthHouseholdServer`). Community, AI and sharing the organizer's
+/// plan need Sign in with Apple.
 @MainActor
 @Observable
 final class AppModel {
@@ -20,10 +23,7 @@ final class AppModel {
     enum Phase: Equatable {
         /// Reading the saved session.
         case launching
-        case signedOut
-        /// Signed in; `/v1/bigtable/me` is loading.
-        case loading
-        /// Signed in with no household set up yet.
+        /// No household set up yet (signed in or not).
         case needsHousehold
         case ready
     }
@@ -31,12 +31,11 @@ final class AppModel {
     private(set) var phase: Phase = .launching
     private(set) var session: AuthSession?
     private(set) var me: MeResponse?
-    private(set) var permissions: HouseholdMemberPermissions = .organizer
     private(set) var usage: UsageCheckResponse?
     /// The last thing that went wrong loading the household, shown with Try Again.
     private(set) var loadError: String?
-    /// A password-reset link was opened: ask for the new password.
-    var needsNewPassword = false
+    /// Why Sign in with Apple is being asked for, while the sheet is up (`requireSignIn`).
+    var signInReason: SignInReason?
     /// Unread notifications, for the bell's badge.
     private(set) var unreadCount = 0
 
@@ -46,18 +45,26 @@ final class AppModel {
     // MARK: Who and what
 
     var userID: String? { session?.user.id }
+    var isSignedIn: Bool { session != nil }
     var membership: MembershipInfo? { me?.membership }
-    var isOrganizer: Bool { (membership?.role ?? .organizer) == .organizer }
-    var members: [HouseholdMember] { me?.householdMembers ?? [] }
-    var householdName: String {
-        if !isOrganizer, let name = membership?.organizerHouseholdName, !name.isEmpty { return name }
-        return me?.profile?.householdName ?? ""
+    /// The household's organizer (or someone in their own household, or with none yet): owns the
+    /// kitchen and its plan.
+    var isOrganizer: Bool { !HearthHouseholdStore.shared.isMember }
+    /// Older server-side household people, for screens that haven't moved to HearthKit's.
+    var members: [HouseholdMember] { [] }
+    var householdName: String { HearthHouseholdStore.shared.info?.name ?? "" }
+
+    /// Their role in the household, when they're in someone else's.
+    private var memberRole: HearthRole? {
+        let household = HearthHouseholdStore.shared
+        guard household.isMember else { return nil }
+        return household.me?.role ?? .adult
     }
 
-    var canManagePlan: Bool { isOrganizer || permissions.canManageMealPlan }
-    var canUseAIPlan: Bool { isOrganizer || permissions.canUseAiMealPlan }
-    var canUseAIGrocery: Bool { isOrganizer || permissions.canUseAiGrocery }
-    var canEditMembers: Bool { isOrganizer || permissions.canEditMembers }
+    var canManagePlan: Bool { memberRole != .kid }
+    var canUseAIPlan: Bool { memberRole != .kid }
+    var canUseAIGrocery: Bool { memberRole != .kid }
+    var canEditMembers: Bool { HearthHouseholdStore.shared.canEditEveryone }
 
     /// BigTable Plus or Hearth+: bought on this Apple Account, family-shared, or the household
     /// organizer's (HearthKit's `HearthPurchases`, which reads the household's plan from
@@ -79,16 +86,19 @@ final class AppModel {
         session = new
         guard let new else {
             me = nil
-            HearthPublisher.clear()
             usage = nil
-            permissions = .organizer
-            phase = .signedOut
+            unreadCount = 0
+            loadError = nil
+            updatePhase()
             Task { await HearthPurchases.shared.followSignIn() }
             return
         }
         // A token refresh for the same person changes nothing on screen.
-        guard previous != new.user.id || phase == .launching || phase == .signedOut else { return }
-        phase = .loading
+        guard previous != new.user.id || phase == .launching else { return }
+        // The kitchen doesn't wait for the server: it's in iCloud.
+        if previous != nil { me = nil; usage = nil }
+        updatePhase()
+        signInReason = nil
         Task {
             await HearthPurchases.shared.followSignIn()
             await reload()
@@ -118,41 +128,74 @@ final class AppModel {
         )
     }
 
-    /// Loads `/v1/bigtable/me`, then permissions and usage.
+    /// Signed in: loads `/v1/bigtable/me` (the community profile) and AI usage.
     func reload() async {
+        guard isSignedIn else {
+            updatePhase()
+            return
+        }
         do {
             let me = try await api.me()
             self.me = me
-            HearthPublisher.publishFamily(me, householdName: householdName.isEmpty ? nil : householdName, userID: userID)
             loadError = nil
-            if let membership = me.membership, membership.role == .member, let id = userID {
-                permissions = (try? await api.memberPermissions(id)) ?? .none
-            } else {
-                permissions = .organizer
-            }
-            phase = isSetUp(me) ? .ready : .needsHousehold
+            if me.isOnboarded { markSetUp() }
+            updatePhase()
             await refreshUsage()
             if phase == .ready { await requestPushIfNeeded() }
         } catch let error as APIError where error.kind == .signedOut {
             await AuthClient.shared.clear()
         } catch {
-            Self.log.error("Couldn't load the household: \(error.localizedDescription, privacy: .public)")
-            loadError = error.localizedDescription
-            if phase == .loading { phase = me == nil ? .loading : .ready }
+            Self.log.error("Couldn't load the account: \(error.localizedDescription, privacy: .public)")
+            loadError = FriendlyError.message(error, fallback: "BigTable couldn't load your account. Check your connection and try again.")
         }
     }
 
-    /// Ready to cook: set up before (on the server, the old way), in someone's household, with
-    /// a Hearth household, or started as just this person.
-    private func isSetUp(_ me: MeResponse) -> Bool {
-        me.isOnboarded || me.membership?.role == .member || HearthHouseholdStore.shared.exists
+    /// Ready to cook once there's a household (HearthKit's, from any Hearth app), or after the
+    /// first run on this device (set up before, or "Just me for now").
+    private func updatePhase() {
+        let setUp = HearthHouseholdStore.shared.exists || HearthHouseholdStore.shared.isMember
+            || UserDefaults.standard.bool(forKey: Self.setUpKey)
             || userID.map { UserDefaults.standard.bool(forKey: "bigtable.setUp.\($0)") } == true
+        // A fresh install: give iCloud a moment to bring the family's household before offering
+        // to set one up (the launch splash covers it).
+        if !setUp, phase == .launching, !HearthHouseholdStore.shared.hasLoaded, !waitedForHousehold {
+            if householdWait == nil {
+                householdWait = Task {
+                    try? await Task.sleep(for: .seconds(4))
+                    waitedForHousehold = true
+                    updatePhase()
+                }
+            }
+            return
+        }
+        phase = setUp ? .ready : .needsHousehold
+    }
+
+    @ObservationIgnored private var householdWait: Task<Void, Never>?
+    @ObservationIgnored private var waitedForHousehold = false
+
+    private static let setUpKey = "bigtable.setUp"
+
+    /// The household appeared or changed (here or in another Hearth app).
+    func householdChanged() {
+        if phase != .ready { updatePhase() }
     }
 
     /// The first run is done (a household was set up or joined, or "Just me for now").
     func markSetUp() {
-        if let userID { UserDefaults.standard.set(true, forKey: "bigtable.setUp.\(userID)") }
+        UserDefaults.standard.set(true, forKey: Self.setUpKey)
         if phase == .needsHousehold { phase = .ready }
+    }
+
+    // MARK: Sign in with Apple
+
+    /// Signed in: true. Signed out: asks them to sign in (the sheet says why) and returns false.
+    /// For Community, AI, and anything else that needs the Hearth API.
+    @discardableResult
+    func requireSignIn(_ reason: SignInReason) -> Bool {
+        if isSignedIn { return true }
+        signInReason = reason
+        return false
     }
 
     func refreshUnreadCount() async {
@@ -185,6 +228,7 @@ final class AppModel {
     }
 
     func refreshUsage() async {
+        guard isSignedIn else { return }
         usage = try? await api.usage()
     }
 
@@ -193,14 +237,8 @@ final class AppModel {
         usage = new
     }
 
-    /// Saves the household, then reloads `/v1/bigtable/me`: the PUT's reply leaves out the membership
-    /// (and, for someone who joined, is just `{ ok: true }`).
-    func saveHousehold(_ payload: SaveHouseholdPayload) async throws {
-        _ = try await api.saveHousehold(payload)
-        await reload()
-    }
-
     func markTutorialComplete() {
+        guard isSignedIn else { return }
         Task { try? await api.markTutorialComplete() }
     }
 
@@ -213,15 +251,47 @@ final class AppModel {
         // The account is gone, so the other Hearth apps signed in with it are signed out too.
         await AuthClient.shared.clear(everywhere: true)
     }
+}
 
-    /// bigtable://auth links from the confirmation and password-reset emails.
-    func handleAuthRedirect(_ url: URL) async {
-        do {
-            if try await AuthClient.shared.handleRedirect(url) == "recovery" {
-                needsNewPassword = true
-            }
-        } catch {
-            loadError = error.localizedDescription
+/// Why BigTable is asking someone to sign in with Apple: what it's for, in the sheet.
+enum SignInReason: String, Identifiable {
+    case community
+    case aiPlan
+    case aiGrocery
+    case recipeAI
+    case publishing
+    case notifications
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .community: "Join the Community"
+        case .aiPlan: "Plan with AI"
+        case .aiGrocery: "Make Lists with AI"
+        case .recipeAI: "Recipes with AI"
+        case .publishing: "Share Your Recipes"
+        case .notifications: "Notifications"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .community: "Sign in with Apple to follow cooks, like and save their recipes, and share your own."
+        case .aiPlan: "Sign in with Apple to plan your week with AI. It's the same Hearth account in every Hearth app."
+        case .aiGrocery: "Sign in with Apple to turn your plan into a grocery list with AI."
+        case .recipeAI: "Sign in with Apple to scan, import and refine recipes with AI."
+        case .publishing: "Sign in with Apple to publish recipes to the Community."
+        case .notifications: "Sign in with Apple to get likes, follows and household news."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .community: "person.2"
+        case .aiPlan, .aiGrocery, .recipeAI: "sparkles"
+        case .publishing: "square.and.arrow.up"
+        case .notifications: "bell"
         }
     }
 }

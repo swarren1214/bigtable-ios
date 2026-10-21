@@ -26,7 +26,7 @@ import Security
 // MARK: - The apps
 
 nonisolated enum HearthApp: String, Codable, CaseIterable, Sendable {
-    case bigtable, suffice, sated, caloma, hearken
+    case bigtable, suffice, sated, caloma, hearken, trove
 
     var displayName: String {
         switch self {
@@ -35,6 +35,7 @@ nonisolated enum HearthApp: String, Codable, CaseIterable, Sendable {
         case .sated: "Sated"
         case .caloma: "Caloma"
         case .hearken: "Hearken"
+        case .trove: "Trove"
         }
     }
 }
@@ -580,6 +581,35 @@ nonisolated enum HearthAccounts {
             merged.email = identity.email ?? existing.email
         }
         if appleID() != merged { save(merged, account: "apple") }
+    }
+
+    /// Supabase rejected this session's refresh token: it's dead in every app. Removes it (only
+    /// if it's still the shared one, so a newer sign-in or refresh stays), and every app follows
+    /// it out. Call it wherever a refresh is rejected, instead of only dropping the app's copy.
+    static func discardSession(ifRefreshToken refreshToken: String) {
+        guard let current = session(), current.refreshToken == refreshToken else { return }
+        delete(account: "session")
+        Hearth.postChange()
+    }
+
+    /// The shared access token while it's still good for a minute, without refreshing it (only
+    /// apps with their own session refresh, so a token is never spent twice). For apps without
+    /// an API client of their own (Caloma, Trove).
+    static func currentAccessToken() -> String? {
+        guard let current = session(), current.expiresAt > Date.now.timeIntervalSince1970 + 60 else { return nil }
+        return current.accessToken
+    }
+
+    /// The account an access token belongs to (its `sub`), read without checking the signature:
+    /// only to make sure a call goes out as the shared sign-in's account.
+    static func userID(ofAccessToken token: String) -> String? {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        var base64 = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while base64.count % 4 != 0 { base64 += "=" }
+        guard let data = Data(base64Encoded: base64),
+              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return claims["sub"] as? String
     }
 
     /// Signs out of every Hearth app on this device. Each app notices on `Hearth.didChange`

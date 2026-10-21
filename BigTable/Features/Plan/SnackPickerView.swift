@@ -178,7 +178,7 @@ struct PlanSnackPickerView: View {
         } catch {
             results = []
             hasMore = false
-            message = error.localizedDescription
+            message = FriendlyError.message(error)
         }
     }
 

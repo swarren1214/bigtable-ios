@@ -44,7 +44,7 @@ final class NotificationsStore {
             return
         } catch {
             Self.log.error("Couldn't load notifications: \(error.localizedDescription, privacy: .public)")
-            if hasLoaded { errorMessage = error.localizedDescription } else { loadError = error.localizedDescription }
+            if hasLoaded { errorMessage = FriendlyError.message(error) } else { loadError = FriendlyError.message(error, fallback: "Notifications couldn't load. Try again.") }
         }
         await AppModel.shared.refreshUnreadCount()
     }
@@ -62,7 +62,7 @@ final class NotificationsStore {
         } catch is CancellationError {
             return
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 
@@ -90,7 +90,7 @@ final class NotificationsStore {
         } catch {
             if let index = items.firstIndex(where: { $0.id == notification.id }) { items[index].readAt = nil }
             adjustUnread(by: 1)
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 
@@ -104,7 +104,7 @@ final class NotificationsStore {
         } catch {
             if let index = items.firstIndex(where: { $0.id == notification.id }) { items[index].readAt = previous }
             adjustUnread(by: -1)
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
     }
 
@@ -121,7 +121,7 @@ final class NotificationsStore {
             if unreadOnly { await load() }
         } catch {
             items = before
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
             await AppModel.shared.refreshUnreadCount()
         }
     }
@@ -155,7 +155,7 @@ final class NotificationsStore {
             errorMessage = error.message ?? "You can't join this household right now."
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = FriendlyError.message(error)
         }
         return false
     }

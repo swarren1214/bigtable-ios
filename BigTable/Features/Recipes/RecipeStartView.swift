@@ -292,7 +292,7 @@ struct RecipeStartView: View {
             do {
                 try await dictation.start()
             } catch {
-                onNotice(RecipeEditorNotice(title: "Can't listen right now", message: error.localizedDescription))
+                onNotice(RecipeEditorNotice(title: "Can't listen right now", message: FriendlyError.message(error)))
             }
         }
     }

@@ -60,7 +60,7 @@ final class PlanStore {
             return
         } catch {
             if weeks[weekStart] == nil {
-                loadErrors[weekStart] = error.localizedDescription
+                loadErrors[weekStart] = FriendlyError.message(error, fallback: "This week's plan couldn't load. Try again.")
             }
         }
     }
@@ -97,7 +97,7 @@ final class PlanStore {
         } catch {
             setLocal(previous, ref)
             if !(error is CancellationError) {
-                actionError = error.localizedDescription
+                actionError = FriendlyError.message(error)
             }
             return false
         }
@@ -231,7 +231,7 @@ final class PlanStore {
         } catch is CancellationError {
             return
         } catch {
-            actionError = error.localizedDescription
+            actionError = FriendlyError.message(error)
         }
     }
 
