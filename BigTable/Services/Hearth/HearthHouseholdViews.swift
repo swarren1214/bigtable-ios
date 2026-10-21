@@ -45,15 +45,23 @@ struct HearthMemberAvatar: View {
 // MARK: - The household
 
 
-/// The household: everyone, grouped into parents and kids, with invitations, adding people and
-/// the privacy note. Push it from Profile or Family; it shows first-time setup when there's
-/// no household yet.
+/// The household: a color header with its name, everyone grouped into parents, adults and
+/// kids, each app's shared data, its settings and Stop Sharing, and the privacy note. A
+/// household of one gets "Bring your family in" instead of the groups' empty space. Push it
+/// from Profile or Family; it shows first-time setup when there's no household yet.
+/// Design: the HearthKit Profile canvas, "Household · family" and "household of one".
 struct HearthHouseholdView: View {
     var accent: Color
     @State private var store = HearthHouseholdStore.shared
+    @State private var purchases = HearthPurchases.shared
     @State private var adding = false
     @State private var inviting = false
     @State private var picksMe = false
+    @State private var renaming = false
+    @State private var newName = ""
+    @State private var confirmsStop = false
+    @State private var showsPaywall = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
@@ -68,7 +76,7 @@ struct HearthHouseholdView: View {
             if store.exists && store.canEditEveryone {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Person", systemImage: "plus") { adding = true }
-                        // Not a confirm button: the text color, not the app's (AGENT.md).
+                        // White over the color header, as every top-of-page control (AGENT.md).
                         .tint(.primary)
                 }
             }
@@ -82,6 +90,7 @@ struct HearthHouseholdView: View {
         .refreshable { await store.refresh() }
         // The same person brought in twice (once from each app, or twice from one): fold them.
         .task(id: store.people.count) { store.mergeDuplicates() }
+        .task { await store.refreshShare() }
     }
 
     /// An action row: the icon and the text in the text color, never the app's color.
@@ -94,11 +103,23 @@ struct HearthHouseholdView: View {
         .foregroundStyle(.primary)
     }
 
+    /// Just one person so far.
+    private var isSolo: Bool { store.people.count <= 1 }
+    private var adults: [HearthMember] { store.people.filter { $0.role == .adult } }
+    private var parents: [HearthMember] { store.people.filter { $0.role == .parent } }
+
     private var list: some View {
         List {
-            Section {
-                summary
+            header
+
+            if isSolo && store.canEditEveryone {
+                Section {
+                    soloCard
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                }
             }
+
             if store.me == nil && !store.people.isEmpty {
                 Section {
                     Button { picksMe = true } label: {
@@ -108,16 +129,17 @@ struct HearthHouseholdView: View {
                     Text("So every Hearth app on this \(UIDevice.current.localizedModel) knows who's using it.")
                 }
             }
-            if !store.parents.isEmpty {
-                Section("Parents and Adults") {
-                    ForEach(store.parents) { row($0) }
+
+            if isSolo {
+                if !store.people.isEmpty {
+                    Section("Just You") { ForEach(store.people) { row($0) } }
                 }
+            } else {
+                if !parents.isEmpty { Section("Parents") { ForEach(parents) { row($0) } } }
+                if !adults.isEmpty { Section("Adults") { ForEach(adults) { row($0) } } }
+                if !store.kids.isEmpty { Section("Kids") { ForEach(store.kids) { row($0) } } }
             }
-            if !store.kids.isEmpty {
-                Section("Kids") {
-                    ForEach(store.kids) { row($0) }
-                }
-            }
+
             // Invitations sent before invitations belonged to a person (each person's row says
             // where they stand now).
             if !Self.unmatched(store.pendingParticipants, in: store).isEmpty {
@@ -139,18 +161,26 @@ struct HearthHouseholdView: View {
                     }
                 }
             }
-            if store.canEditEveryone {
+
+            if !isSolo && store.canEditEveryone {
                 Section {
-                    Button { adding = true } label: {
-                        actionLabel("Add a Person", symbol: "person.badge.plus")
-                    }
                     if store.canInvite {
                         Button { inviting = true } label: {
-                            actionLabel("Invite Someone", symbol: "envelope")
+                            actionLabel("Invite to Household", symbol: "person.badge.plus")
                         }
                     }
+                    Button { adding = true } label: {
+                        actionLabel("Add a Person", symbol: "plus.circle")
+                    }
+                } footer: {
+                    Text("One invite covers every Hearth app. Kids can see the household but can't change it.")
                 }
             }
+
+            sharedSection
+
+            settingsSection
+
             if store.isMember {
                 Section {
                     Button(role: .destructive) {
@@ -161,7 +191,20 @@ struct HearthHouseholdView: View {
                 } footer: {
                     Text(store.ownerName.map { "\($0) shares this household with you." } ?? "This household is shared with you.")
                 }
+            } else if store.isSharing && store.canInvite {
+                Section {
+                    Button(role: .destructive) {
+                        confirmsStop = true
+                    } label: {
+                        Text("Stop Sharing Household…")
+                            .foregroundStyle(.red)
+                    }
+                    .disabled(store.isWorking)
+                } footer: {
+                    Text("Everyone else loses access to the shared household and each app's shared data. Their own private data stays with them.")
+                }
             }
+
             Section {
                 EmptyView()
             } footer: {
@@ -176,44 +219,126 @@ struct HearthHouseholdView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(alignment: .top) { HearthProfileHeader(color: accent) }
+        .background(Color(.systemGroupedBackground))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            // The title is drawn large in the content, as on every color-header screen.
+            ToolbarItem(placement: .principal) {
+                Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+            }
+        }
         .confirmationDialog("Which one is you?", isPresented: $picksMe, titleVisibility: .visible) {
             ForEach(store.people) { member in
                 Button(member.trimmedName) { store.claim(member.id) }
             }
         }
-    }
-
-    private var summary: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(store.info?.name ?? "Household")
-                        .font(.title3.bold())
-                    Text(summaryLine)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                HStack(spacing: -10) {
-                    ForEach(store.people.prefix(5)) { member in
-                        HearthMemberAvatar(member: member, size: 30, ring: false)
-                            .overlay(Circle().strokeBorder(Color(.secondarySystemGroupedBackground), lineWidth: 2.5))
-                    }
-                }
+        .alert("Household Name", isPresented: $renaming) {
+            TextField("Name", text: $newName)
+                .textInputAutocapitalization(.words)
+            Button("Save") {
+                let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { store.updateInfo(name: name) }
             }
-            Text("The same family in every Hearth app.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every Hearth app shows this name.")
         }
-        .padding(.vertical, 4)
+        .alert("Stop sharing the household?", isPresented: $confirmsStop) {
+            Button("Stop Sharing", role: .destructive) {
+                Task { await store.stopSharing() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Everyone you've invited loses access to the household and to what each Hearth app shares with it: \(sharedAppNames). Their apps go back to their own data, and invitations stop working. Everyone stays in your household, and you can invite them again.")
+        }
+        .hearthPaywall(isPresented: $showsPaywall)
     }
 
-    private var summaryLine: String {
-        let count = store.people.count
-        var line = "\(count) \(count == 1 ? "person" : "people")"
-        if let organizer = store.organizer { line += " · \(organizer.firstName) is the organizer" }
-        return line
+    // MARK: Header
+
+    /// The large white title and the household's name over the app's color, as on Profile.
+    private var header: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Household")
+                    .font(.largeTitle.bold())
+                    .accessibilityAddTraits(.isHeader)
+                Text(subtitle)
+                    .font(.subheadline)
+            }
+            .foregroundStyle(.white.opacity(colorScheme == .light ? 0.88 : 1))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+        }
+        .listSectionSpacing(8)
     }
+
+    private var subtitle: String {
+        if isSolo { return "A household of one, for now" }
+        let count = store.people.count
+        let name = store.info?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let people = "\(count) people"
+        return name.isEmpty ? people : "\(name) · \(people)"
+    }
+
+    // MARK: A household of one
+
+    private var soloCard: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: -12) {
+                if let me = store.people.first {
+                    HearthMemberAvatar(member: me, size: 52, ring: false)
+                        .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                }
+                Image(systemName: "plus")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 52, height: 52)
+                    .background(.background.opacity(0.8), in: .circle)
+                    .overlay(Circle().strokeBorder(Color(.systemGray2), style: StrokeStyle(lineWidth: 2, dash: [5, 4])))
+            }
+            .padding(.bottom, 8)
+            .accessibilityHidden(true)
+            Text("Bring your family in")
+                .font(.title2.bold())
+            Text("One invite shares every Hearth app's household data: kitchen, chores, budget and documents. Each person keeps their own private data.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            VStack(spacing: 2) {
+                if store.canInvite {
+                    Button { inviting = true } label: {
+                        Text("Invite to Household")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
+                    .tint(accent)
+                }
+                Button { adding = true } label: {
+                    Text("Add a Kid Without a Phone")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 10)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 22)
+        .padding([.horizontal, .bottom], 18)
+        .glassEffect(.regular, in: .rect(cornerRadius: 28, style: .continuous))
+    }
+
+    // MARK: People
 
     private func row(_ member: HearthMember) -> some View {
         // Pushes the page itself rather than a value: the apps push this screen with a view
@@ -222,10 +347,20 @@ struct HearthHouseholdView: View {
             HearthPersonView(memberID: member.id, accent: accent)
         } label: {
             HStack(spacing: 12) {
-                HearthMemberAvatar(member: member, size: 40)
+                avatar(member)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(member.trimmedName)
-                        .font(.body.weight(.semibold))
+                    HStack(spacing: 8) {
+                        Text(member.trimmedName)
+                            .font(.body.weight(.semibold))
+                        if member.id == store.me?.id {
+                            Text("You")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Color(.tertiarySystemFill), in: .capsule)
+                        }
+                    }
                     HStack(spacing: 6) {
                         Text(detail(member))
                             .font(.subheadline)
@@ -245,13 +380,145 @@ struct HearthHouseholdView: View {
         }
     }
 
+    /// Invited and not joined yet: faded, with a dashed ring.
+    @ViewBuilder
+    private func avatar(_ member: HearthMember) -> some View {
+        if case .invited = store.inviteStatus(member) {
+            HearthMemberAvatar(member: member, size: 40, ring: false)
+                .opacity(0.45)
+                .padding(2)
+                .overlay(Circle().strokeBorder(Color(.systemGray2), style: StrokeStyle(lineWidth: 2, dash: [4, 3])))
+        } else {
+            HearthMemberAvatar(member: member, size: 40)
+        }
+    }
+
     private func detail(_ member: HearthMember) -> String {
         var parts: [String] = []
-        if member.id == store.info?.organizerID { parts.append("Organizer") } else if member.role != .kid { parts.append(member.role.label) }
+        parts.append(member.id == store.info?.organizerID ? "Organizer" : member.role.label)
         if let age = member.age() { parts.append("\(age)") }
-        if member.id == store.me?.id { parts.append("You") }
-        if let line = store.inviteLine(member) { parts.append(line) }
+        switch store.inviteStatus(member) {
+        case .invited where !store.isMember: parts.append("Invite sent · not joined yet")
+        default: if let line = store.inviteLine(member), line != "Invited" { parts.append(line) }
+        }
         return parts.joined(separator: " · ")
+    }
+
+    // MARK: Shared in each app
+
+    private struct SharedApp: Identifiable {
+        let app: HearthApp
+        let title: String
+        let what: String
+        let who: String
+        var id: HearthApp { app }
+    }
+
+    private static let sharedApps: [SharedApp] = [
+        SharedApp(app: .bigtable, title: "BigTable kitchen", what: "Recipes, meal plans, groceries", who: "Parents and adults"),
+        SharedApp(app: .caloma, title: "Caloma family", what: "Chores, rewards, calendar", who: "Everyone · kids can check off chores"),
+        SharedApp(app: .suffice, title: "Suffice budget", what: "Accounts, bills, budget", who: "Parents and adults"),
+        SharedApp(app: .trove, title: "Trove documents", what: "Documents, assets, places", who: "Parents and adults"),
+    ]
+
+    private var sharedAppNames: String {
+        ListFormatter.localizedString(byJoining: Self.sharedApps.map(\.title))
+    }
+
+    @ViewBuilder
+    private var sharedSection: some View {
+        if !store.isMember {
+            Section {
+                ForEach(Self.sharedApps) { shared in
+                    HStack(spacing: 12) {
+                        HearthAppIcon(app: shared.app, size: 32)
+                            .clipShape(.rect(cornerRadius: 8, style: .continuous))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(shared.title)
+                            Text(store.isSharing ? shared.who : shared.what)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        status(for: shared.app)
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
+                }
+            } header: {
+                Text("Shared in Each App")
+            } footer: {
+                Text(sharedFooter)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func status(for app: HearthApp) -> some View {
+        let (text, color): (String, Color) = !store.isSharing
+            ? ("Just you", Color(.systemGray))
+            : store.isAppShared(app) ? ("Shared", .green) : ("Open \(app.displayName)", .orange)
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 8, height: 8).accessibilityHidden(true)
+            Text(text)
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
+
+    private var sharedFooter: String {
+        guard store.isSharing else {
+            return "When someone joins, each app shares its household data with them automatically."
+        }
+        let waiting = Self.sharedApps.filter { !store.isAppShared($0.app) }.map(\.app.displayName)
+        guard !waiting.isEmpty else { return "Each app shares its data with the household on its own." }
+        return "Each app shares its data once you, the organizer, open it. \(ListFormatter.localizedString(byJoining: waiting)) \(waiting.count == 1 ? "is" : "are") waiting for that."
+    }
+
+    // MARK: Settings
+
+    private var settingsSection: some View {
+        Section("Settings") {
+            Button {
+                newName = store.info?.name ?? ""
+                renaming = true
+            } label: {
+                settingRow("Household Name", symbol: "pencil", value: store.info?.name ?? "")
+            }
+            .disabled(!store.canEditEveryone)
+            Button {
+                showsPaywall = true
+            } label: {
+                settingRow("Hearth+", symbol: "crown", value: hearthPlusValue)
+            }
+        }
+        .tint(.primary)
+    }
+
+    private var hearthPlusValue: String {
+        guard purchases.membership?.kind == .hearthPlus else { return "Not a member" }
+        return isSolo ? "Just you" : "Shared with everyone"
+    }
+
+    private func settingRow(_ title: String, symbol: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .foregroundStyle(.primary)
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            Text(title)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 8)
+            Text(value)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        .contentShape(.rect)
     }
 
     /// Pending participants no person's invitation accounts for.

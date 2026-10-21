@@ -202,7 +202,8 @@ enum HearthHouseholdServer {
 
         var roles: [String: String] = [:]
         for person in household.people {
-            guard let linked = person.appIDs[accountKey]?.lowercased(), linked != account else { continue }
+            // Blank: their link was cleared (Stop Sharing), so they're no longer on the plan.
+            guard let linked = person.appIDs[accountKey]?.lowercased(), !linked.isEmpty, linked != account else { continue }
             roles[linked] = person.role.rawValue
         }
         guard let householdID = household.info?.id else { return }

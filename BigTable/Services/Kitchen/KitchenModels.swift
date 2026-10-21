@@ -30,6 +30,10 @@ nonisolated struct KitchenSlot: Codable, Hashable, Sendable {
 nonisolated struct KitchenGrocery: Codable, Hashable, Sendable {
     var snapshot: GrocerySnapshot
     var updatedAt: Date
+    /// The days the list was made for ("YYYY-MM-DD"), so every device in the family shows them
+    /// (`GroceryRangeMemory`). Nil for lists made before this was kept.
+    var start: String? = nil
+    var end: String? = nil
 }
 
 nonisolated struct KitchenTag: Codable, Hashable, Sendable {
@@ -43,6 +47,12 @@ nonisolated struct KitchenSettings: Codable, Hashable, Sendable {
     var updatedAt: Date = .distantPast
     /// When the family's data moved here from the server (once, from any device).
     var movedAt: Date? = nil
+    /// When someone in the family finished onboarding (any device): BigTable's onboarding is
+    /// skipped on the family's other devices and for everyone who joins.
+    var setUpAt: Date? = nil
+    /// How the family shops: grocery lists round up to warehouse sizes. Mirrored into
+    /// `SettingsKey.warehouseSizes`, which the screens read. Nil until someone chose.
+    var warehouseSizes: Bool? = nil
 }
 
 /// Everything in one kitchen, as saved on the device.

@@ -623,12 +623,16 @@ struct GroceryPreview: Identifiable, Hashable {
     var itemCount: Int { sections.reduce(0) { $0 + $1.items.count } }
 }
 
-/// The days a list was generated for, remembered on this device by snapshot id (the API
-/// doesn't store them), for the header and the shared text.
+/// The days a list was generated for, by snapshot id (the API doesn't store them), for the
+/// header and the shared text. Kept with the list in the family's kitchen, so every device has
+/// them, and on this device for lists from before that.
 enum GroceryRangeMemory {
     private static let key = SettingsKey.grocerySnapshotRanges
 
     static func range(for snapshotID: String) -> (start: String, end: String)? {
+        if let grocery = KitchenStore.shared.state.groceries[snapshotID], let start = grocery.start, let end = grocery.end {
+            return (start, end)
+        }
         guard let stored = UserDefaults.standard.dictionary(forKey: key)?[snapshotID] as? String else { return nil }
         let parts = stored.split(separator: "|").map(String.init)
         guard parts.count == 2 else { return nil }
@@ -641,6 +645,7 @@ enum GroceryRangeMemory {
         // Five lists are kept by the API; a few extra entries are harmless, but don't grow forever.
         if stored.count > 20 { stored = Dictionary(uniqueKeysWithValues: stored.suffix(20).map { ($0.key, $0.value) }) }
         UserDefaults.standard.set(stored, forKey: key)
+        KitchenStore.shared.setRange(start: start, end: end, forGrocery: snapshotID)
     }
 }
 

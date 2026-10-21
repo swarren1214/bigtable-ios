@@ -30,11 +30,15 @@
 //
 // - The section sizes and clips the button (a 52 pt capsule), so pass the bare
 //   SignInWithAppleButton with its style for the color scheme (.white in dark, .black in light).
-// - `rows` is optional; each row is separated by a hairline. Use `HearthAccountRow` for the label.
+// - Signed in, the section starts its group with Add / Change Profile Photo and Remove Photo for
+//   "me" in the household (the one photo every Hearth app shows), so apps don't add their own.
+// - `rows` is optional and follows the photo rows; each row is separated by a hairline. Use
+//   `HearthAccountRow` for the label.
 // - Pass `onDeleteAccount` whenever the person is signed in to a Hearth account (it calls the API's
 //   `DELETE /v1/me`, which deletes the account for every Hearth app). Leave it nil when there's no
 //   server account (Caloma, or an anonymous session), and `onSignOut` nil where signing out isn't offered.
 
+import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -113,6 +117,7 @@ struct HearthAccountSection<SignInButton: View, Rows: View>: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var installed: Set<HearthApp> = []
+    @State private var photoItem: PhotosPickerItem?
 
     private var info: HearthAppInfo { app.info }
     private var device: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
@@ -252,7 +257,7 @@ struct HearthAccountSection<SignInButton: View, Rows: View>: View {
                 appGrid(showsStatus: true)
             }
 
-            Group(subviews: rows) { subviews in
+            Group(subviews: groupRows) { subviews in
                 if !subviews.isEmpty {
                     VStack(spacing: 0) {
                         ForEach(subviews) { subview in
@@ -272,12 +277,12 @@ struct HearthAccountSection<SignInButton: View, Rows: View>: View {
                         Button(role: .destructive) {
                             onSignOut()
                         } label: {
-                            Text("Sign Out")
+                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                                 .font(.headline)
                                 .frame(maxWidth: .infinity, minHeight: 36)
                         }
                         .buttonStyle(.bordered)
-                        .buttonBorderShape(.roundedRectangle(radius: 16))
+                        .buttonBorderShape(.capsule)
                         .controlSize(.large)
                         .tint(.red)
                     }
@@ -294,6 +299,47 @@ struct HearthAccountSection<SignInButton: View, Rows: View>: View {
                         .buttonStyle(.plain)
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: Profile photo
+
+    /// The photo rows, then the app's own rows, as one group.
+    @ViewBuilder
+    private var groupRows: some View {
+        photoRows
+        rows
+    }
+
+    /// Add / Change Profile Photo and Remove Photo, for "me" in the household: the one photo
+    /// every Hearth app shows (HearthHouseholdStore). Hidden until the household has loaded.
+    @ViewBuilder
+    private var photoRows: some View {
+        if let me = HearthHouseholdStore.shared.me {
+            PhotosPicker(selection: $photoItem, matching: .images) {
+                HearthAccountRow(me.photo == nil ? "Add Profile Photo" : "Change Profile Photo", systemImage: "camera", showsChevron: false)
+            }
+            .buttonStyle(.plain)
+            .onChange(of: photoItem) { _, item in
+                guard let item else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       HearthHouseholdStore.shared.setPhoto(data, for: me.id) {
+                        HearthAccountPhotoRemoval.clear(for: me.id)
+                    }
+                    photoItem = nil
+                }
+            }
+            if me.photo != nil {
+                Button {
+                    if HearthHouseholdStore.shared.setPhoto(nil, for: me.id) {
+                        HearthAccountPhotoRemoval.mark(for: me.id)
+                    }
+                } label: {
+                    HearthAccountRow("Remove Photo", systemImage: "trash", showsChevron: false)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -489,7 +535,7 @@ struct HearthAccountAvatar: View {
     /// only choosing a new photo changes it.
     private func adoptOlderPhoto() async {
         let store = HearthHouseholdStore.shared
-        guard let me = store.me, me.photo == nil else { return }
+        guard let me = store.me, me.photo == nil, !HearthAccountPhotoRemoval.isMarked(for: me.id) else { return }
         if let data = profile.photo, store.adoptPhoto(data, for: me.id) { return }
         guard let url = profile.photoURL,
               let (data, response) = try? await URLSession.shared.data(from: url),
@@ -519,6 +565,18 @@ struct HearthAccountAvatar: View {
         .clipShape(.circle)
         .accessibilityHidden(true)
     }
+}
+
+/// Remove Photo, remembered: an app's older photo (Hearken's, BigTable's server avatar) isn't
+/// adopted again for someone who removed theirs. Kept in the Hearth app group, so every app on
+/// this device respects it; choosing a new photo clears it.
+nonisolated enum HearthAccountPhotoRemoval {
+    private static var defaults: UserDefaults? { UserDefaults(suiteName: Hearth.appGroupID) }
+    private static func key(_ memberID: String) -> String { "hearth.photoRemoved.\(memberID)" }
+
+    static func mark(for memberID: String) { defaults?.set(true, forKey: key(memberID)) }
+    static func clear(for memberID: String) { defaults?.removeObject(forKey: key(memberID)) }
+    static func isMarked(for memberID: String) -> Bool { defaults?.bool(forKey: key(memberID)) ?? false }
 }
 
 private struct HearthAccountTightLabel: LabelStyle {

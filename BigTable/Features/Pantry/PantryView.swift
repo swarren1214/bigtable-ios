@@ -25,6 +25,7 @@ struct PantryView: View {
         let receipts = { _ = hearthTick; return kitchen.pendingReceipts() }()
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                HeaderTitle("Pantry")
                 GrocerySidePicker(side: $side)
                 if let first = receipts.first {
                     receiptCard(first)
@@ -38,18 +39,27 @@ struct PantryView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.top, 4)
             .padding(.bottom, 32)
+            .frame(maxWidth: BigTableScreen<EmptyView>.readableWidth)
+            .frame(maxWidth: .infinity)
         }
-        .background(Color(.systemGroupedBackground))
+        // The app's color header and large white title, like the other tabs.
+        .colorHeader("Pantry")
         .refreshable { await kitchen.syncNow() }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Tell the Pantry", systemImage: "mic") { showVoice = true }
-                Button("Quick Check", systemImage: "checklist") { showCheck = true }
-                Button("Add", systemImage: "plus") { showAdd = true }
+                Group {
+                    Button("Tell the Pantry", systemImage: "mic") { showVoice = true }
+                    Button("Quick Check", systemImage: "checklist") { showCheck = true }
+                    Button("Add", systemImage: "plus") { showAdd = true }
+                }
+                // White over the color header.
+                .tint(.white)
             }
         }
+        // Ask, notifications and the profile photo (always last), as on every tab.
+        .bigTableToolbar()
         .fullScreenCover(isPresented: $showVoice) { PantryVoiceView() }
         .sheet(isPresented: $showCheck) { PantryCheckView() }
         .sheet(isPresented: $showAdd) { PantryAddView(placeID: placeID) }

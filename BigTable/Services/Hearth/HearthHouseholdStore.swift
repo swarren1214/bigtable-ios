@@ -655,12 +655,21 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         UserDefaults.standard.dictionary(forKey: localLinksKey(app)) as? [String: String] ?? [:]
     }
 
-    func updateInfo(name: String? = nil, restrictions: [String]? = nil, joinCode: String? = nil, appShare: (app: HearthApp, url: String)? = nil) {
+    /// `clearAppShares` blanks every app's share link (Stop Sharing). Blank, not removed: links
+    /// merge per key, so a removed one would come back from another app's copy.
+    func updateInfo(name: String? = nil, restrictions: [String]? = nil, joinCode: String? = nil, appShare: (app: HearthApp, url: String)? = nil, clearAppShares: Bool = false, mealTimes: HearthMealTimes? = nil) {
         catchUpWithOtherApps()
         guard var info = snapshot.info else { return }
         if let name { info.name = name }
+        if let mealTimes, mealTimes != info.mealTimes {
+            info.mealTimes = mealTimes
+            info.mealTimesAt = Self.stamp
+        }
         if let restrictions { info.restrictions = restrictions }
         if let joinCode { info.joinCode = joinCode }
+        if clearAppShares {
+            for key in info.appShareURLs.keys { info.appShareURLs[key] = "" }
+        }
         if let appShare { info.appShareURLs[appShare.app.rawValue] = appShare.url }
         guard info != snapshot.info else { return }
         info.updatedAt = Self.stamp
@@ -888,8 +897,10 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
                     var merged = theirsNewer ? info : mine
                     let other = theirsNewer ? mine : info
                     for (app, url) in other.appShareURLs where merged.appShareURLs[app] == nil { merged.appShareURLs[app] = url }
+                    merged.keepNewerMealTimes(from: other)
                     next.info = merged
-                    let iCloudLacks = merged.appShareURLs != info.appShareURLs || Self.isNewer(mine.updatedAt, than: info.updatedAt)
+                    let iCloudLacks = merged.appShareURLs != info.appShareURLs || merged.mealTimes != info.mealTimes
+                        || Self.isNewer(mine.updatedAt, than: info.updatedAt)
                     if iCloudLacks, !isMember, !pending.contains(name) { resend.append(name) }
                 }
             } else if record.recordType == "HouseholdMember", let deletedAt = HearthHouseholdRecords.deletedAt(record) {
@@ -1093,6 +1104,7 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
             guard theirs.updatedAt > mine.updatedAt else { return false }
             var merged = theirs
             for (app, url) in mine.appShareURLs where merged.appShareURLs[app] == nil { merged.appShareURLs[app] = url }
+            merged.keepNewerMealTimes(from: mine)
             snapshot.info = merged
             publish()
             if merged != theirs { queueSaves([Self.householdRecordName]) }
@@ -1220,7 +1232,9 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         if invitation?.acceptanceStatus == .accepted { return .joined }
         // Joined with their own Apple Account (before invitations were by name), and still on
         // the share as far as this device knows.
-        if let appleUserID = member.appleUserID, !(shareLoaded && share != nil && !isMember && !isOnShare(appleUserID)) {
+        // Once the organizer's share is read, not being on it (or there being none: sharing
+        // stopped) means they're out.
+        if let appleUserID = member.appleUserID, !(shareLoaded && !isMember && (share == nil || !isOnShare(appleUserID))) {
             return .joined
         }
         guard let hash = member.appIDs[Self.inviteKey], !hash.isEmpty, invitation != nil || !shareLoaded else { return .notInvited }
@@ -1536,6 +1550,73 @@ final class HearthHouseholdStore: NSObject, CKSyncEngineDelegate {
         Task { await refreshShare() }
     }
 
+    // MARK: - Stopping sharing (organizer)
+
+    /// The zone each sharing app keeps in the organizer's private database (`HearthAppSharing`),
+    /// and how it's named in Household › Shared in Each App.
+    nonisolated static let appZones: [(app: HearthApp, zoneName: String)] = [
+        (.bigtable, "Kitchen"),
+        (.caloma, "Caloma"),
+        (.suffice, "Budget"),
+        (.trove, "Trove"),
+    ]
+
+    /// The organizer is sharing the household with someone (invited or joined).
+    var isSharing: Bool { !isMember && shareLoaded && !participants.isEmpty }
+
+    /// An app's zone is shared with the household (its link is in the household).
+    func isAppShared(_ app: HearthApp) -> Bool {
+        !(info?.appShareURLs[app.rawValue] ?? "").isEmpty
+    }
+
+    /// Stops sharing the household and every app's zone: everyone else loses access on their
+    /// devices (their apps go back to their own data) and their invitations stop working. The
+    /// people stay in the household, not invited, and can be invited again. True when done.
+    @discardableResult
+    func stopSharing() async -> Bool {
+        guard canInvite, let container else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        problem = nil
+        let database = container.privateCloudDatabase
+        do {
+            // The apps' zones first: if the household's share went first and this failed, its
+            // data would stay shared with no way to see who it's shared with.
+            for zone in Self.appZones {
+                try await deleteZoneWideShare(in: CKRecordZone.ID(zoneName: zone.zoneName), database: database)
+            }
+            try await deleteZoneWideShare(in: zoneID, database: database)
+        } catch {
+            note(error)
+            await refreshShare()
+            return false
+        }
+        share = nil
+        shareLoaded = true
+        updateInfo(clearAppShares: true)
+        // Their invitations and their Hearth account links (so the organizer's app ends their
+        // share of the plan). Blanked, not removed, so other copies can't bring them back.
+        for person in people where person.id != me?.id && person.id != info?.organizerID {
+            var changed = person
+            for key in [Self.inviteKey, Self.invitedAtKey, HearthHouseholdServer.accountKey] where !(changed.appIDs[key] ?? "").isEmpty {
+                changed.appIDs[key] = ""
+            }
+            if changed != person { save(changed) }
+        }
+        log.notice("Stopped sharing the household")
+        return true
+    }
+
+    /// Deletes a zone's zone-wide share; no share (or no zone) is fine.
+    private func deleteZoneWideShare(in zone: CKRecordZone.ID, database: CKDatabase) async throws {
+        let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zone)
+        do {
+            let result = try await database.modifyRecords(saving: [], deleting: [shareID])
+            if case .failure(let error)? = result.deleteResults[shareID] { throw error }
+        } catch let error as CKError where error.code == .unknownItem || error.code == .zoneNotFound {
+        }
+    }
+
     // MARK: - Joining and leaving (member)
 
     /// Whether an invitation is to the Hearth household (and not an app's own sharing).
@@ -1702,6 +1783,11 @@ nonisolated enum HearthHouseholdRecords {
         record.encryptedValues["restrictions"] = info.restrictions as NSArray
         record.encryptedValues["joinCode"] = info.joinCode.map { $0 as NSString }
         record.encryptedValues["appShareURLs"] = (try? JSONEncoder().encode(info.appShareURLs)).flatMap { String(data: $0, encoding: .utf8) }.map { $0 as NSString }
+        // Only once some app has set them: left unset, iCloud keeps the times it has.
+        if let mealTimes = info.mealTimes, let data = try? JSONEncoder().encode(mealTimes) {
+            record["mealTimes"] = String(decoding: data, as: UTF8.self) as NSString
+            record["mealTimesAt"] = (info.mealTimesAt ?? info.updatedAt) as NSDate
+        }
     }
 
     static func info(from record: CKRecord) -> HearthHouseholdInfo {
@@ -1713,7 +1799,10 @@ nonisolated enum HearthHouseholdRecords {
             updatedAt: record["updatedAt"] as? Date ?? record.modificationDate ?? .distantPast,
             joinCode: record.encryptedValues["joinCode"] as? String,
             appShareURLs: (record.encryptedValues["appShareURLs"] as? String)
-                .flatMap { try? JSONDecoder().decode([String: String].self, from: Data($0.utf8)) } ?? [:]
+                .flatMap { try? JSONDecoder().decode([String: String].self, from: Data($0.utf8)) } ?? [:],
+            mealTimes: (record["mealTimes"] as? String)
+                .flatMap { try? JSONDecoder().decode(HearthMealTimes.self, from: Data($0.utf8)) },
+            mealTimesAt: record["mealTimesAt"] as? Date
         )
     }
 

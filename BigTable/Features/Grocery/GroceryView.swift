@@ -34,15 +34,12 @@ struct GroceryView: View {
     private var householdKey: String { "\(model.userID ?? "")|\(model.membership?.organizerProfileId ?? "")" }
 
     var body: some View {
-        Group {
-            if side == "pantry" {
-                PantryView(side: $side)
-            } else {
-                listSide
-            }
+        // Each side sets its own title: the list a large bar title, the Pantry the color header's.
+        if side == "pantry" {
+            PantryView(side: $side)
+        } else {
+            listSide
         }
-        .navigationTitle(side == "pantry" ? "Pantry" : "Grocery")
-        .navigationBarTitleDisplayMode(.large)
     }
 
     private var listSide: some View {

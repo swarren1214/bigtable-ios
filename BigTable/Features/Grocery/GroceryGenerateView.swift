@@ -66,6 +66,8 @@ struct GroceryGenerateView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    // The family's choice, on every device (KitchenSettings).
+                    .onChange(of: costcoMode) { _, on in KitchenStore.shared.setWarehouseSizes(on) }
                     if !store.isEmpty {
                         Toggle(isOn: $overwrite) {
                             Label {

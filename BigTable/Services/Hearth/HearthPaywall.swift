@@ -1015,15 +1015,18 @@ struct HearthPaywall: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
                 if membership?.source == .own {
+                    // Liquid Glass, like Close and Restore: it floats over the plan card as it
+                    // scrolls, so it needs glass rather than a see-through fill.
                     Button { Task { await store.manageSubscription() } } label: {
                         Text("Manage Subscription")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 54)
-                            .foregroundStyle(hearth ? Ember.text : Color.primary)
-                            .background(hearth ? AnyShapeStyle(Ember.raised) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: .capsule)
-                            .overlay(Capsule().strokeBorder(hearth ? Ember.stroke : .clear))
+                            .frame(maxWidth: .infinity, minHeight: 46)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
+                    .tint(hearth ? Ember.text : Color.primary)
+                    .foregroundStyle(hearth ? Ember.text : Color.primary)
                     Text(membership?.term == .lifetime ? "Yours for good." : "Change or cancel your plan in Apple Account settings.")
                         .font(.footnote)
                         .foregroundStyle(hearth ? Ember.sub : Color.secondary)
@@ -1032,6 +1035,8 @@ struct HearthPaywall: View {
             .padding(16)
             .frame(maxWidth: 560)
         }
+        // The plan card fades out under the button and its note instead of showing through.
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 
     private func memberLine(_ membership: HearthMembership?) -> String {

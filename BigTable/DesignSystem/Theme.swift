@@ -16,7 +16,9 @@ nonisolated enum SettingsKey {
     static let pushDisabled = "push.disabled"
     /// The date range each grocery list covers, by snapshot id (the API doesn't store it).
     static let grocerySnapshotRanges = "grocery.snapshotRanges"
-    static let appearance = "appearance.mode"
+    /// Where Appearance used to be stored, before it moved to the shared Hearth Profile
+    /// (HearthAppearance.key). Read once at launch to carry the choice over.
+    static let legacyAppearance = "appearance.mode"
     /// Names from Caloma's family that "Add your family from Caloma?" was dismissed for, one
     /// per line, so it isn't offered for them again.
     static let calomaFamilyDismissed = "hearth.calomaFamilyDismissed"
@@ -40,22 +42,6 @@ nonisolated enum Brand {
 extension EnvironmentValues {
     /// BigTable's tint (the tomato of its icon). It used to be a setting, Accent Color.
     @Entry var accent: Color = Brand.defaultAccent
-}
-
-/// Settings › Appearance.
-nonisolated enum AppearanceOption: String, CaseIterable, Identifiable, Sendable {
-    case system, light, dark
-
-    var id: String { rawValue }
-    var label: String { rawValue.capitalized }
-
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system: nil
-        case .light: .light
-        case .dark: .dark
-        }
-    }
 }
 
 /// A person's color, for their avatar and their chip when choosing who's eating.

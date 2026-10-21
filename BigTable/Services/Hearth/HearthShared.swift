@@ -308,8 +308,10 @@ nonisolated struct HearthMealPlan: HearthPublication, Hashable {
 // MARK: - Meal times
 
 /// When the family eats, set in BigTable or Caloma and shared both ways: each app saves the
-/// times when they're changed there, and every app uses the newest copy (`current`). BigTable
-/// plans meals, not times; Caloma puts them on the calendar at these times.
+/// times when they're changed there (`save`), and every app uses the newest copy (`current`).
+/// They're kept in the Hearth household too, so the family's other devices and everyone in the
+/// household get them. BigTable plans meals, not times; Caloma puts them on the calendar at these
+/// times.
 nonisolated struct HearthMealTimes: HearthPublication, Hashable {
     static let kind = "meal-times"
     static let version = 1
@@ -321,9 +323,23 @@ nonisolated struct HearthMealTimes: HearthPublication, Hashable {
 
     static let standard = HearthMealTimes(breakfast: 8 * 60, lunch: 12 * 60, dinner: 18 * 60)
 
-    /// The newest times any Hearth app saved, or 8 AM, noon and 6 PM.
+    /// The newest times any Hearth app saved here or the household brought from iCloud, or 8 AM,
+    /// noon and 6 PM.
     static var current: HearthMealTimes {
-        Hearth.readAll(HearthMealTimes.self).first?.value ?? .standard
+        let here = Hearth.readAll(HearthMealTimes.self).first
+        let household = Hearth.readAll(HearthHouseholdSnapshot.self)
+            .compactMap { copy in copy.value.info.flatMap { info in info.mealTimes.map { ($0, info.mealTimesAt ?? .distantPast) } } }
+            .max { $0.1 < $1.1 }
+        if let household, household.1 > (here?.updatedAt ?? .distantPast) { return household.0 }
+        return here?.value ?? .standard
+    }
+
+    /// Saves times changed in `app`: for the apps on this device, and in the household for the
+    /// family's other devices.
+    @MainActor
+    static func save(_ times: HearthMealTimes, from app: HearthApp) {
+        _ = Hearth.publish(times, from: app)
+        HearthHouseholdStore.shared.updateInfo(mealTimes: times)
     }
 
     /// For "breakfast", "lunch" or "dinner".

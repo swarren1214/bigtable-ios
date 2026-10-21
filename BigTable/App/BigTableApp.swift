@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 import UIKit
@@ -14,6 +15,8 @@ struct BigTableApp: App {
         ScreenshotMode.prepareLaunch()
         // Alerts use the system label color rather than the accent. Destructive buttons stay red.
         UIView.appearance(whenContainedInInstancesOf: [UIAlertController.self]).tintColor = .label
+        // Appearance moved to the shared Hearth Profile; keep the choice made under the old key.
+        HearthAppearance.adopt(legacyKey: SettingsKey.legacyAppearance)
     }
 
     var body: some Scene {
@@ -151,9 +154,28 @@ final class AppRouter {
 
 /// Sign in, set up the household, then the tabs.
 struct AppRoot: View {
+    /// Shows onboarding once the phase is known, if this install needs it.
+    private func checkOnboarding() {
+        guard model.phase != .launching, !showsOnboarding, !onboardingCheckRunning else { return }
+        onboardingCheckRunning = true
+        Task {
+            let needed = await BigTableOnboarding.isNeededAfterCheckingCloud(model)
+            onboardingCheckRunning = false
+            if needed, model.phase != .launching { showsOnboarding = true }
+        }
+    }
+
+    /// Onboarding is up, but the family or this person turned out to have done it already
+    /// somewhere else: it closes. (Not for what they've added here meanwhile.)
+    private func recheckOpenOnboarding() {
+        guard showsOnboarding, BigTableOnboarding.isDoneElsewhere else { return }
+        BigTableOnboarding.skipHere(model)
+        showsOnboarding = false
+    }
+
+    @State private var onboardingCheckRunning = false
     @Environment(AppRouter.self) private var router
     @Environment(AppModel.self) private var model
-    @AppStorage(SettingsKey.appearance) private var appearance = AppearanceOption.system.rawValue
     @Environment(\.scenePhase) private var scenePhase
     @State private var purchases = HearthPurchases.shared
     /// First run on this install (BigTableOnboarding.swift).
@@ -193,7 +215,9 @@ struct AppRoot: View {
         }
         .tint(accent)
         .environment(\.accent, accent)
-        .preferredColorScheme(AppearanceOption(rawValue: appearance)?.colorScheme)
+        // Profile › Appearance (HearthProfile.swift). BigTable shows Profile from its own sheet
+        // rather than `.hearthProfile { }`, so it applies it here.
+        .hearthAppearance()
         .animation(.smooth, value: model.phase)
         // The Hearth launch splash, held until the household has loaded (or 3 seconds).
         .hearthSplash(.bigtable, isReady: model.phase != .launching, isEnabled: !ScreenshotMode.isOn)
@@ -208,11 +232,14 @@ struct AppRoot: View {
             BigTableOnboarding { showsOnboarding = false }
                 .environment(\.accent, accent)
         }
-        .onChange(of: model.phase, initial: true) { _, phase in
-            if phase != .launching, !showsOnboarding, BigTableOnboarding.isNeeded(model) { showsOnboarding = true }
-        }
-        .onChange(of: model.me?.profile?.tutorialComplete) { _, _ in
-            if model.phase != .launching, !showsOnboarding, BigTableOnboarding.isNeeded(model) { showsOnboarding = true }
+        .onChange(of: model.phase, initial: true) { _, _ in checkOnboarding() }
+        .onChange(of: model.me?.profile?.tutorialComplete) { _, _ in checkOnboarding() }
+        // The family's kitchen, or this person's iCloud, can say onboarding's done after it
+        // opened: it closes (BigTableOnboarding.isNeeded).
+        .onChange(of: KitchenStore.shared.isSetUp) { _, _ in recheckOpenOnboarding() }
+        .onChange(of: HearthHouseholdStore.shared.isMember) { _, _ in recheckOpenOnboarding() }
+        .onReceive(NotificationCenter.default.publisher(for: NSUbiquitousKeyValueStore.didChangeExternallyNotification).receive(on: RunLoop.main)) { _ in
+            recheckOpenOnboarding()
         }
         // The Hearth household and the kitchen in iCloud: invitations, sharing the kitchen with
         // the family, and the one-time move of what the server kept.
@@ -223,6 +250,21 @@ struct AppRoot: View {
             guard !ScreenshotMode.isOn else { return }
             KitchenStore.shared.prepare()
             HearthHouseholdStore.shared.start(app: .bigtable)
+            // Onboarded before the family's kitchen and iCloud remembered it: say so now, so
+            // the family's other devices skip onboarding and keep this device's shopping choice.
+            if UserDefaults.standard.bool(forKey: BigTableOnboarding.doneKey) {
+                HearthOnboarding.rememberInCloud(.bigtable)
+                // After iCloud's copy of the kitchen is here, so older settings don't replace it.
+                for _ in 0..<60 where !HearthHouseholdStore.shared.cloudLoaded {
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+                guard HearthHouseholdStore.shared.cloudLoaded else { return }
+                KitchenStore.shared.markSetUp()
+                if KitchenStore.shared.state.settings.warehouseSizes == nil,
+                   let on = UserDefaults.standard.object(forKey: SettingsKey.warehouseSizes) as? Bool {
+                    KitchenStore.shared.setWarehouseSizes(on)
+                }
+            }
         }
         // Not a .task(id:): these change the household themselves, which would cancel them.
         .onChange(of: KitchenCheck(phase: model.phase, userID: model.userID, household: HearthHouseholdStore.shared.snapshot, account: HearthHouseholdStore.shared.account), initial: true) { _, _ in

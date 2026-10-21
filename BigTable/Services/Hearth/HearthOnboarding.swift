@@ -32,10 +32,77 @@ import UIKit
 @MainActor
 enum HearthOnboarding {
     /// Ends onboarding. The tour won't show its own Welcome afterwards (onboarding already
-    /// welcomed them); with `tour`, it starts at its first step once the tabs are up.
+    /// welcomed them); with `tour`, it starts at its first step once the tabs are up. Remembered
+    /// in iCloud too, so this person's other devices skip onboarding (`isDoneOnAnotherDevice`).
     static func finish(_ app: HearthApp, tour: Bool) {
         UserDefaults.standard.set(true, forKey: HearthTour.doneKey(for: app))
+        NSUbiquitousKeyValueStore.default.set(true, forKey: HearthTour.doneKey(for: app))
+        rememberInCloud(app)
         if tour { HearthTour.shared.start(skippingWelcome: true, after: .milliseconds(700)) }
+    }
+
+    // MARK: Done on another device
+
+    // Onboarding asks once per person, not once per device: finishing it is kept in iCloud
+    // key-value storage (the app needs Signing & Capabilities › iCloud › Key-value storage), so
+    // their iPad skips it after their iPhone did. What the family set up (the household, the
+    // kitchen, the family's settings) is the app's to check; this is only the person.
+    //
+    // At the root, for a device that hasn't onboarded:
+    //
+    //     if await HearthOnboarding.waitForOtherDevices(.sated) { onboardingDone = true }
+    //
+    // and once onboarded (also for people who onboarded before this existed):
+    //
+    //     HearthOnboarding.rememberInCloud(.sated)
+
+    /// Where "this person finished onboarding" is kept in iCloud key-value storage.
+    nonisolated static func cloudKey(for app: HearthApp) -> String { "hearth.onboarded.\(app.rawValue)" }
+
+    /// Says in iCloud that this person has been through onboarding. Cheap to call at every launch.
+    static func rememberInCloud(_ app: HearthApp) {
+        let cloud = NSUbiquitousKeyValueStore.default
+        guard !cloud.bool(forKey: cloudKey(for: app)) else { return }
+        cloud.set(true, forKey: cloudKey(for: app))
+        cloud.synchronize()
+    }
+
+    /// Erase <App> Data: onboarding and the tour show again, on this device and the next.
+    static func forgetInCloud(_ app: HearthApp) {
+        let cloud = NSUbiquitousKeyValueStore.default
+        cloud.removeObject(forKey: cloudKey(for: app))
+        cloud.removeObject(forKey: HearthTour.doneKey(for: app))
+        cloud.synchronize()
+    }
+
+    /// This person finished onboarding on another of their devices.
+    static func isDoneOnAnotherDevice(_ app: HearthApp) -> Bool {
+        NSUbiquitousKeyValueStore.default.bool(forKey: cloudKey(for: app))
+    }
+
+    /// A new install: gives iCloud up to `timeout` to say this person already onboarded on
+    /// another device. True when they did. No iCloud account answers false at once.
+    static func waitForOtherDevices(_ app: HearthApp, timeout: Duration = .seconds(4)) async -> Bool {
+        let cloud = NSUbiquitousKeyValueStore.default
+        cloud.synchronize()
+        if isDoneOnAnotherDevice(app) { return true }
+        guard FileManager.default.ubiquityIdentityToken != nil else { return false }
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(200))
+            if Task.isCancelled { return false }
+            if isDoneOnAnotherDevice(app) { return true }
+        }
+        return false
+    }
+
+    /// Onboarding skipped on this device because it's already done (another device, or the
+    /// family's): no tour Welcome either, when they've seen it elsewhere.
+    static func finishWithoutSteps(_ app: HearthApp) {
+        rememberInCloud(app)
+        if NSUbiquitousKeyValueStore.default.bool(forKey: HearthTour.doneKey(for: app)) {
+            UserDefaults.standard.set(true, forKey: HearthTour.doneKey(for: app))
+        }
     }
 
     /// The app's deep color: buttons and selections, readable under white text.

@@ -14,6 +14,7 @@
 //     itself (Sign in with Apple)
 //   Membership: the billing banner when a renewal failed, and Get / Manage Hearth+
 //   Household and iCloud Sync (iCloud Sync opens the shared sync card)
+//   Appearance: System, Light or Dark (Hearken's thumbnails), for every Hearth app
 //   <the app's own settings sections>
 //   Hearth Apps
 //   Help & Feedback: Take the Tour, Send Feedback, Support, Rate <App>
@@ -26,6 +27,10 @@
 //
 //       RootTabView()
 //           .hearthProfile { SatedProfileView() }
+//
+// - Appearance is applied by `.hearthProfile { }`. An app that shows Profile some other way
+//   puts `.hearthAppearance()` on its root view instead. The choice is stored per device under
+//   `HearthAppearance.key` ("settings.appearance"), so it isn't mirrored to iCloud.
 //
 // - On every main screen, the photo at the top right, always last in the trailing group:
 //
@@ -95,11 +100,13 @@ private struct HearthProfileSheet<Profile: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         @Bindable var presenter = presenter
-        content.sheet(isPresented: $presenter.isPresented) {
-            NavigationStack {
-                profile()
+        content
+            .sheet(isPresented: $presenter.isPresented) {
+                NavigationStack {
+                    profile()
+                }
             }
-        }
+            .hearthAppearance()
     }
 }
 
@@ -152,6 +159,239 @@ struct HearthProfileAvatar: View {
                 .frame(width: size, height: size)
                 .accessibilityHidden(true)
         }
+    }
+}
+
+// MARK: - Appearance
+
+/// Profile › Appearance, the same in every Hearth app: follow the system, or always Light or
+/// Dark. It belongs to this device (it isn't mirrored to iCloud).
+nonisolated enum HearthAppearance: String, CaseIterable, Identifiable, Sendable {
+    case system, light, dark
+
+    /// The UserDefaults key. Hearken and Sated already used it, so their choice carries over.
+    static let key = "settings.appearance"
+
+    var id: String { rawValue }
+    var name: String { rawValue.capitalized }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    var interfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .system: .unspecified
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    /// Moves a choice an app stored under its own key (BigTable's "appearance.mode") to the
+    /// shared key, once. Call before the first view reads it.
+    static func adopt(legacyKey: String) {
+        let defaults = UserDefaults.standard
+        guard let old = defaults.string(forKey: legacyKey) else { return }
+        if defaults.string(forKey: key) == nil, HearthAppearance(rawValue: old) != nil {
+            defaults.set(old, forKey: key)
+        }
+        defaults.removeObject(forKey: legacyKey)
+    }
+}
+
+extension View {
+    /// Applies Profile › Appearance to every window of the app, so sheets and full-screen covers
+    /// follow it too (preferredColorScheme only reaches the presentation it's applied to).
+    /// `.hearthProfile { }` already does this; use it only where an app doesn't.
+    func hearthAppearance() -> some View {
+        modifier(HearthAppearanceApplier())
+    }
+}
+
+private struct HearthAppearanceApplier: ViewModifier {
+    @AppStorage(HearthAppearance.key) private var appearance: HearthAppearance = .system
+    @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: appearance, initial: true) { _, option in
+                Self.apply(option)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // Windows made since (a new scene on iPad) pick it up too.
+                if phase == .active { Self.apply(appearance) }
+            }
+    }
+
+    private static func apply(_ option: HearthAppearance) {
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            for window in scene.windows {
+                window.overrideUserInterfaceStyle = option.interfaceStyle
+            }
+        }
+    }
+}
+
+/// Three thumbnails (System, Light, Dark) with radio buttons. The ring and the selected radio
+/// button take the tint (Profile gives it the app's color).
+struct HearthAppearancePicker: View {
+    @Binding var selection: HearthAppearance
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ForEach(HearthAppearance.allCases) { option in
+                let isSelected = option == selection
+                Button {
+                    selection = option
+                } label: {
+                    VStack(spacing: 8) {
+                        HearthAppearanceThumbnail(option: option)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(Color(.separator)),
+                                                  lineWidth: isSelected ? 3 : 0.5)
+                            }
+                        Text(option.name)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(Color(.tertiaryLabel)))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(option.name)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, 6)
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
+/// A miniature screen: a title bar and two cards, in light, dark, or split for System.
+private struct HearthAppearanceThumbnail: View {
+    let option: HearthAppearance
+
+    private struct Palette {
+        let background: Color
+        let card: Color
+        let bar: Color
+    }
+
+    private static let light = Palette(background: Color(white: 0.95), card: .white, bar: Color(white: 0.82))
+    private static let dark = Palette(background: Color(white: 0.11), card: Color(white: 0.23), bar: Color(white: 0.4))
+
+    var body: some View {
+        Group {
+            switch option {
+            case .light:
+                screen(Self.light)
+            case .dark:
+                screen(Self.dark)
+            case .system:
+                screen(Self.light)
+                    .overlay(alignment: .trailing) {
+                        GeometryReader { proxy in
+                            screen(Self.dark)
+                                .mask(alignment: .trailing) {
+                                    Rectangle().frame(width: proxy.size.width / 2)
+                                }
+                        }
+                    }
+            }
+        }
+        .frame(height: 120)
+        .clipShape(.rect(cornerRadius: 14, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
+    private func screen(_ palette: Palette) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Capsule().fill(palette.bar).frame(width: 46, height: 10)
+            RoundedRectangle(cornerRadius: 7, style: .continuous).fill(palette.card).frame(height: 32)
+            RoundedRectangle(cornerRadius: 7, style: .continuous).fill(palette.card).frame(height: 32)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(palette.background)
+    }
+}
+
+// MARK: - Notices above everything
+
+extension View {
+    /// An OK-only notice raised by app-wide state (a sync notice, a finished import, joining a
+    /// family), shown above whatever is on screen. A SwiftUI `.alert` only appears while the view
+    /// it's on is frontmost, so one on the root waits, unseen, behind any open sheet (Profile
+    /// included), full-screen cover or alert. This presents a native alert on the topmost screen.
+    /// Use `.alert` as usual for confirmations the screen itself asks for.
+    func hearthNotice(_ title: String, isPresented: Binding<Bool>, message: String? = nil) -> some View {
+        modifier(HearthNoticeModifier(title: title, message: message, isPresented: isPresented))
+    }
+}
+
+private struct HearthNoticeModifier: ViewModifier {
+    let title: String
+    let message: String?
+    @Binding var isPresented: Bool
+    @State private var shown: UIAlertController?
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: isPresented, initial: true) { _, show in
+                if show {
+                    present(attempt: 0)
+                } else if let alert = shown {
+                    shown = nil
+                    alert.dismiss(animated: true)
+                }
+            }
+    }
+
+    private func present(attempt: Int) {
+        guard isPresented, shown == nil else { return }
+        // Something is mid-transition, or another alert is up: try again shortly.
+        guard let top = HearthTopScreen.find(), !(top is UIAlertController),
+              !top.isBeingPresented, !top.isBeingDismissed else {
+            if attempt < 20 {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(400))
+                    present(attempt: attempt + 1)
+                }
+            }
+            return
+        }
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel) { _ in
+            shown = nil
+            isPresented = false
+        })
+        shown = alert
+        top.present(alert, animated: true)
+    }
+}
+
+/// The screen on top of everything in the active window: the last sheet, cover or alert.
+@MainActor
+enum HearthTopScreen {
+    static func find() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        let window = scene?.keyWindow ?? scene?.windows.first { $0.isKeyWindow } ?? scene?.windows.first
+        guard var top = window?.rootViewController else { return nil }
+        while let next = top.presentedViewController, !next.isBeingDismissed {
+            top = next
+        }
+        return top
     }
 }
 
@@ -212,7 +452,13 @@ struct HearthProfileErase {
         self.confirm = confirm
         self.footer = footer
         self.symbol = symbol
-        self.action = action
+        // Erasing starts the app over: so does onboarding, here and on their other devices.
+        // (An app that only leaves a shared household keeps its onboarding on this device, and
+        // says so in iCloud again at its next launch.)
+        self.action = {
+            await action()
+            await HearthOnboarding.forgetInCloud(app)
+        }
     }
 }
 
@@ -292,6 +538,7 @@ struct HearthProfileView<Account: View, Settings: View, DataRows: View, About: V
     @State private var showsAccount = false
     @State private var confirmsErase = false
     @State private var isErasing = false
+    @AppStorage(HearthAppearance.key) private var appearance: HearthAppearance = .system
 
     private var info: HearthAppInfo { app.info }
 
@@ -340,6 +587,15 @@ struct HearthProfileView<Account: View, Settings: View, DataRows: View, About: V
                 }
             }
             .tint(.primary)
+
+            Section {
+                HearthAppearancePicker(selection: $appearance)
+                    .tint(info.color)
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text("System follows your \(UIDevice.current.localizedModel)'s Light and Dark setting, including scheduled switching.")
+            }
 
             settings
 
@@ -491,7 +747,10 @@ struct HearthProfileView<Account: View, Settings: View, DataRows: View, About: V
                     confirmsErase = true
                 } label: {
                     HStack {
+                        // Red icon and text together: a destructive row's icon otherwise takes
+                        // the app's tint instead of the red its title gets.
                         Label(erase.title, systemImage: erase.symbol)
+                            .foregroundStyle(.red)
                         if isErasing {
                             Spacer()
                             ProgressView()
@@ -649,7 +908,9 @@ private struct HearthProfileSyncLabel: View {
 // MARK: - Header
 
 /// The app's color across the top, fading into the gray, as on every main screen.
-private struct HearthProfileHeader: View {
+/// The app's color fading down from the top, behind a color-header screen's large white title
+/// (Profile, Household).
+struct HearthProfileHeader: View {
     let color: Color
 
     @Environment(\.horizontalSizeClass) private var sizeClass

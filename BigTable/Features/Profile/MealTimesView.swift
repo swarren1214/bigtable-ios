@@ -27,7 +27,7 @@ struct MealTimesView: View {
         .navigationTitle("Meal Times")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: times) { _, new in
-            _ = Hearth.publish(new, from: app)
+            HearthMealTimes.save(new, from: app)
         }
         // Changed in the other app while this screen is open.
         .onReceive(NotificationCenter.default.publisher(for: Hearth.didChange)) { _ in

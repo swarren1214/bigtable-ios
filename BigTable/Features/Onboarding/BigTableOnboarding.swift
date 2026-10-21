@@ -156,7 +156,7 @@ struct BigTableOnboarding: View {
             HearthOnboardingNote("Change them anytime in Profile › Meal Times.")
         } controls: {
             HearthOnboardingButtons(app: app, primary: "Continue", action: {
-                _ = Hearth.publish(times, from: .bigtable)
+                HearthMealTimes.save(times, from: .bigtable)
                 go(.shopping)
             }, secondary: "Skip", secondaryAction: { go(.shopping) })
         }
@@ -181,6 +181,7 @@ struct BigTableOnboarding: View {
         } controls: {
             HearthOnboardingButtons(app: app, primary: "Continue", action: {
                 warehouseSizes = shopping == .warehouse
+                KitchenStore.shared.setWarehouseSizes(warehouseSizes)
                 go(.firstWeek)
             }, secondary: "Skip", secondaryAction: { go(.firstWeek) })
         }
@@ -251,6 +252,8 @@ struct BigTableOnboarding: View {
         model.markSetUp()
         model.markTutorialComplete()
         UserDefaults.standard.set(true, forKey: Self.doneKey)
+        // For the family: their other devices, and anyone who joins, skip onboarding.
+        KitchenStore.shared.markSetUp()
         onFinish()
         if plan {
             Task {
@@ -266,7 +269,10 @@ struct BigTableOnboarding: View {
 
     /// A new install of BigTable: not set up before on this device, not an account that's been
     /// through the old tutorial, and no kitchen. Someone who used BigTable before is marked done
-    /// here so they never see it. Ask again when the phase or the account changes.
+    /// here so they never see it, and so is a device whose family already set BigTable up (the
+    /// kitchen says so), whose person finished onboarding on another device (iCloud), or that's
+    /// in someone else's household (the organizer runs the kitchen). Ask again when the phase,
+    /// the account or the kitchen changes.
     @MainActor
     static func isNeeded(_ model: AppModel) -> Bool {
         let defaults = UserDefaults.standard
@@ -280,10 +286,39 @@ struct BigTableOnboarding: View {
             || model.userID.map { defaults.bool(forKey: "bigtable.setUp.\($0)") } == true
             || model.me?.profile?.tutorialComplete == true
             || !kitchen.recipes.isEmpty || !kitchen.slots.isEmpty
+            || isDoneElsewhere
         if usedBefore {
-            defaults.set(true, forKey: doneKey)
+            skipHere(model)
             return false
         }
         return true
+    }
+
+    /// The family set BigTable up (the kitchen says so), this person finished onboarding on
+    /// another device (iCloud), or this account is in someone else's household.
+    @MainActor
+    static var isDoneElsewhere: Bool {
+        KitchenStore.shared.isSetUp || HearthOnboarding.isDoneOnAnotherDevice(.bigtable)
+            || HearthHouseholdStore.shared.isMember
+    }
+
+    /// Onboarding isn't needed on this device: remembered, without any of its steps.
+    @MainActor
+    static func skipHere(_ model: AppModel) {
+        UserDefaults.standard.set(true, forKey: doneKey)
+        model.markSetUp()
+        HearthOnboarding.finishWithoutSteps(.bigtable)
+    }
+
+    /// `isNeeded`, after giving iCloud a moment on a new install to say this person already
+    /// onboarded on another device.
+    @MainActor
+    static func isNeededAfterCheckingCloud(_ model: AppModel) async -> Bool {
+        guard isNeeded(model) else { return false }
+        if await HearthOnboarding.waitForOtherDevices(.bigtable, timeout: .seconds(3)) {
+            skipHere(model)
+            return false
+        }
+        return isNeeded(model)
     }
 }

@@ -87,8 +87,11 @@ final class HearthTour {
     /// Where "seen the tour" is kept for an app.
     nonisolated static func doneKey(for app: HearthApp) -> String { "hearth.tour.done.\(app.rawValue)" }
 
-    /// Whether this install has seen the tour (finished or skipped).
-    var isDone: Bool { UserDefaults.standard.bool(forKey: doneKey) }
+    /// Whether they've seen the tour (finished or skipped), here or on another of their devices
+    /// (iCloud key-value storage, so a new iPad doesn't show it again).
+    var isDone: Bool {
+        UserDefaults.standard.bool(forKey: doneKey) || NSUbiquitousKeyValueStore.default.bool(forKey: doneKey)
+    }
 
     func configure(app: HearthApp, steps: [HearthTourStep], finishTitle: String, doneKey: String? = nil) {
         self.app = app
@@ -140,6 +143,7 @@ final class HearthTour {
         showsWelcome = false
         targetFrame = nil
         UserDefaults.standard.set(true, forKey: doneKey)
+        NSUbiquitousKeyValueStore.default.set(true, forKey: doneKey)
         if completed { finishRequested = true }
     }
 

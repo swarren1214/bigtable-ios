@@ -162,6 +162,45 @@ final class KitchenStore: HearthZoneParticipant {
         }
     }
 
+    // MARK: The family's settings
+
+    /// Someone in the family has been through onboarding.
+    var isSetUp: Bool { state.settings.setUpAt != nil }
+
+    /// Onboarding finished here (or before this was kept): the family's other devices and
+    /// everyone who joins skip it.
+    func markSetUp() {
+        guard state.settings.setUpAt == nil else { return }
+        state.settings.setUpAt = .now
+        state.settings.updatedAt = .now
+        changed(KitchenRecords.settingsName)
+    }
+
+    /// Warehouse sizes on or off, for the whole family.
+    func setWarehouseSizes(_ on: Bool) {
+        guard state.settings.warehouseSizes != on else { return }
+        state.settings.warehouseSizes = on
+        state.settings.updatedAt = .now
+        changed(KitchenRecords.settingsName)
+    }
+
+    /// The family's settings from iCloud into UserDefaults, where the screens read them.
+    private func applyFamilySettings() {
+        if let on = state.settings.warehouseSizes, UserDefaults.standard.object(forKey: SettingsKey.warehouseSizes) as? Bool != on {
+            UserDefaults.standard.set(on, forKey: SettingsKey.warehouseSizes)
+        }
+    }
+
+    /// The days a grocery list was made for, kept with the list for the family's other devices.
+    func setRange(start: String, end: String, forGrocery id: String) {
+        guard var grocery = state.groceries[id], grocery.start != start || grocery.end != end else { return }
+        grocery.start = start
+        grocery.end = end
+        grocery.updatedAt = .now
+        state.groceries[id] = grocery
+        changed(KitchenRecords.groceryName(id))
+    }
+
     func setActiveGrocery(_ id: String?) {
         guard state.settings.activeGroceryID != id else { return }
         state.settings.activeGroceryID = id
@@ -326,6 +365,7 @@ final class KitchenStore: HearthZoneParticipant {
         if next != state {
             state = next
             revision += 1
+            applyFamilySettings()
         }
         scheduleSave()
     }

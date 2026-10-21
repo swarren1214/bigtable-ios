@@ -9,7 +9,6 @@ import UIKit
 /// NavigationStack).
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage(SettingsKey.appearance) private var appearance = AppearanceOption.system.rawValue
 
     @State private var mealTimesSummary = HearthMealTimes.current.summary
     @State private var confirmSignOut = false
@@ -47,31 +46,6 @@ struct ProfileView: View {
             await model.refreshUsage()
             await purchases.refresh()
         }
-        .alert("Sign out of BigTable?", isPresented: $confirmSignOut) {
-            Button("Sign Out", role: .destructive) { Task { await signOut() } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your kitchen, recipes and plan stay. Community and AI need you to sign in again.")
-        }
-        .alert("Delete your Hearth account?", isPresented: $showDeleteAccount) {
-            TextField("DELETE", text: $deleteConfirmation)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-            Button("Delete Account", role: .destructive) { Task { await deleteAccount() } }
-            Button("Cancel", role: .cancel) { deleteConfirmation = "" }
-        } message: {
-            Text("This permanently deletes your Hearth account, the one every Hearth app uses, and everything stored with it on our servers, including your published recipes and community profile. You'll be signed out of every Hearth app. It can't be undone. A BigTable Plus or Hearth+ subscription is canceled separately in your Apple Account's subscriptions. Type DELETE to confirm.")
-        }
-        .errorAlert($errorMessage)
-        .overlay {
-            if isWorking {
-                ZStack {
-                    Color.black.opacity(0.15).ignoresSafeArea()
-                    ProgressView().controlSize(.large)
-                }
-            }
-        }
-        .disabled(isWorking)
     }
 
     // MARK: Account and membership
@@ -131,6 +105,31 @@ struct ProfileView: View {
             deleteConfirmation = ""
             showDeleteAccount = true
         }
+        // The alerts, errors and spinner ride with the section, not with Profile: signed in,
+        // the section is on the pushed Hearth Account page, and an alert on Profile would wait
+        // behind it until the person went back.
+        .alert("Sign out of BigTable?", isPresented: $confirmSignOut) {
+            Button("Sign Out", role: .destructive) { Task { await signOut() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your kitchen, recipes and plan stay. Community and AI need you to sign in again.")
+        }
+        .alert("Delete your Hearth account?", isPresented: $showDeleteAccount) {
+            TextField("DELETE", text: $deleteConfirmation)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+            Button("Delete Account", role: .destructive) { Task { await deleteAccount() } }
+            Button("Cancel", role: .cancel) { deleteConfirmation = "" }
+        } message: {
+            Text("This permanently deletes your Hearth account, the one every Hearth app uses, and everything stored with it on our servers, including your published recipes and community profile. You'll be signed out of every Hearth app. It can't be undone. A BigTable Plus or Hearth+ subscription is canceled separately in your Apple Account's subscriptions. Type DELETE to confirm.")
+        }
+        .errorAlert($errorMessage)
+        .overlay {
+            if isWorking {
+                ProgressView().controlSize(.large)
+            }
+        }
+        .disabled(isWorking)
     }
 
     /// BigTable's own sections: AI requests, settings and recipes.
@@ -168,18 +167,6 @@ struct ProfileView: View {
                 HearthProfileRow("Meal Times", systemImage: "clock", value: mealTimesSummary)
             }
             .onAppear { mealTimesSummary = HearthMealTimes.current.summary }
-            Picker(selection: $appearance) {
-                ForEach(AppearanceOption.allCases) { option in
-                    Text(option.label).tag(option.rawValue)
-                }
-            } label: {
-                Label {
-                    Text("Appearance")
-                } icon: {
-                    Image(systemName: "circle.lefthalf.filled").foregroundStyle(.primary)
-                }
-            }
-            .pickerStyle(.menu)
         }
         .tint(.primary)
 

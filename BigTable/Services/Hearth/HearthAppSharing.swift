@@ -59,7 +59,8 @@ enum HearthAppSharing {
                 && (audience == .everyone || participant.permission == .readWrite)
         }
         // Nobody else in the household yet, and never shared: nothing to do.
-        guard !people.isEmpty || household.info?.appShareURLs[app.rawValue] != nil else { return }
+        // (A blank link: sharing was stopped, so it waits for someone to join again.)
+        guard !people.isEmpty || household.isAppShared(app) else { return }
         do {
             _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: zoneID)], deleting: [])
             let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
@@ -114,7 +115,7 @@ enum HearthAppSharing {
            zones.contains(where: { $0.zoneID.zoneName == zoneName && $0.zoneID.ownerName == ownerName }) {
             return ownerName
         }
-        guard let link = household.info?.appShareURLs[app.rawValue], let url = URL(string: link) else { return nil }
+        guard let link = household.info?.appShareURLs[app.rawValue], !link.isEmpty, let url = URL(string: link) else { return nil }
         do {
             let metadatas = try await container.shareMetadatas(for: [url])
             guard let metadata = try metadatas[url]?.get(), metadata.participantRole != .owner else { return nil }

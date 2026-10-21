@@ -156,6 +156,20 @@ nonisolated struct HearthHouseholdInfo: Codable, Hashable, Sendable {
     /// the household's people are added to it, and their app joins it from this link.
     /// Encrypted.
     var appShareURLs: [String: String] = [:]
+    /// When the family eats (set in BigTable or Caloma), so every device and everyone in the
+    /// household has the same times, not just the apps on one device. `HearthMealTimes.current`
+    /// reads it.
+    var mealTimes: HearthMealTimes? = nil
+    /// When `mealTimes` last changed. Copies merge it by this, not by `updatedAt`.
+    var mealTimesAt: Date? = nil
+
+    /// Takes the other copy's meal times when they changed more recently than these.
+    mutating func keepNewerMealTimes(from other: HearthHouseholdInfo?) {
+        guard let other, let theirs = other.mealTimes,
+              (other.mealTimesAt ?? .distantPast) > (mealTimesAt ?? .distantPast) else { return }
+        mealTimes = theirs
+        mealTimesAt = other.mealTimesAt
+    }
 }
 
 extension HearthHouseholdInfo {
@@ -169,7 +183,9 @@ extension HearthHouseholdInfo {
             organizerID: try c.decodeIfPresent(String.self, forKey: .organizerID),
             updatedAt: try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast,
             joinCode: try c.decodeIfPresent(String.self, forKey: .joinCode),
-            appShareURLs: try c.decodeIfPresent([String: String].self, forKey: .appShareURLs) ?? [:]
+            appShareURLs: try c.decodeIfPresent([String: String].self, forKey: .appShareURLs) ?? [:],
+            mealTimes: try c.decodeIfPresent(HearthMealTimes.self, forKey: .mealTimes),
+            mealTimesAt: try c.decodeIfPresent(Date.self, forKey: .mealTimesAt)
         )
     }
 }
@@ -279,6 +295,7 @@ nonisolated struct HearthHouseholdSnapshot: HearthPublication, Hashable {
                 var newer = candidate.updatedAt > (info?.updatedAt ?? .distantPast) ? candidate : (info ?? candidate)
                 let older = newer == candidate ? info : candidate
                 for (app, url) in older?.appShareURLs ?? [:] where newer.appShareURLs[app] == nil { newer.appShareURLs[app] = url }
+                newer.keepNewerMealTimes(from: older)
                 info = newer
             }
             for member in copy.members {

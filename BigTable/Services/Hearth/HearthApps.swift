@@ -219,7 +219,7 @@ nonisolated struct HearthAppInfo: Sendable {
         scheme: "sated",
         availability: .testFlight(URL(string: "https://testflight.apple.com/join/pp2V9MdA")!),
         symbol: "leaf",
-        colorHex: 0xE8650F, inkHex: 0xB44A06, liteHex: 0xFF9F57
+        colorHex: 0xDA8300, inkHex: 0x9C5D00, liteHex: 0xFFB442
     )
 
     private static let caloma = HearthAppInfo(
@@ -1043,7 +1043,7 @@ struct HearthMark: View {
         Petal(path: small, angle: -38, hex: 0x1E9E6A, opacity: 0.85),
         Petal(path: small, angle: 38, hex: 0x0A7AFF, opacity: 0.85),
         Petal(path: medium, angle: -19, hex: 0xE0284F, opacity: 0.85),
-        Petal(path: medium, angle: 19, hex: 0xE8650F, opacity: 0.85),
+        Petal(path: medium, angle: 19, hex: 0xDA8300, opacity: 0.85),
         Petal(path: large, angle: 0, hex: 0xD9472B, opacity: 0.88),
     ]
 
