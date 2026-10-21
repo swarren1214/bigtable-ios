@@ -25,6 +25,7 @@
 #                                     <appearance>-landscape folders. It turns the Simulator
 #                                     through its Device menu, which needs Accessibility access.
 #   SHUTDOWN=1                        Shut the Simulator down when done.
+#   WARMUP=8                          Seconds the warm-up launch gets before capturing starts.
 #   SHOT_EVENTS=1                     Also print @@SHOT progress lines (Hearth Ship reads them).
 #   SKIP_BUILD=1                      Reuse the last build.
 #   WEB_WIDTH=720                     Width of the website copies, in pixels.
@@ -299,6 +300,15 @@ xcrun simctl status_bar "$UDID" override \
 # The text size: the one asked for, or the standard one (in case an earlier run changed it).
 xcrun simctl ui "$UDID" content_size "${TEXT_SIZE:-large}"
 
+# A warm-up launch. The first launch after installing is the slowest (cold caches, the
+# splash screen stays up longer), and the first screenshot used to catch the splash still
+# fading out, tinted in the app's color.
+log "Warming up"
+event phase warming
+xcrun simctl launch "$UDID" "$BUNDLE_ID" "$MODE_ARGUMENT" "$SCREEN_ARGUMENT" "${SCREENS[0]}" >/dev/null 2>&1 || true
+sleep "${WARMUP:-8}"
+xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+
 # MARK: Capture
 
 device_dir="$(echo "$DEVICE_NAME" | tr ' ' '-')"
@@ -320,6 +330,7 @@ for orientation in $ORIENTATIONS; do
     xcrun simctl ui "$UDID" appearance "$appearance"
     dir="$OUT/$device_dir/$appearance$suffix${TEXT_SIZE:+-$TEXT_SIZE}"
     mkdir -p "$dir"
+    first=1   # the first launch after a rotation or appearance change gets extra time
 
     for screen in "${SCREENS[@]}"; do
       number=0
@@ -329,6 +340,7 @@ for orientation in $ORIENTATIONS; do
       xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
       xcrun simctl launch "$UDID" "$BUNDLE_ID" "$MODE_ARGUMENT" "$SCREEN_ARGUMENT" "$screen" >/dev/null
       sleep "$(settle_time "$screen")"
+      if [[ -n "$first" ]]; then sleep "${FIRST_EXTRA:-2}"; first=""; fi
       xcrun simctl io "$UDID" screenshot --type=png "$file" >/dev/null 2>&1
 
       if [[ "$orientation" == landscape ]]; then
