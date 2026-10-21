@@ -225,7 +225,7 @@ struct HearthHouseholdOnboarding: View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(accent)
+                .foregroundStyle(.secondary)
                 .frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
@@ -280,6 +280,7 @@ struct HearthHouseholdOnboarding: View {
             .tint(accent)
             .disabled(store.isWorking)
             Button("Not Now") { store.pendingInvite = nil }
+                .tint(.primary)
                 .disabled(store.isWorking)
         }
         .padding(20)
@@ -313,6 +314,7 @@ struct HearthHouseholdOnboarding: View {
             }
             .padding(.top, 4)
             Button("Back") { waitsForInvite = false }
+                .tint(.primary)
                 .padding(.top, 4)
         }
         .padding(20)
@@ -353,7 +355,7 @@ struct HearthHouseholdOnboarding: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(number)
                 .font(.headline)
-                .foregroundStyle(accent)
+                .foregroundStyle(.secondary)
             Text(text)
         }
     }

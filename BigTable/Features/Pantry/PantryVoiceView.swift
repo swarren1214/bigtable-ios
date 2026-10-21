@@ -142,7 +142,7 @@ struct PantryVoiceView: View {
                 Text(dictation.isListening ? "LISTENING" : (typing ? "TYPING" : "PAUSED"))
                     .font(.footnote.weight(.bold))
                     .tracking(1)
-                    .foregroundStyle(dictation.isListening ? accent : .white.opacity(0.5))
+                    .foregroundStyle(dictation.isListening ? Color.white : Color.white.opacity(0.5))
                 Text(hint)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
@@ -236,7 +236,7 @@ struct PantryVoiceView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .swipeActions { Button("Remove", role: .destructive) { remove(proposal) } }
-                    .contextMenu { Button("Remove", systemImage: "trash", role: .destructive) { remove(proposal) } }
+                    .contextMenu { Button("Remove", menuIcon: "trash", role: .destructive) { remove(proposal) } }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }

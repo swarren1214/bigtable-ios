@@ -95,6 +95,8 @@ struct PlanDineOutView: View {
                         Label("Distance", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                     }
                     .accessibilityLabel("Distance, within \(Int(radiusMiles)) miles")
+                    // Not a confirm button: the text color, not the app's (AGENT.md).
+                    .tint(.primary)
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -201,6 +203,7 @@ struct PlanDineOutView: View {
                 if location.isDenied, let settings = URL(string: UIApplication.openSettingsURLString) {
                     Link("Open Settings", destination: settings)
                         .font(.footnote.weight(.semibold))
+                        .tint(.primary)
                 }
             }
         }
@@ -318,6 +321,7 @@ struct PlanDineOutView: View {
                         .frame(minHeight: 44)
                     Button("Save", action: saveCustom)
                         .buttonStyle(.bordered)
+                        .tint(.primary)
                         .disabled(customLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }

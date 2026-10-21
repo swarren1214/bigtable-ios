@@ -69,6 +69,7 @@ struct PrivacyView: View {
                         Spacer(minLength: 8)
                         Button("Unblock") { unblocking = person }
                             .buttonStyle(.bordered)
+                            .tint(.primary)
                             .accessibilityLabel("Unblock \(person.name)")
                     }
                     .padding(.horizontal, 16)

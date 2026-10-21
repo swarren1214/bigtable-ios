@@ -162,6 +162,7 @@ struct RecipeAddToPlanSheet: View {
             .buttonStyle(.borderless)
             .accessibilityLabel("Next week")
         }
+        .tint(.primary)
     }
 
     private var dayStrip: some View {

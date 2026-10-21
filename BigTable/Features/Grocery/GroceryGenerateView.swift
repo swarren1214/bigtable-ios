@@ -59,11 +59,21 @@ struct GroceryGenerateView: View {
 
                 Section {
                     Toggle(isOn: $costcoMode) {
-                        Label("Warehouse sizes", systemImage: "shippingbox")
+                        Label {
+                            Text("Warehouse sizes")
+                        } icon: {
+                            Image(systemName: "shippingbox")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     if !store.isEmpty {
                         Toggle(isOn: $overwrite) {
-                            Label("Replace current list", systemImage: "arrow.triangle.2.circlepath")
+                            Label {
+                                Text("Replace current list")
+                            } icon: {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 } header: {

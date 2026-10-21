@@ -247,6 +247,7 @@ struct RecipeDetailView: View {
                         Task { await load() }
                     }
                     .buttonStyle(.bordered)
+                    .tint(.primary)
                     .padding(.top, 2)
                 }
             }
@@ -267,6 +268,7 @@ struct RecipeDetailView: View {
                     Button("Duplicate", systemImage: "plus.square.on.square") { Task { await duplicate(detail) } }
                 }
                 .buttonStyle(.bordered)
+                .tint(.primary)
                 .disabled(isWorking)
             }
         }
@@ -477,6 +479,7 @@ struct RecipeDetailView: View {
                         Label(link.host() ?? "View the original", systemImage: "safari")
                             .font(.footnote.weight(.semibold))
                     }
+                    .tint(.primary)
                 }
             }
             .padding(.horizontal, 4)
@@ -516,6 +519,8 @@ struct RecipeDetailView: View {
                     }
                 }
                 .disabled(isWorking)
+                // Not a confirm button: the text color, not the app's (AGENT.md).
+                .tint(.primary)
             }
         }
         if let detail, isReportable(detail) {
@@ -527,6 +532,8 @@ struct RecipeDetailView: View {
                 } label: {
                     Label("More", systemImage: "ellipsis")
                 }
+                // Not a confirm button: the text color, not the app's (AGENT.md).
+                .tint(.primary)
             }
         }
     }

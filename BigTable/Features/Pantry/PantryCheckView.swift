@@ -34,7 +34,8 @@ struct PantryCheckView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { SheetCancelButton("Close") { dismiss() } }
                 if !done, !cards.isEmpty {
-                    ToolbarItem(placement: .confirmationAction) { Button("Skip") { withAnimation(.snappy) { index += 1 } } }
+                    // Skip isn't a confirm button: the text color, not the app's (AGENT.md).
+                    ToolbarItem(placement: .primaryAction) { Button("Skip") { withAnimation(.snappy) { index += 1 } }.tint(.primary) }
                 }
             }
         }
@@ -217,6 +218,7 @@ struct PantryAddView: View {
                             Text(place.name).tag(place.id)
                         }
                     }
+                    .tint(.primary)
                 } footer: {
                     Text("Type it however you like. Saying it works too: tap the mic on the Pantry.")
                 }

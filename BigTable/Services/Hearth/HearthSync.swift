@@ -285,6 +285,8 @@ struct HearthSyncCard: View {
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
         .controlSize(.large)
+        // Steve's call: a light wash of the app's color with the icon and text in the app's color.
+        // An approved exception to the app-color rules in AGENT.md; keep it.
         .tint(info.color)
         .disabled(phase == .syncing || phase == .checking)
         .accessibilityHint(phase == .off ? "Opens Settings" : "Syncs \(app.displayName) with iCloud now")
@@ -364,7 +366,7 @@ struct HearthSyncCard: View {
     private var statusInk: Color {
         switch phase {
         case .checking, .off, .upToDate: .secondary
-        case .syncing: info.ink
+        case .syncing: .secondary
         case .failed: Color(.systemRed)
         case .waiting: Color(.systemOrange)
         }

@@ -176,6 +176,7 @@ struct ProfileView: View {
                         Button("What this means", systemImage: "info.circle") { showMembershipInfo = true }
                             .labelStyle(.iconOnly)
                             .font(.title3)
+                            .foregroundStyle(.secondary)
                             .frame(minWidth: 44, minHeight: 44)
                     }
                     ProfileSecondaryButton(title: "Leave Household", systemImage: "door.left.hand.open", role: .destructive) {
@@ -389,6 +390,7 @@ struct ProfileView: View {
                     }
                     .pickerStyle(.menu)
                     .labelsHidden()
+                    .tint(.primary)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -588,6 +590,7 @@ struct ProfileInviteFriendCard: View {
                         self.sentTo = nil
                     }
                     .font(.subheadline.weight(.semibold))
+                    .tint(.primary)
                 } else {
                     HStack(spacing: 10) {
                         TextField("friend@example.com", text: $email)

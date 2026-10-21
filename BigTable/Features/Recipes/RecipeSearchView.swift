@@ -32,6 +32,7 @@ struct RecipeSearchView: View {
                     Spacer()
                     Button("Clear") { store.quickFilter = RecipeQuickFilters.all }
                         .font(.subheadline)
+                        .tint(.primary)
                 }
             }
 

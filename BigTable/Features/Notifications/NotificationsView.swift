@@ -48,6 +48,8 @@ struct NotificationsView: View {
                 }
                 .disabled(!store.hasUnread || store.isMarkingAll)
                 .accessibilityLabel("Mark all as read")
+                // Not a confirm button: the text color, not the app's (AGENT.md).
+                .tint(.primary)
             }
         }
         .task { await store.load() }

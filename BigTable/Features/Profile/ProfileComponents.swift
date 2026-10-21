@@ -251,6 +251,7 @@ struct ProfileTagEditor: View {
                             .frame(minWidth: 44, minHeight: 36)
                     }
                     .buttonStyle(.borderless)
+                    .tint(.primary)
                     .disabled(trimmedNew.isEmpty)
                     .accessibilityLabel("Add")
                 }

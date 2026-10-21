@@ -171,6 +171,7 @@ struct GroceryView: View {
                     Button("Show \(store.checkedCount) checked \(store.checkedCount == 1 ? "item" : "items")", systemImage: "eye") {
                         withAnimation { hideChecked = false }
                     }
+                    .tint(.primary)
                     .frame(maxWidth: .infinity)
                 }
                 .listRowBackground(Color.clear)
@@ -257,7 +258,7 @@ struct GroceryView: View {
         HStack(spacing: 10) {
             Image(systemName: "plus.circle.fill")
                 .font(.title3)
-                .foregroundStyle(accent)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             TextField("Add an item", text: $newItemText)
                 .focused($addFieldFocused)
@@ -283,11 +284,13 @@ struct GroceryView: View {
                 .frame(minHeight: 32)
                 .background(GroceryAisleStyle.color(newItemSection).opacity(0.14), in: Capsule())
             }
+            .tint(.primary)
             .accessibilityLabel("Section: \(newItemSection)")
             if !newItemText.trimmingCharacters(in: .whitespaces).isEmpty {
                 Button("Add", action: addItem)
                     .font(.subheadline.weight(.semibold))
                     .buttonStyle(.borderless)
+                    .tint(.primary)
             }
         }
         .frame(minHeight: 44)

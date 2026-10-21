@@ -12,11 +12,20 @@
 # Usage:
 #   scripts/screenshots.sh                 every screen, light and dark
 #   scripts/screenshots.sh plan grocery aipreview   just these screens
+#   scripts/screenshots.sh --list-screens   the screen names, in order
 #
 # Options (environment variables):
 #   DEVICE_TYPE="iPhone 17 Pro Max"   Simulator model. Default: one with the 6.9" screen App Store
 #                                     Connect asks for (1320 × 2868), or else the biggest iPhone screen.
+#   DEVICE_TYPE="iPad Pro 13-inch (M5)"
+#                                     Any Simulator model works, iPads included.
 #   APPEARANCES="light"               "light", "dark" or "light dark" (default).
+#   ORIENTATIONS="portrait landscape" "portrait" (default), "landscape" or both. Landscape is
+#                                     for iPads (the app is portrait only on iPhone) and saved in
+#                                     <appearance>-landscape folders. It turns the Simulator
+#                                     through its Device menu, which needs Accessibility access.
+#   SHUTDOWN=1                        Shut the Simulator down when done.
+#   SHOT_EVENTS=1                     Also print @@SHOT progress lines (Hearth Ship reads them).
 #   SKIP_BUILD=1                      Reuse the last build.
 #   WEB_WIDTH=720                     Width of the website copies, in pixels.
 #   TEXT_SIZE=accessibility-extra-extra-extra-large
@@ -66,6 +75,15 @@ SIM_NAME="$APP_NAME Screenshots"
 APPEARANCES="${APPEARANCES:-light dark}"
 TEXT_SIZE="${TEXT_SIZE:-}"
 WEB_WIDTH="${WEB_WIDTH:-720}"
+ORIENTATIONS="${ORIENTATIONS:-portrait}"
+# Turns the Simulator's landscape screenshots upright, when simctl saves them sideways
+# (sips rotates clockwise by this many degrees). Only used when a capture comes out portrait.
+LANDSCAPE_ROTATION="${LANDSCAPE_ROTATION:-270}"
+
+if [[ "${1:-}" == "--list-screens" ]]; then printf '%s\n' "${ALL_SCREENS[@]}"; exit 0; fi
+for orientation in $ORIENTATIONS; do
+  [[ "$orientation" == portrait || "$orientation" == landscape ]] || { echo "Unknown orientation: $orientation (portrait or landscape)" >&2; exit 1; }
+done
 
 if [[ $# -gt 0 ]]; then SCREENS=("$@"); else SCREENS=("${ALL_SCREENS[@]}"); fi
 for screen in "${SCREENS[@]}"; do
@@ -74,6 +92,13 @@ done
 
 log() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
+# Progress lines for Hearth Ship (SHOT_EVENTS=1): @@SHOT<tab>event<tab>fields…
+event() {
+  [[ -n "${SHOT_EVENTS:-}" ]] || return 0
+  local IFS=$'\t'
+  printf '@@SHOT\t%s\n' "$*"
+}
+
 # MARK: Simulator
 
 json() { xcrun simctl list "$1" -j; }
@@ -81,7 +106,46 @@ json() { xcrun simctl list "$1" -j; }
 # Helpers in Python, written to files rather than inline: macOS's bash 3.2 misreads Python
 # (comments, quotes, parentheses) inside $( ... ).
 HELPERS="$(mktemp -d)"
-trap 'rm -rf "$HELPERS"' EXIT
+UDID=""
+ROTATED=""
+SHUTDOWN_AFTER="${SHUTDOWN:-}"
+cleanup() {
+  trap '' TERM INT   # a second stop signal mustn't cut the cleanup short
+  if [[ -n "$ROTATED" ]]; then rotate portrait || true; fi
+  if [[ -n "$UDID" ]]; then
+    xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+    if [[ -n "$SHUTDOWN_AFTER" ]]; then xcrun simctl shutdown "$UDID" 2>/dev/null || true; fi
+  fi
+  rm -rf "$HELPERS"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM INT
+
+# Turns the Simulator window with this device (the one `open -a Simulator` just brought
+# forward) to portrait or landscape, through the Simulator's Device menu. macOS asks once to
+# let Hearth Ship (or Terminal) control the computer for this: System Settings › Privacy &
+# Security › Accessibility.
+rotate() {
+  local item
+  if [[ "$1" == landscape ]]; then
+    [[ -z "$ROTATED" ]] || return 0
+    item="Rotate Left"
+  else
+    [[ -n "$ROTATED" ]] || return 0
+    item="Rotate Right"
+  fi
+  open -a Simulator --args -CurrentDeviceUDID "$UDID" >/dev/null 2>&1 || true
+  sleep 1
+  if ! osascript \
+      -e 'tell application "Simulator" to activate' \
+      -e "tell application \"System Events\" to tell process \"Simulator\" to click menu item \"$item\" of menu \"Device\" of menu bar 1" \
+      >/dev/null 2>&1; then
+    echo "Couldn't turn the Simulator ($item). Allow control in System Settings › Privacy & Security › Accessibility, then try again." >&2
+    return 1
+  fi
+  if [[ "$1" == landscape ]]; then ROTATED=1; else ROTATED=""; fi
+  sleep 2   # the rotation animates
+}
 
 cat > "$HELPERS/pick.py" <<'PY'
 import json, os, plistlib, re, sys
@@ -100,11 +164,12 @@ runtimes.sort(key=lambda r: [int(p) for p in re.findall(r"\d+", r.get("version",
 listed = {t["identifier"]: t for t in json.loads(types_text)["devicetypes"]}
 
 
-def models(runtime):
+def models(runtime, kind="iPhone"):
+    # kind="" matches every model (DEVICE_TYPE may name an iPad).
     supported = runtime.get("supportedDeviceTypes")
     if supported is None:
-        return [t for t in listed.values() if "iPhone" in t.get("name", "")]
-    return [listed.get(t["identifier"], t) for t in supported if "iPhone" in t.get("name", "")]
+        return [t for t in listed.values() if kind in t.get("name", "")]
+    return [listed.get(t["identifier"], t) for t in supported if kind in t.get("name", "")]
 
 
 def screen(t):
@@ -130,7 +195,7 @@ def choose():
     wanted = os.environ.get("DEVICE_TYPE")
     if wanted:
         for runtime in runtimes:
-            for t in models(runtime):
+            for t in models(runtime, ""):
                 if t["name"] == wanted:
                     return runtime, t
         return None
@@ -159,7 +224,7 @@ if picked:
 else:
     lines = []
     for runtime in runtimes:
-        names = ", ".join(sorted({t["name"] for t in models(runtime)})) or "none"
+        names = ", ".join(sorted({t["name"] for t in models(runtime, "" if os.environ.get("DEVICE_TYPE") else "iPhone")})) or "none"
         lines.append("  iOS " + runtime.get("version", "?") + ": " + names)
     wanted = os.environ.get("DEVICE_TYPE")
     print("ERROR\t" + ((wanted + " isn't available") if wanted else "No regular iPhone model found")
@@ -184,6 +249,7 @@ DEVICE_TYPE_ID="${DEVICE_TYPE_ID%%$'\t'*}"
 DEVICE_SIZE="${DEVICE_NAME#*$'\t'}"
 DEVICE_NAME="${DEVICE_NAME%%$'\t'*}"
 echo "Using $DEVICE_NAME ($DEVICE_SIZE) on ${RUNTIME##*.}"
+event device "$DEVICE_NAME" "$DEVICE_SIZE"
 SIM="$SIM_NAME ($DEVICE_NAME)"
 
 UDID="$(json devices | SIM="$SIM" RUNTIME="$RUNTIME" /usr/bin/python3 "$HELPERS/udid.py")"
@@ -193,6 +259,7 @@ if [[ -z "$UDID" ]]; then
 fi
 
 log "Booting $SIM"
+event phase booting
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null
 open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
@@ -207,6 +274,7 @@ if [[ -z "${SKIP_BUILD:-}" || ! -d "$APP" ]]; then
     exit 1
   fi
   log "Building $APP_NAME (Debug, Simulator)"
+  event phase building
   xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
@@ -218,6 +286,7 @@ if [[ -z "${SKIP_BUILD:-}" || ! -d "$APP" ]]; then
 fi
 
 log "Installing"
+event phase installing
 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
 xcrun simctl install "$UDID" "$APP"
 
@@ -235,37 +304,61 @@ xcrun simctl ui "$UDID" content_size "${TEXT_SIZE:-large}"
 device_dir="$(echo "$DEVICE_NAME" | tr ' ' '-')"
 if [[ -n "$WEB" ]]; then WEB="$(mkdir -p "$WEB" && cd "$WEB" && pwd)"; fi
 
-for appearance in $APPEARANCES; do
-  log "Capturing ($appearance)"
-  xcrun simctl ui "$UDID" appearance "$appearance"
-  dir="$OUT/$device_dir/$appearance${TEXT_SIZE:+-$TEXT_SIZE}"
-  mkdir -p "$dir"
+for orientation in $ORIENTATIONS; do
+  if [[ "$orientation" == landscape && "$DEVICE_NAME" == iPhone* ]]; then
+    echo "Skipping landscape on $DEVICE_NAME: $APP_NAME runs in portrait on iPhone."
+    event skipped landscape "$DEVICE_NAME"
+    continue
+  fi
+  rotate "$orientation"
+  suffix=""
+  [[ "$orientation" == landscape ]] && suffix="-landscape"
 
-  for screen in "${SCREENS[@]}"; do
-    number=0
-    for i in "${!ALL_SCREENS[@]}"; do [[ "${ALL_SCREENS[$i]}" == "$screen" ]] && number=$((i + 1)); done
-    file="$dir/$(printf '%02d' "$number")-$screen.png"
+  for appearance in $APPEARANCES; do
+    log "Capturing ($appearance, $orientation)"
+    event phase capturing "$appearance" "$orientation"
+    xcrun simctl ui "$UDID" appearance "$appearance"
+    dir="$OUT/$device_dir/$appearance$suffix${TEXT_SIZE:+-$TEXT_SIZE}"
+    mkdir -p "$dir"
 
-    xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-    xcrun simctl launch "$UDID" "$BUNDLE_ID" "$MODE_ARGUMENT" "$SCREEN_ARGUMENT" "$screen" >/dev/null
-    sleep "$(settle_time "$screen")"
-    xcrun simctl io "$UDID" screenshot --type=png "$file" >/dev/null 2>&1
-    echo "  $screen  →  ${file#$ROOT/}"
+    for screen in "${SCREENS[@]}"; do
+      number=0
+      for i in "${!ALL_SCREENS[@]}"; do [[ "${ALL_SCREENS[$i]}" == "$screen" ]] && number=$((i + 1)); done
+      file="$dir/$(printf '%02d' "$number")-$screen.png"
 
-    if [[ -n "$TEXT_SIZE" ]]; then
-      :
-    elif [[ -n "$WEB" && "$appearance" == "light" ]]; then
-      sips --resampleWidth "$WEB_WIDTH" "$file" --out "$WEB/$screen.png" >/dev/null
-    elif [[ -n "$WEB" && -n "$WEB_DARK" && "$appearance" == "dark" ]]; then
-      sips --resampleWidth "$WEB_WIDTH" "$file" --out "$WEB/$screen-dark.png" >/dev/null
-    fi
+      xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+      xcrun simctl launch "$UDID" "$BUNDLE_ID" "$MODE_ARGUMENT" "$SCREEN_ARGUMENT" "$screen" >/dev/null
+      sleep "$(settle_time "$screen")"
+      xcrun simctl io "$UDID" screenshot --type=png "$file" >/dev/null 2>&1
+
+      if [[ "$orientation" == landscape ]]; then
+        width="$(sips -g pixelWidth "$file" | awk '/pixelWidth/ { print $2 }')"
+        height="$(sips -g pixelHeight "$file" | awk '/pixelHeight/ { print $2 }')"
+        if [[ -n "$width" && -n "$height" && "$height" -gt "$width" ]]; then
+          sips --rotate "$LANDSCAPE_ROTATION" "$file" >/dev/null
+        fi
+      fi
+      echo "  $screen  →  ${file#$ROOT/}"
+      event saved "$screen" "$appearance" "$orientation" "$file"
+
+      # Website copies come from the iPhone in portrait, at the standard text size.
+      if [[ -n "$TEXT_SIZE" || "$orientation" != portrait || "$DEVICE_NAME" != iPhone* ]]; then
+        :
+      elif [[ -n "$WEB" && "$appearance" == "light" ]]; then
+        sips --resampleWidth "$WEB_WIDTH" "$file" --out "$WEB/$screen.png" >/dev/null
+      elif [[ -n "$WEB" && -n "$WEB_DARK" && "$appearance" == "dark" ]]; then
+        sips --resampleWidth "$WEB_WIDTH" "$file" --out "$WEB/$screen-dark.png" >/dev/null
+      fi
+    done
   done
 done
+rotate portrait || true
 
 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
 xcrun simctl status_bar "$UDID" clear || true
 xcrun simctl ui "$UDID" content_size large || true
 
+event done "$OUT/$device_dir"
 log "Done"
 echo "Full size:  ${OUT#$ROOT/}/$device_dir/"
 [[ -n "$WEB" ]] && echo "Website:    $WEB/"

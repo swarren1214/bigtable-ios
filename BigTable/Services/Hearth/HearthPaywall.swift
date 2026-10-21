@@ -166,6 +166,8 @@ struct HearthPaywall: View {
     @State private var phase: Phase = .choosing
     @State private var toast: Toast?
     @State private var showsLink = false
+    /// The sign-in step is showing before a Hearth+ purchase (not the link step after one).
+    @State private var linkBeforePurchase = false
     @State private var didStart = false
 
     private enum Phase: Equatable {
@@ -187,6 +189,8 @@ struct HearthPaywall: View {
     private var app: HearthApp { store.app }
     private var info: HearthAppInfo { app.info }
     private var isHearth: Bool { kind == .hearthPlus }
+    /// Hearth+ covers every app and the household, so it's tied to a Hearth account: sign in first.
+    private var needsSignIn: Bool { isHearth && !store.isSignedIn }
     /// They already have this app's plan: Hearth+ is an upgrade.
     private var isUpgrade: Bool {
         store.membership?.kind == .app && store.membership?.source != .household
@@ -231,7 +235,21 @@ struct HearthPaywall: View {
             if store.plansState != .loaded { await store.loadPlans() }
         }
         .fullScreenCover(isPresented: $showsLink) {
-            HearthLinkAccountView { showsLink = false; dismiss() }
+            HearthLinkAccountView(beforePurchase: linkBeforePurchase) {
+                showsLink = false
+                if linkBeforePurchase {
+                    linkBeforePurchase = false
+                    // Signed in: carry on to Apple's purchase sheet once this cover is gone.
+                    if store.isSignedIn {
+                        Task {
+                            try? await Task.sleep(for: .seconds(0.6))
+                            await buy()
+                        }
+                    }
+                } else {
+                    dismiss()
+                }
+            }
         }
     }
 
@@ -449,7 +467,7 @@ struct HearthPaywall: View {
             Button("Try Again") { Task { await store.loadPlans() } }
                 .font(.subheadline.weight(.semibold))
                 .buttonStyle(.bordered)
-                .tint(isHearth ? Ember.text : info.ink)
+                .tint(isHearth ? Ember.text : Color.primary)
                 .padding(.top, 6)
         }
         .padding(.vertical, 22)
@@ -655,7 +673,7 @@ struct HearthPaywall: View {
                     HStack(spacing: 12) {
                         Image(systemName: "checkmark")
                             .font(.body.weight(.bold))
-                            .foregroundStyle(info.ink)
+                            .foregroundStyle(.secondary)
                         Text(perk)
                     }
                     .frame(minHeight: 44)
@@ -687,7 +705,7 @@ struct HearthPaywall: View {
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.bold))
-                        .foregroundStyle(Ember.label)
+                        .foregroundStyle(Ember.sub)
                 }
                 .foregroundStyle(Ember.text)
                 .padding(.horizontal, 16)
@@ -720,13 +738,20 @@ struct HearthPaywall: View {
                     .font(.callout.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 54)
                     .background(isHearth ? AnyShapeStyle(Ember.raised) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: .capsule)
-                    .foregroundStyle(isHearth ? Ember.text : info.ink)
+                    .foregroundStyle(isHearth ? Ember.text : Color.primary)
                 Text("Your request went to your family organizer. \(isHearth ? "Hearth+" : app.planName) unlocks as soon as it's approved; you can close this.")
                     .font(.footnote)
                     .foregroundStyle(subStyle)
                     .multilineTextAlignment(.center)
             } else {
-                Button { Task { await buy() } } label: {
+                Button {
+                    if needsSignIn {
+                        linkBeforePurchase = true
+                        showsLink = true
+                    } else {
+                        Task { await buy() }
+                    }
+                } label: {
                     HStack(spacing: 10) {
                         if phase == .purchasing { ProgressView().tint(isHearth ? Ember.ink : .white) }
                         Text(ctaTitle)
@@ -788,6 +813,7 @@ struct HearthPaywall: View {
         if store.plansState == .unavailable { return "Unavailable" }
         if case .failed = phase { return "Try Again" }
         guard let plan = chosen else { return "Unavailable" }
+        if needsSignIn { return "Sign in to continue" }
         if isUpgrade && isHearth { return "Upgrade to Hearth+" }
         if plan.term == .lifetime { return "Buy for \(plan.price)" }
         if plan.offersTrial, let days = plan.trialDays { return "Try free for \(days) days" }
@@ -795,6 +821,9 @@ struct HearthPaywall: View {
     }
 
     private var fineprint: String {
+        if needsSignIn {
+            return "Hearth+ covers all your Hearth apps and your household, so it’s tied to your Hearth account. Your data stays in iCloud."
+        }
         guard let plan = chosen else { return "Shared with your family. Cancel anytime in Settings." }
         if plan.term == .lifetime { return "One payment of \(plan.price). No subscription. Shared with your family." }
         if isUpgrade && isHearth { return "Starts today. Apple credits what's left of \(app.planName)." }
@@ -952,7 +981,7 @@ struct HearthPaywall: View {
                             Spacer()
                             Text(on ? "Unlocked" : "Not included")
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(on ? (hearth ? Ember.label : info.ink) : Color.secondary)
+                                .foregroundStyle(on ? (hearth ? Ember.text : Color.primary) : Color.secondary)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 11)
@@ -988,7 +1017,7 @@ struct HearthPaywall: View {
                         Text("Manage Subscription")
                             .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: 54)
-                            .foregroundStyle(hearth ? Ember.text : info.ink)
+                            .foregroundStyle(hearth ? Ember.text : Color.primary)
                             .background(hearth ? AnyShapeStyle(Ember.raised) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: .capsule)
                             .overlay(Capsule().strokeBorder(hearth ? Ember.stroke : .clear))
                     }
@@ -1024,6 +1053,8 @@ struct HearthPaywall: View {
 
 /// After buying Hearth+ signed out: sign in once so the other apps unlock too.
 struct HearthLinkAccountView: View {
+    /// True when shown before a Hearth+ purchase (sign in first); false after a signed-out one.
+    var beforePurchase = false
     var onDone: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var store = HearthPurchases.shared
@@ -1040,7 +1071,7 @@ struct HearthLinkAccountView: View {
                         .fill(Ember.badge)
                         .frame(width: 88, height: 88)
                         .shadow(color: Color(hearthHex: 0xFF7832, opacity: 0.5), radius: 17)
-                    Image(systemName: "link")
+                    Image(systemName: beforePurchase ? "person.crop.circle" : "link")
                         .font(.system(size: 36, weight: .bold))
                         .foregroundStyle(Ember.ink)
                 }
@@ -1050,11 +1081,11 @@ struct HearthLinkAccountView: View {
                     .tracking(2.4)
                     .foregroundStyle(Ember.label)
                     .padding(.top, 10)
-                Text("One more step")
+                Text(beforePurchase ? "Sign in for Hearth+" : "One more step")
                     .font(.title.bold())
                     .foregroundStyle(Ember.text)
                     .padding(.top, 8)
-                Text("\(store.app.displayName) is unlocked. Sign in once so Hearth+ unlocks in your other apps too.")
+                Text(message)
                     .font(.body)
                     .foregroundStyle(Ember.sub)
                     .multilineTextAlignment(.center)
@@ -1069,9 +1100,9 @@ struct HearthLinkAccountView: View {
                                 .font(.callout.weight(.semibold))
                                 .foregroundStyle(Ember.text)
                             Spacer()
-                            Text(other == store.app || store.isSignedIn ? "Unlocked" : "After sign-in")
+                            Text(status(for: other))
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(other == store.app || store.isSignedIn ? Ember.label : Ember.sub)
+                                .foregroundStyle(other == store.app || store.isSignedIn ? Ember.text : Ember.sub)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
@@ -1089,9 +1120,9 @@ struct HearthLinkAccountView: View {
                         .frame(height: 54)
                         .clipShape(.capsule)
                 }
-                Button("Not now", action: onDone)
+                Button(beforePurchase && store.signInButton == nil ? "Back" : "Not now", action: onDone)
                     .font(.headline)
-                    .foregroundStyle(Ember.label)
+                    .foregroundStyle(Ember.text)
                     .frame(minHeight: 44)
                     .padding(.top, 8)
                 Text("Your data stays in iCloud. Your Hearth account only tells your apps that you're a member.")
@@ -1112,6 +1143,21 @@ struct HearthLinkAccountView: View {
                 }
             }
         }
+    }
+
+    private var message: String {
+        guard beforePurchase else {
+            return "\(store.app.displayName) is unlocked. Sign in once so Hearth+ unlocks in your other apps too."
+        }
+        if store.signInButton == nil {
+            return "Hearth+ lives on your Hearth account. Sign in from another Hearth app, then come back: \(store.app.displayName) picks it up on its own."
+        }
+        return "Hearth+ unlocks all five apps and your household, so it lives on your Hearth account. Sign in once, then confirm with Apple."
+    }
+
+    private func status(for other: HearthApp) -> String {
+        if beforePurchase { return store.isSignedIn ? "Unlocked" : "Included" }
+        return other == store.app || store.isSignedIn ? "Unlocked" : "After sign-in"
     }
 }
 
@@ -1149,7 +1195,7 @@ struct HearthLockedCard: View {
             Text("HEARTH+ OR \(store.app.planName.uppercased())")
                 .font(.caption.weight(.bold))
                 .tracking(1.6)
-                .foregroundStyle(Ember.label)
+                .foregroundStyle(Ember.sub)
             Text(feature.title)
                 .font(.title3.bold())
                 .foregroundStyle(Ember.text)
@@ -1234,7 +1280,7 @@ struct HearthMembershipRow: View {
         Button { showsPaywall = true } label: {
             HStack(spacing: 12) {
                 Image(systemName: store.isUnlocked ? "sparkles" : "flame.fill")
-                    .foregroundStyle(store.isUnlocked ? store.app.info.ink : Ember.ember)
+                    .foregroundStyle(.primary)
                     .frame(width: 28)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)

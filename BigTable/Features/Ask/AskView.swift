@@ -104,7 +104,7 @@ struct AskView: View {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(.secondary)
                 Text("Ask BigTable")
                     .font(.headline)
             }
@@ -121,7 +121,7 @@ struct AskView: View {
                     .contentShape(.circle)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(accent)
+            .foregroundStyle(.primary)
             .glassEffect(.regular.interactive(), in: .circle)
             .disabled(!isAvailable)
             .accessibilityLabel("Talk hands free")
@@ -170,8 +170,8 @@ struct AskView: View {
                                     .contentShape(.capsule)
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(accent)
-                            .background(accent.opacity(0.12), in: .capsule)
+                            .foregroundStyle(.primary)
+                            .background(Color(.tertiarySystemFill), in: .capsule)
                             .disabled(engine.isThinking || !isAvailable)
                         }
                     }
@@ -238,7 +238,7 @@ struct AskView: View {
                     refreshSuggestions()
                 }
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(accent)
+                .foregroundStyle(.primary)
                 .disabled(engine.isThinking)
             }
         }
@@ -322,6 +322,7 @@ struct AskMessageRow: View {
                     Text(AskFormatting.attributed(message.text))
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
+                        .tint(.primary)
                 }
                 ForEach(message.actions) { action in
                     AskActionCard(action: action) {

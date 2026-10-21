@@ -51,6 +51,8 @@ struct PlanDineOutDetailView: View {
                             Image(systemName: "ellipsis")
                         }
                         .accessibilityLabel("More")
+                        // Not a confirm button: the text color, not the app's (AGENT.md).
+                        .tint(.primary)
                     }
                 }
             }
@@ -80,7 +82,7 @@ struct PlanDineOutDetailView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(ref.title.uppercased())
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(accent)
+                            .foregroundStyle(.secondary)
                         Text(name)
                             .font(.title2.bold())
                     }
@@ -159,7 +161,7 @@ struct PlanDineOutDetailView: View {
                     .font(.caption.weight(.semibold))
             }
             .frame(maxWidth: .infinity, minHeight: 64)
-            .foregroundStyle(url == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(accent))
+            .foregroundStyle(url == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
             .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
         }
         .buttonStyle(.plain)
@@ -185,9 +187,10 @@ struct PlanDineOutDetailView: View {
 
     private func detailLabel(_ symbol: String, _ label: String, _ value: String, isLink: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
+            // A tappable row's icon matches its value's color (AGENT.md); info rows stay grey.
             Image(systemName: symbol)
                 .font(.body)
-                .foregroundStyle(accent)
+                .foregroundStyle(isLink ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
@@ -195,7 +198,7 @@ struct PlanDineOutDetailView: View {
                     .foregroundStyle(.secondary)
                 Text(value)
                     .font(.body)
-                    .foregroundStyle(isLink ? AnyShapeStyle(accent) : AnyShapeStyle(.primary))
+                    .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
             }
             Spacer(minLength: 0)

@@ -46,6 +46,7 @@ struct AppleLinkView: View {
                         dismiss()
                     }
                     .font(.body.weight(.medium))
+                    .tint(.primary)
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
             }

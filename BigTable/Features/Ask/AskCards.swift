@@ -58,8 +58,8 @@ struct AskUndoButton: View {
                 .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(accent)
-        .background(accent.opacity(0.12), in: .capsule)
+        .foregroundStyle(.primary)
+        .background(Color(.tertiarySystemFill), in: .capsule)
         .disabled(isBusy)
         .opacity(isBusy ? 0.5 : 1)
     }
@@ -184,8 +184,8 @@ struct AskPlanCard: View {
                             .contentShape(.capsule)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(accent)
-                    .background(accent.opacity(0.12), in: .capsule)
+                    .foregroundStyle(.primary)
+                    .background(Color(.tertiarySystemFill), in: .capsule)
                 }
                 .disabled(isBusy)
                 .opacity(isBusy ? 0.5 : 1)

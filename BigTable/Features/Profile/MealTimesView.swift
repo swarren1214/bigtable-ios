@@ -20,6 +20,7 @@ struct MealTimesView: View {
             if times != .standard {
                 Section {
                     Button("Reset to 8 AM, Noon and 6 PM") { times = .standard }
+                        .tint(.primary)
                 }
             }
         }
@@ -40,7 +41,12 @@ struct MealTimesView: View {
             get: { Self.date(minutes: times[keyPath: key]) },
             set: { times[keyPath: key] = Self.minutes(of: $0) }
         ), displayedComponents: .hourAndMinute) {
-            Label(title, systemImage: symbol)
+            Label {
+                Text(title)
+            } icon: {
+                Image(systemName: symbol)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

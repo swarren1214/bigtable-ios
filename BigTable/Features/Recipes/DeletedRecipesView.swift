@@ -77,6 +77,7 @@ struct DeletedRecipesView: View {
                 }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
+                .tint(.primary)
                 .disabled(restoringID != nil)
                 .accessibilityLabel("Restore \(recipe.title)")
             }

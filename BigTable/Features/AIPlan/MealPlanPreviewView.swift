@@ -51,6 +51,8 @@ struct AIPlanPreviewView: View {
                 Button("Try Again", systemImage: "arrow.clockwise", action: onRegenerate)
                     .disabled(store.phase.isBusy)
                     .accessibilityLabel("Plan something different")
+                    // Not a confirm button: the text color, not the app's (AGENT.md).
+                    .tint(.primary)
             }
         }
         .safeAreaInset(edge: .bottom) {

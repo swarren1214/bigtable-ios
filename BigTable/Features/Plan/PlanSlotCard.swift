@@ -136,12 +136,13 @@ struct PlanSlotCard: View {
         } label: {
             Image(systemName: "plus")
                 .font(.body.weight(.semibold))
-                .foregroundStyle(accent)
+                .foregroundStyle(.primary)
                 .frame(width: 34, height: 34)
-                .background(accent.opacity(0.13), in: Circle())
+                .background(Color(.tertiarySystemFill), in: Circle())
                 .frame(width: 44, height: 44)
                 .contentShape(.rect)
         }
+        .tint(.primary)
         .accessibilityLabel("Add to \(ref.slot.label.lowercased())")
     }
 
@@ -187,6 +188,7 @@ struct PlanSlotCard: View {
                 .font(.footnote.weight(.semibold))
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .tint(.primary)
                 .accessibilityLabel("Use the latest version of \(item.title)")
             } else if item.recipeId != nil {
                 Image(systemName: "chevron.right")
@@ -265,7 +267,7 @@ struct PlanSlotCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("DINE OUT")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(.secondary)
                 Text(PlanDineOutFormat.displayName(dineOut))
                     .font(.body.weight(.semibold))
                     .lineLimit(2)
@@ -378,8 +380,8 @@ struct PlanSlotCard: View {
                 .fixedSize()
                 .padding(.horizontal, 12)
                 .frame(minHeight: 36)
-                .foregroundStyle(accent)
-                .background(accent.opacity(0.12), in: Capsule())
+                .foregroundStyle(.primary)
+                .background(Color(.tertiarySystemFill), in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Add \(title.lowercased()) to \(ref.slot.label.lowercased())")
@@ -439,7 +441,6 @@ struct PlanSlotCard: View {
                 HStack(spacing: 8) {
                     Image(systemName: "person.2.fill")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
                     Text("Who's eating")
                         .font(.subheadline.weight(.semibold))
                     Text("\(faces.filter { !excluded.contains($0.name) }.count)/\(faces.count)")

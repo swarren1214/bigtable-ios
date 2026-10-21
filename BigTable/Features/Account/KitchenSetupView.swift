@@ -15,6 +15,7 @@ struct KitchenSetupView: View {
         .overlay(alignment: .topTrailing) {
             Button("Sign Out") { confirmSignOut = true }
                 .font(.subheadline.weight(.semibold))
+                .tint(.primary)
                 .frame(minHeight: 44)
                 .padding(.horizontal, 20)
         }

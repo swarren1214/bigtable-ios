@@ -116,10 +116,10 @@ struct RecipeRefineView: View {
                         ForEach(model.tags.prefix(4), id: \.self) { tag in
                             Text(RecipeQuickFilters.presetLabel(for: tag) ?? tag.capitalized)
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(accent)
+                                .foregroundStyle(.secondary)
                                 .padding(.horizontal, 8)
                                 .frame(minHeight: 22)
-                                .background(accent.opacity(0.12), in: Capsule())
+                                .background(Color(.tertiarySystemFill), in: Capsule())
                                 .lineLimit(1)
                         }
                     }
@@ -203,7 +203,7 @@ struct RecipeRefineView: View {
             Text(row.amount.isEmpty ? "–" : row.amount)
                 .font(.body.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(isRemoved ? Color.secondary : accent)
+                .foregroundStyle(isRemoved ? Color.secondary : Color.primary)
                 .strikethrough(isRemoved)
                 .frame(width: 76, alignment: .leading)
             Text("\(Text(row.name).strikethrough(isRemoved))\(Text(was).font(.footnote).foregroundStyle(.secondary))")
@@ -287,6 +287,7 @@ struct RecipeRefineView: View {
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.capsule)
                         .controlSize(.small)
+                        .tint(.primary)
                         .disabled(model.isRefining)
                     }
                 }
@@ -314,10 +315,10 @@ struct RecipeRefineView: View {
                     ForEach(suggestions, id: \.self) { suggestion in
                         Button(suggestion) { send(suggestion) }
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(accent)
+                            .foregroundStyle(.primary)
                             .padding(.horizontal, 14)
                             .frame(minHeight: 34)
-                            .background(accent.opacity(0.12), in: Capsule())
+                            .background(Color(.tertiarySystemFill), in: Capsule())
                             .buttonStyle(.plain)
                     }
                 }

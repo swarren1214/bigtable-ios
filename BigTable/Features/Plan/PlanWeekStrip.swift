@@ -66,6 +66,7 @@ struct PlanWeekStrip: View {
                     }
                     .accessibilityLabel("Next week")
                 }
+                .tint(.primary)
 
                 HStack(spacing: 2) {
                     ForEach(DayOfWeek.allCases) { day in

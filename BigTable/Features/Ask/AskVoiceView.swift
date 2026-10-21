@@ -167,7 +167,7 @@ struct AskVoiceView: View {
     private var phaseColor: Color {
         if conversation.isMuted { return Color.white.opacity(0.5) }
         switch conversation.phase {
-        case .listening: return accent
+        case .listening: return .white
         case .thinking: return Color.white.opacity(0.7)
         case .speaking: return .white
         case .starting, .micOff, .failed: return Color.white.opacity(0.5)

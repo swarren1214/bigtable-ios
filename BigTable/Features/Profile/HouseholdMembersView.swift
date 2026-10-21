@@ -292,6 +292,7 @@ struct ProfileInvitationsCard: View {
             } else {
                 Button("Cancel") { pending = .cancel(invitation, name) }
                     .buttonStyle(.bordered)
+                    .tint(.primary)
                     .disabled(busyID != nil)
                     .accessibilityLabel("Cancel invitation to \(name)")
             }

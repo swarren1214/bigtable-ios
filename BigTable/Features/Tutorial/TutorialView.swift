@@ -27,6 +27,7 @@ struct TutorialView: View {
                 Spacer()
                 Button("Skip") { finish() }
                     .font(.body.weight(.semibold))
+                    .tint(.primary)
                     .frame(minWidth: 44, minHeight: 44)
                     .opacity(isLast ? 0 : 1)
                     .disabled(isLast)

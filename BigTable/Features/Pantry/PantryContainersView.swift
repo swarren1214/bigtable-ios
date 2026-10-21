@@ -37,6 +37,7 @@ struct PantryContainersView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        .tint(.primary)
                     }
                     Picker("Refill from", selection: Binding(get: { current.refillFromItemID ?? "" }, set: { id in
                         var next = current
@@ -48,6 +49,7 @@ struct PantryContainersView: View {
                             Text(other.name).tag(other.id)
                         }
                     }
+                    .tint(.primary)
                 }
             }
 
@@ -178,8 +180,8 @@ struct PantryContainersView: View {
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 14)
                         .frame(height: 34)
-                        .foregroundStyle(on ? accent : .primary)
-                        .background(on ? accent.opacity(0.14) : Color(.tertiarySystemFill), in: Capsule())
+                        .foregroundStyle(on ? .white : .primary)
+                        .background(on ? accent : Color(.tertiarySystemFill), in: Capsule())
                         .buttonStyle(.borderless)
                     }
                 }

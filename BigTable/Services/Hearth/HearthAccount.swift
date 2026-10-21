@@ -4,7 +4,8 @@
 //
 // Canonical copy: ~/Developer/hearthkit/HearthAccount.swift. Don't edit the copies inside the
 // apps; edit this one and run ~/Developer/hearthkit/sync.sh. Needs HearthShared.swift and
-// HearthApps.swift (for `HearthApp`, its colors, `HearthAppIcon` and `HearthMark`).
+// HearthApps.swift (for `HearthApp`, its colors, `HearthAppIcon` and `HearthMark`), and in Debug
+// builds HearthPurchases.swift (for the Copy RevenueCat ID row).
 //
 // Using it
 // - Each app passes who's signed in (nil when no one is), its own Sign in with Apple button (which
@@ -101,7 +102,7 @@ struct HearthAccountSection<SignInButton: View, Rows: View>: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
-        Group {
+        VStack(alignment: .leading, spacing: 18) {
             if let profile {
                 signedIn(profile)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
@@ -109,6 +110,9 @@ struct HearthAccountSection<SignInButton: View, Rows: View>: View {
                 signedOut
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
+            #if DEBUG
+            HearthRevenueCatIDRow()
+            #endif
         }
         .padding(.horizontal, 16)
         .padding(.top, 20)
@@ -139,7 +143,7 @@ struct HearthAccountSection<SignInButton: View, Rows: View>: View {
                         .font(.footnote.weight(.semibold))
                         .textCase(.uppercase)
                         .tracking(0.6)
-                        .foregroundStyle(info.ink)
+                        .foregroundStyle(.secondary)
                     Text("Not signed in")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -200,7 +204,7 @@ struct HearthAccountSection<SignInButton: View, Rows: View>: View {
                     } icon: {
                         Image(systemName: "checkmark")
                             .fontWeight(.bold)
-                            .foregroundStyle(info.ink)
+                            .foregroundStyle(.secondary)
                     }
                     .labelStyle(HearthAccountTightLabel())
                     .font(.footnote)
@@ -310,7 +314,7 @@ struct HearthAccountSection<SignInButton: View, Rows: View>: View {
             Button {
                 openURL(other.info.getURL)
             } label: {
-                tileContent(other, status: Text(onAppStore ? "Get" : "Beta").fontWeight(.semibold).foregroundStyle(info.ink), dimmed: true)
+                tileContent(other, status: Text(onAppStore ? "Get" : "Beta").fontWeight(.semibold).foregroundStyle(Color.primary), dimmed: true)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(onAppStore ? "Get \(other.displayName) on the App Store" : "Join the \(other.displayName) beta")
@@ -370,7 +374,7 @@ struct HearthAccountRow: View {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                     .frame(width: 24)
                     .accessibilityHidden(true)
             }

@@ -57,7 +57,7 @@ struct PantryItemView: View {
                         Text("Until your next shop")
                         Spacer()
                         Text(row.shortfall?.badge ?? "Lasts")
-                            .foregroundStyle(row.shortfall == nil ? PantryColors.good : accent)
+                            .foregroundStyle(row.shortfall == nil ? PantryColors.good : PantryColors.warn)
                     }
                 }
             }
@@ -85,6 +85,7 @@ struct PantryItemView: View {
                         }
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.capsule)
+                        .tint(.primary)
                         .disabled(listing)
                     }
                 }
@@ -109,6 +110,7 @@ struct PantryItemView: View {
                         Text(place.name).tag(place.id)
                     }
                 }
+                .tint(.primary)
                 if let container = row.container {
                     NavigationLink {
                         PantryContainersView(selected: container.id)
@@ -141,6 +143,7 @@ struct PantryItemView: View {
 
             Section {
                 Button("Fix the Amount", systemImage: "pencil") { showFix = true }
+                    .tint(.primary)
                 Button("Remove from Pantry", systemImage: "trash", role: .destructive) { confirmRemove = true }
             }
         }
@@ -238,7 +241,7 @@ struct PantryItemView: View {
                     Text(use.amount.map { PantryUnits.display($0, for: item) } ?? "some")
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
-                        .foregroundStyle(short ? accent : .secondary)
+                        .foregroundStyle(short ? PantryColors.warn : .secondary)
                 }
             }
         }
@@ -274,13 +277,14 @@ struct PantryItemView: View {
                         .foregroundStyle(.secondary)
                 }
                 Button("Undo") { kitchen.setSwap(from: row.item.canonical, to: to, slotKey: use.slotKey, on: false) }
+                    .tint(.primary)
             }
         } else if let stand = PantryLedger.swap(for: row.item.canonical, need: need, kind: row.item.kind, in: kitchen.pantry.liveItems, amounts: amounts) {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Or skip buying more", systemImage: "sparkles")
                         .font(.headline)
-                        .foregroundStyle(accent)
+                        .foregroundStyle(.primary)
                     Text("You have \(PantryUnits.display(amounts[stand.id]?.amount ?? 0, for: stand)) of \(stand.name.lowercased()). Use it for \(use.mealTitle) and the \(row.item.name.lowercased()) lasts longer.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -289,6 +293,7 @@ struct PantryItemView: View {
                     kitchen.setSwap(from: row.item.canonical, to: stand, slotKey: use.slotKey, on: true)
                 }
                 .font(.body.weight(.semibold))
+                .tint(.primary)
             }
         }
     }

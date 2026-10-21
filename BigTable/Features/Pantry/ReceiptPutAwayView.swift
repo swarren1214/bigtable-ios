@@ -147,7 +147,7 @@ struct ReceiptPutAwayView: View {
                 Spacer(minLength: 8)
                 Menu {
                     ForEach(places) { option in
-                        Button(option.name, systemImage: option.kind.symbol) { move(line, to: option.id) }
+                        Button(option.name, menuIcon: option.kind.symbol) { move(line, to: option.id) }
                     }
                 } label: {
                     HStack(spacing: 4) {
@@ -155,14 +155,15 @@ struct ReceiptPutAwayView: View {
                         Image(systemName: "chevron.down").font(.caption2.weight(.bold))
                     }
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(place?.color ?? accent)
+                    .foregroundStyle(place?.color ?? Color.secondary)
                     .padding(.horizontal, 12)
                     .frame(height: 32)
-                    .background((place?.color ?? accent).opacity(0.13), in: Capsule())
+                    .background((place?.color ?? Color.secondary).opacity(0.13), in: Capsule())
                 } primaryAction: {
                     let index = places.firstIndex { $0.id == line.placeID } ?? 0
                     move(line, to: places[(index + 1) % max(places.count, 1)].id)
                 }
+                .tint(.primary)
                 .accessibilityLabel("\(line.name) goes in the \(place?.name ?? "pantry"). Move it.")
             }
         }
@@ -236,6 +237,7 @@ struct ReceiptPutAwayView: View {
                 withAnimation(.snappy) { done = false }
             }
             .font(.headline)
+            .tint(.primary)
         }
         .padding(24)
     }

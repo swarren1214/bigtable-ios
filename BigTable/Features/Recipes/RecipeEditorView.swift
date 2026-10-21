@@ -267,6 +267,7 @@ struct RecipeEditorView: View {
             label()
         }
         .disabled(model.isGeneratingImage)
+        .tint(.primary)
     }
 
     private var nameSection: some View {

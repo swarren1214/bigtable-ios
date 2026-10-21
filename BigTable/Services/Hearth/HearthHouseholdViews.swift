@@ -68,6 +68,8 @@ struct HearthHouseholdView: View {
             if store.exists && store.canEditEveryone {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Person", systemImage: "plus") { adding = true }
+                        // Not a confirm button: the text color, not the app's (AGENT.md).
+                        .tint(.primary)
                 }
             }
         }
@@ -82,14 +84,14 @@ struct HearthHouseholdView: View {
         .task(id: store.people.count) { store.mergeDuplicates() }
     }
 
-    /// An action row: the icon and the text in the app's color.
+    /// An action row: the icon and the text in the text color, never the app's color.
     private func actionLabel(_ title: String, symbol: String) -> some View {
         Label {
             Text(title)
         } icon: {
             Image(systemName: symbol)
         }
-        .foregroundStyle(accent)
+        .foregroundStyle(.primary)
     }
 
     private var list: some View {
@@ -319,7 +321,7 @@ struct HearthPersonView: View {
                 Section {
                     Button { editing = true } label: {
                         Label("Edit Details", systemImage: "pencil")
-                            .foregroundStyle(accent)
+                            .foregroundStyle(.primary)
                     }
                 } footer: {
                     Text("Name, photo, birthday, role, color, allergies and food.")
@@ -330,6 +332,7 @@ struct HearthPersonView: View {
                     .foregroundStyle(.secondary)
                 if member.id != store.me?.id && store.me == nil {
                     Button("This Is Me") { store.claim(member.id) }
+                        .tint(.primary)
                 }
             }
             if store.canEditEveryone && member.id != store.info?.organizerID {
@@ -338,7 +341,7 @@ struct HearthPersonView: View {
                         if member.isArchived { store.archive(member.id, archived: false) } else { confirmsArchive = true }
                     } label: {
                         Label(member.isArchived ? "Restore \(member.firstName)" : "Archive \(member.firstName)", systemImage: member.isArchived ? "arrow.uturn.backward" : "archivebox")
-                            .foregroundStyle(member.isArchived ? accent : .red)
+                            .foregroundStyle(member.isArchived ? Color.primary : Color.red)
                     }
                     Button(role: .destructive) { confirmsRemove = true } label: {
                         Label("Remove from Household", systemImage: "person.badge.minus")
@@ -353,6 +356,8 @@ struct HearthPersonView: View {
             if store.canEdit(member) {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Edit") { editing = true }
+                        // Not a confirm button: the text color, not the app's (AGENT.md).
+                        .tint(.primary)
                 }
             }
         }
@@ -401,7 +406,7 @@ struct HearthPersonView: View {
             if values.isEmpty {
                 Text(empty)
             } else {
-                HearthChipFlow(values: values, tint: danger ? .red : accent)
+                HearthChipFlow(values: values, tint: danger ? .red : .primary)
             }
         }
         .padding(.vertical, 2)
@@ -704,6 +709,7 @@ struct HearthChoiceTokens: View {
             } else {
                 Button(addLabel) { adding = true }
                     .font(.subheadline.weight(.semibold))
+                    .tint(.primary)
             }
         }
     }
@@ -770,7 +776,7 @@ struct HearthInviteSheet: View {
                                 if role == option {
                                     Image(systemName: "checkmark")
                                         .font(.body.weight(.semibold))
-                                        .foregroundStyle(accent)
+                                        .foregroundStyle(.primary)
                                 }
                             }
                         }
@@ -830,7 +836,9 @@ struct HearthHouseholdLabel: View {
         LabeledContent {
             Text(store.exists ? "\(store.people.count)" : "")
         } label: {
+            // The icon in the title's color, not the app's (it sits inside a NavigationLink).
             Label("Household", systemImage: HearthHouseholdLabel.symbol)
+                .foregroundStyle(.primary)
         }
     }
 

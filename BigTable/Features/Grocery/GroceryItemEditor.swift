@@ -59,6 +59,7 @@ struct GroceryItemEditor: View {
                             Label(choice, systemImage: GroceryAisleStyle.symbol(choice)).tag(choice)
                         }
                     }
+                    .tint(.primary)
                     Toggle("Bulk size", isOn: $bulk)
                 } footer: {
                     Text("Bulk marks warehouse-size packs.")

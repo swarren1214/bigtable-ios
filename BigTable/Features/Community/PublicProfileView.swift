@@ -232,6 +232,8 @@ struct PublicProfileView: View {
                     Image(systemName: "ellipsis")
                 }
                 .accessibilityLabel("More")
+                // Not a confirm button: the text color, not the app's (AGENT.md).
+                .tint(.primary)
             }
         }
     }

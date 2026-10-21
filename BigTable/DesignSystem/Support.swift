@@ -105,6 +105,7 @@ struct RetryCard: View {
                     .multilineTextAlignment(.center)
                 Button("Try Again", action: retry)
                     .buttonStyle(.bordered)
+                    .tint(.primary)
             }
             .frame(maxWidth: .infinity)
         }

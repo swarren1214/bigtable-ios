@@ -287,6 +287,7 @@ struct LaunchView: View {
                     .buttonStyle(.glassProminent)
                 Button("Sign Out") { Task { await AppModel.shared.signOut() } }
                     .font(.footnote)
+                    .tint(.primary)
             } else {
                 ProgressView()
             }

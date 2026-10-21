@@ -101,7 +101,7 @@ struct PantryView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button("Not Now", systemImage: "xmark") { kitchen.dismissReceipt(receipt) }
+            Button("Not Now", menuIcon: "xmark") { kitchen.dismissReceipt(receipt) }
         }
     }
 
@@ -163,8 +163,8 @@ struct PantryView: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
                     .frame(height: 34)
-                    .foregroundStyle(listed ? PantryColors.good : accent)
-                    .background((listed ? PantryColors.good : accent).opacity(0.13), in: Capsule())
+                    .foregroundStyle(listed ? PantryColors.good : Color.primary)
+                    .background(listed ? PantryColors.good.opacity(0.13) : Color(.tertiarySystemFill), in: Capsule())
             }
             .buttonStyle(.plain)
             .disabled(listed)
@@ -244,10 +244,10 @@ struct PantryView: View {
                     } label: {
                         Label("Containers", systemImage: "takeoutbag.and.cup.and.straw")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(accent)
+                            .foregroundStyle(.primary)
                             .padding(.horizontal, 14)
                             .frame(height: 36)
-                            .background(accent.opacity(0.12), in: Capsule())
+                            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -295,7 +295,7 @@ struct PantryView: View {
                     .lineLimit(1)
                 Text(row.detail)
                     .font(.footnote.weight(warn ? .semibold : .regular))
-                    .foregroundStyle(warn ? PantryColors.warn : (saved ? accent : .secondary))
+                    .foregroundStyle(warn ? PantryColors.warn : .secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
@@ -359,6 +359,7 @@ struct PantryView: View {
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
+        .tint(.primary)
     }
 
     private func header(_ title: String, trailing: String?) -> some View {
@@ -443,6 +444,7 @@ struct PantryPlaceEmptyState: View {
                 }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
+                .tint(.primary)
             }
         }
         .padding(.horizontal, 20)

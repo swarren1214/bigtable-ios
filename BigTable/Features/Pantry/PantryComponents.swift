@@ -5,7 +5,7 @@ extension PantryPlace {
     var color: Color { Color(hex: kind.colorHex) }
 }
 
-/// Orange for running low, the house color for saved-for-a-meal, quiet otherwise.
+/// Orange for running low, green for what's taken care of, quiet otherwise.
 enum PantryColors {
     static let warn = Color(hex: 0xC25E00)
     static let good = Color(hex: 0x1E9E6A)

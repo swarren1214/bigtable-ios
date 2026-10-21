@@ -63,6 +63,7 @@ struct RecipePickerView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(error).foregroundStyle(.secondary)
                     Button("Try Again") { Task { await store.reload() } }
+                        .tint(.primary)
                 }
             } else {
                 ContentUnavailableView {

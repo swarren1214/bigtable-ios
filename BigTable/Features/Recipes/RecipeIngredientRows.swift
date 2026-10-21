@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import UIKit
 
-/// The editor's Ingredients: one row per ingredient (a tinted amount, a measurement and the
+/// The editor's Ingredients: one row per ingredient (an amount, a measurement and the
 /// name), swipe to delete, drag to reorder, and a line at the bottom that takes an ingredient
 /// typed however you like ("2 cups beef broth") and splits it up on the device. Paste a List
 /// adds many at once.
@@ -33,9 +33,9 @@ struct RecipeIngredientSection: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.subheadline.weight(.bold))
-                        .foregroundStyle(accent)
+                        .foregroundStyle(.primary)
                         .frame(width: 30, height: 30)
-                        .background(accent.opacity(0.14), in: Circle())
+                        .background(Color(.tertiarySystemFill), in: Circle())
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Add ingredient")
@@ -68,7 +68,7 @@ struct RecipeIngredientSection: View {
     }
 }
 
-/// One ingredient: the amount ("1 1/2") in a tinted pill, a measurement menu (cup, tbsp,
+/// One ingredient: the amount ("1 1/2") in a pill, a measurement menu (cup, tbsp,
 /// lb…), and the name.
 struct RecipeIngredientRowEditor: View {
     @Binding var row: RecipeIngredientDraft
@@ -87,8 +87,8 @@ struct RecipeIngredientRowEditor: View {
                 .monospacedDigit()
                 .frame(width: 54)
                 .padding(.vertical, 6)
-                .background((row.amountIsValid ? accent : Color.red).opacity(0.12), in: .rect(cornerRadius: 10, style: .continuous))
-                .foregroundStyle(row.amountIsValid ? accent : Color.red)
+                .background(row.amountIsValid ? Color(.tertiarySystemFill) : Color.red.opacity(0.12), in: .rect(cornerRadius: 10, style: .continuous))
+                .foregroundStyle(row.amountIsValid ? Color.primary : Color.red)
                 .accessibilityLabel("Amount")
 
             Menu {
@@ -105,13 +105,14 @@ struct RecipeIngredientRowEditor: View {
                         .font(.caption2)
                 }
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(row.measurement.isEmpty ? Color.secondary : accent)
+                .foregroundStyle(row.measurement.isEmpty ? Color.secondary : Color.primary)
                 .frame(minWidth: 54)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 6)
-                .background(accent.opacity(row.measurement.isEmpty ? 0.05 : 0.08), in: .rect(cornerRadius: 10, style: .continuous))
+                .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.borderless)
+            .tint(.primary)
             .accessibilityLabel("Measurement, \(row.measurement.isEmpty ? "none" : measurementLabel)")
 
             TextField("Ingredient", text: $row.name, axis: .vertical)
@@ -171,9 +172,9 @@ struct RecipeStepSection: View {
     private func number(_ text: String, filled: Bool) -> some View {
         Text(text)
             .font(.subheadline.weight(.bold))
-            .foregroundStyle(filled ? Color.white : accent)
+            .foregroundStyle(filled ? Color.white : Color.secondary)
             .frame(width: 26, height: 26)
-            .background(filled ? accent : accent.opacity(0.14), in: Circle())
+            .background(filled ? accent : Color(.tertiarySystemFill), in: Circle())
             .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
             .accessibilityHidden(true)
     }
@@ -213,6 +214,7 @@ struct RecipeEditorSectionHeader: View {
         .font(.subheadline.weight(.semibold))
         .textCase(nil)
         .padding(.leading, -4)
+        .tint(.primary)
     }
 }
 
@@ -307,8 +309,8 @@ struct RecipeTagSection: View {
                     Image(systemName: isAdding ? "xmark" : "plus")
                         .font(.subheadline.weight(.bold))
                         .frame(width: 36, height: 34)
-                        .foregroundStyle(accent)
-                        .background(accent.opacity(0.14), in: Capsule())
+                        .foregroundStyle(.primary)
+                        .background(Color(.tertiarySystemFill), in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(isAdding ? "Cancel new tag" : "Create a tag")
@@ -340,6 +342,7 @@ struct RecipeTagSection: View {
                     } else {
                         Button("Add", action: createTag)
                             .buttonStyle(.borderless)
+                            .tint(.primary)
                             .disabled(newTag.recipeTrimmed.isEmpty)
                     }
                 }
@@ -354,6 +357,7 @@ struct RecipeTagSection: View {
                     ManageTagsView()
                 }
                 .font(.subheadline.weight(.semibold))
+                .tint(.primary)
             }
             .textCase(nil)
             .padding(.leading, -4)

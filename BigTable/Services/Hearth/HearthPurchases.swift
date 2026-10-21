@@ -24,6 +24,7 @@ import Observation
 import OSLog
 import RevenueCat
 import SwiftUI
+import UIKit
 
 // MARK: - Plans and entitlements
 
@@ -436,6 +437,13 @@ final class HearthPurchases {
 
     func purchase(_ plan: HearthPlan) async -> PurchaseOutcome {
         guard let package = packages[plan.id] else { return .failed("This plan isn't available right now.") }
+        if plan.kind == .hearthPlus {
+            // Hearth+ needs a Hearth account (it covers every app and the household), and the
+            // purchase has to land on that account, not this app's anonymous RevenueCat ID.
+            guard isSignedIn else { return .failed("Sign in to your Hearth account to get Hearth+.") }
+            if Purchases.shared.isAnonymous { await followSignIn() }
+            guard !Purchases.shared.isAnonymous else { return .failed("Couldn't connect to your Hearth account. Try again in a moment.") }
+        }
         do {
             let result = try await Purchases.shared.purchase(package: package)
             if result.userCancelled { return .cancelled }
@@ -477,3 +485,67 @@ final class HearthPurchases {
         Purchases.shared.presentCodeRedemptionSheet()
     }
 }
+
+#if DEBUG
+// MARK: - Debug: copy the RevenueCat ID
+
+/// Debug builds only, at the bottom of the Account section: copies this install's RevenueCat ID
+/// so Hearth Ship's Test Plans window can grant it plans. Signed out, the ID is this app's own
+/// anonymous one ($RCAnonymousID:…); signed in, it's the Hearth account's ID.
+struct HearthRevenueCatIDRow: View {
+    @State private var copied = false
+    @State private var appUserID: String?
+
+    private static func currentID() -> String? {
+        Purchases.isConfigured ? Purchases.shared.appUserID : nil
+    }
+
+    var body: some View {
+        Group {
+            if let appUserID {
+                Button {
+                    // Read it now: RevenueCat may have switched IDs since the row last refreshed.
+                    let id = Self.currentID() ?? appUserID
+                    UIPasteboard.general.string = id
+                    self.appUserID = id
+                    copied = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        copied = false
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .frame(width: 22)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(copied ? "Copied" : "Copy RevenueCat ID")
+                            Text(appUserID)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer(minLength: 0)
+                        Text("Debug")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .foregroundStyle(.primary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .sensoryFeedback(.success, trigger: copied) { _, new in new }
+                .accessibilityHint("Copies this install's RevenueCat ID for Hearth Ship")
+            }
+        }
+        .onAppear { appUserID = Self.currentID() }
+        .onReceive(NotificationCenter.default.publisher(for: Hearth.didChange)) { _ in
+            // Sign-in changed; RevenueCat logs in or out a moment later.
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                appUserID = Self.currentID()
+            }
+        }
+    }
+}
+#endif

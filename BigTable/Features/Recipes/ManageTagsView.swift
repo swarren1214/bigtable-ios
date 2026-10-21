@@ -56,6 +56,8 @@ struct ManageTagsView: View {
                         newTagText = ""
                         isCreating = true
                     }
+                    // Not a confirm button: the text color, not the app's (AGENT.md).
+                    .tint(.primary)
                 }
             }
         }
@@ -100,7 +102,12 @@ struct ManageTagsView: View {
 
     private func row(_ tag: CustomTag) -> some View {
         HStack {
-            Label(tag.label, systemImage: "tag")
+            Label {
+                Text(tag.label)
+            } icon: {
+                Image(systemName: "tag")
+                    .foregroundStyle(.secondary)
+            }
             Spacer()
             if busyID == tag.id {
                 ProgressView()
@@ -110,6 +117,7 @@ struct ManageTagsView: View {
                     renaming = tag
                 } label: {
                     Image(systemName: "pencil")
+                        .foregroundStyle(.secondary)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)

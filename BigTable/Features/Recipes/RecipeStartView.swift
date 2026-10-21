@@ -98,7 +98,7 @@ struct RecipeStartView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Recipe link · read on your \(DeviceName.current)", systemImage: "link")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(accent)
+                        .foregroundStyle(.primary)
                     if !isPro {
                         Text(importsNote)
                             .font(.footnote)

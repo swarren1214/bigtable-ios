@@ -92,6 +92,7 @@ struct GrocerySectionHeader: View {
                         .frame(width: 44, height: 32)
                         .contentShape(.rect)
                 }
+                .tint(.primary)
                 .accessibilityLabel("\(section.name) options")
             }
         }

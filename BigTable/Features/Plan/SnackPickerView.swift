@@ -67,6 +67,7 @@ struct PlanSnackPickerView: View {
                                     ProgressView()
                                 } else {
                                     Button("Show More") { Task { await loadMore() } }
+                                        .tint(.primary)
                                 }
                                 Spacer()
                             }

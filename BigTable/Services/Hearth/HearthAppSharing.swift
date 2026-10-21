@@ -45,6 +45,10 @@ enum HearthAppSharing {
 
     private static func share(app: HearthApp, zoneName: String, title: String, audience: Audience, container: CKContainer) async {
         let household = HearthHouseholdStore.shared
+        // Read the household's share fresh every time: the copy loaded at launch still lists
+        // someone who has since accepted the invitation as pending, so they'd never be added
+        // to the app's zone until the app was quit and opened again.
+        await household.refreshShare()
         // Who's in the household is only known once its share has been read; before that an
         // empty list would take everyone out of the app's zone.
         guard household.shareLoaded else { return }

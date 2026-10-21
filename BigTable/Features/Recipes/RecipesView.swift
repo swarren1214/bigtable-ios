@@ -107,6 +107,7 @@ struct RecipeLibraryResults: View {
             } else if let error = store.loadError {
                 Button("Couldn't load more. Try again.") { Task { await store.loadMore() } }
                     .font(.footnote)
+                    .tint(.primary)
                     .frame(maxWidth: .infinity)
                     .accessibilityHint(error)
             }

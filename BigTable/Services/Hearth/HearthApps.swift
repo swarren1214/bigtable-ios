@@ -447,7 +447,7 @@ struct HearthAppsView: View {
         } label: {
             Text(title)
                 .font(.subheadline.weight(.bold))
-                .foregroundStyle(info.ink)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 14)
                 .frame(minWidth: 68, minHeight: 32)
                 .background(info.color.opacity(0.14), in: .capsule)
@@ -529,7 +529,7 @@ struct HearthAppsView: View {
                             .foregroundStyle(.primary)
                         Text(items.count == 1 ? "1 thing together" : "\(items.count) things together")
                             .font(.footnote.weight(.medium))
-                            .foregroundStyle(info.ink)
+                            .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
@@ -638,7 +638,7 @@ struct HearthAppsView: View {
                                 Image(systemName: showsAllElsewhere ? "chevron.up" : "chevron.down")
                                     .font(.footnote.weight(.bold))
                             }
-                            .foregroundStyle(current.info.ink)
+                            .foregroundStyle(.primary)
                             .padding(.horizontal, 16)
                             .frame(minHeight: 48)
                             .contentShape(.rect)
@@ -655,7 +655,7 @@ struct HearthAppsView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(item.direction)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(item.to.info.ink)
+                .foregroundStyle(.secondary)
             Text(item.title)
                 .font(.subheadline.weight(.semibold))
             Text(item.detail)
@@ -706,7 +706,7 @@ struct HearthAppsView: View {
                 .frame(width: 30, height: 26)
             Link("hearthapps.com", destination: URL(string: "https://hearthapps.com")!)
                 .font(.subheadline.weight(.semibold))
-                .tint(current.info.ink)
+                .tint(.primary)
             Text("Hearken is an independent study app. It is not made, sponsored or endorsed by The Church of Jesus Christ of Latter-day Saints.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -777,7 +777,7 @@ struct HearthAppSheet: View {
                             HStack(alignment: .top, spacing: 14) {
                                 Image(systemName: feature.symbol)
                                     .font(.system(size: 17, weight: .semibold))
-                                    .foregroundStyle(info.ink)
+                                    .foregroundStyle(.secondary)
                                     .frame(width: 24, height: 24)
                                     .accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 2) {
@@ -838,7 +838,7 @@ struct HearthAppSheet: View {
                 .font(.footnote.weight(.bold))
                 .textCase(.uppercase)
                 .tracking(0.5)
-                .foregroundStyle(info.ink)
+                .foregroundStyle(.secondary)
             if items.isEmpty {
                 Text(HearthAppInfo.signInLine(current, app))
                     .font(.body)
