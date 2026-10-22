@@ -13,21 +13,35 @@
 #   scripts/screenshots.sh                 every screen, light and dark
 #   scripts/screenshots.sh plan grocery aipreview   just these screens
 #   scripts/screenshots.sh --list-screens   the screen names, in order
+#   scripts/screenshots.sh --list-watch-screens   the Apple Watch app's screen names (none: no watch app)
 #
 # Options (environment variables):
 #   DEVICE_TYPE="iPhone 17 Pro Max"   Simulator model. Default: one with the 6.9" screen App Store
 #                                     Connect asks for (1320 × 2868), or else the biggest iPhone screen.
 #   DEVICE_TYPE="iPad Pro 13-inch (M5)"
 #                                     Any Simulator model works, iPads included.
+#   DEVICE_TYPE="iPhone Duo"          The foldable: captures its outer display (folded) and its inner
+#                                     display (unfolded), in <device>-Outer and <device>-Inner folders.
+#                                     Folding uses app-manager/tools/duo-hinge.m (built with clang).
+#   DEVICE_TYPE="Apple Watch Ultra 3 (49mm)"
+#                                     An Apple Watch: captures the watch app's screens (watchOS is
+#                                     always dark). Screen names given are the watch app's.
 #   APPEARANCES="light"               "light", "dark" or "light dark" (default).
 #   ORIENTATIONS="portrait landscape" "portrait" (default), "landscape" or both. Landscape is
 #                                     for iPads (the app is portrait only on iPhone) and saved in
 #                                     <appearance>-landscape folders. It turns the Simulator
 #                                     through its Device menu, which needs Accessibility access.
 #   SHUTDOWN=1                        Shut the Simulator down when done.
-#   WARMUP=8                          Seconds the warm-up launch gets before capturing starts.
+#   WARMUP=12                         Seconds the warm-up launch gets before capturing starts.
+#   FIRST_EXTRA=4                     Extra seconds for the first screen after an appearance change,
+#                                     a rotation or a fold.
+#   PAGE_PAUSE=2                      Extra seconds after each screen's settle time, before capturing.
+#   STILL_MAX=8                       Then captures a second apart until two match (the screen has
+#                                     stopped moving), for at most this many seconds.
 #   SHOT_EVENTS=1                     Also print @@SHOT progress lines (Hearth Ship reads them).
 #   SKIP_BUILD=1                      Reuse the last build.
+#   PHOTOS_OFF=1                      Drawn art instead of real recipe photos (see MARK: Recipe photos).
+#   PHOTOS_REFRESH=1                  Fetch the recipe photos again from production.
 #   WEB_WIDTH=720                     Width of the website copies, in pixels.
 #   TEXT_SIZE=accessibility-extra-extra-extra-large
 #                                     Capture at another text size, to check large-text layouts. Any
@@ -67,6 +81,21 @@ settle_time() {
   esac
 }
 
+# The Apple Watch app ("" when there isn't one): its bundle id, its product (inside
+# $PRODUCT/Watch), and its screens in order, opened with -Screenshots -Screen <name>.
+WATCH_BUNDLE_ID=""
+WATCH_PRODUCT=""
+WATCH_SCREENS=()
+watch_settle_time() {
+  case "$1" in
+    *) echo 4 ;;
+  esac
+}
+
+# Real recipe photos for the demo recipes: a list of demo recipe ids and production recipe
+# ids ("" for none). See MARK: Recipe photos.
+PHOTOS="$ROOT/scripts/screenshot-photos.txt"
+
 # MARK: Setup
 
 DERIVED="$ROOT/build/screenshots"
@@ -77,19 +106,56 @@ APPEARANCES="${APPEARANCES:-light dark}"
 TEXT_SIZE="${TEXT_SIZE:-}"
 WEB_WIDTH="${WEB_WIDTH:-720}"
 ORIENTATIONS="${ORIENTATIONS:-portrait}"
+WARMUP="${WARMUP:-12}"
+FIRST_EXTRA="${FIRST_EXTRA:-4}"
+PAGE_PAUSE="${PAGE_PAUSE:-2}"
+STILL_MAX="${STILL_MAX:-8}"
 # Turns the Simulator's landscape screenshots upright, when simctl saves them sideways
 # (sips rotates clockwise by this many degrees). Only used when a capture comes out portrait.
 LANDSCAPE_ROTATION="${LANDSCAPE_ROTATION:-270}"
+# The same for the iPhone Duo's inner display, which is landscape natively: only used when
+# its capture comes out wider than tall.
+DUO_INNER_ROTATION="${DUO_INNER_ROTATION:-90}"
+PHOTO_API="${PHOTO_API:-https://api.hearthapps.com}"
 
-if [[ "${1:-}" == "--list-screens" ]]; then printf '%s\n' "${ALL_SCREENS[@]}"; exit 0; fi
+case "${1:-}" in
+  --list-screens) printf '%s\n' "${ALL_SCREENS[@]}"; exit 0 ;;
+  --list-watch-screens)
+    if [[ -n "$WATCH_BUNDLE_ID" && ${#WATCH_SCREENS[@]} -gt 0 ]]; then printf '%s\n' "${WATCH_SCREENS[@]}"; fi
+    exit 0 ;;
+esac
 for orientation in $ORIENTATIONS; do
   [[ "$orientation" == portrait || "$orientation" == landscape ]] || { echo "Unknown orientation: $orientation (portrait or landscape)" >&2; exit 1; }
 done
 
-if [[ $# -gt 0 ]]; then SCREENS=("$@"); else SCREENS=("${ALL_SCREENS[@]}"); fi
+# An Apple Watch run captures the watch app's own screens.
+WATCH=""
+if [[ "${DEVICE_TYPE:-}" == "Apple Watch"* ]]; then
+  WATCH=1
+  if [[ -z "$WATCH_BUNDLE_ID" || ${#WATCH_SCREENS[@]} -eq 0 ]]; then
+    echo "$APP_NAME has no Apple Watch app to capture." >&2
+    exit 1
+  fi
+  CATALOG=("${WATCH_SCREENS[@]}")
+  APPEARANCES="dark"   # watchOS is always dark
+  LAUNCH_ID="$WATCH_BUNDLE_ID"
+  LAUNCH_MODE="-Screenshots"
+  LAUNCH_SCREEN="-Screen"
+else
+  CATALOG=("${ALL_SCREENS[@]}")
+  LAUNCH_ID="$BUNDLE_ID"
+  LAUNCH_MODE="$MODE_ARGUMENT"
+  LAUNCH_SCREEN="$SCREEN_ARGUMENT"
+fi
+
+if [[ $# -gt 0 ]]; then SCREENS=("$@"); else SCREENS=("${CATALOG[@]}"); fi
 for screen in "${SCREENS[@]}"; do
-  [[ " ${ALL_SCREENS[*]} " == *" $screen "* ]] || { echo "Unknown screen: $screen (choose from: ${ALL_SCREENS[*]})" >&2; exit 1; }
+  [[ " ${CATALOG[*]} " == *" $screen "* ]] || { echo "Unknown screen: $screen (choose from: ${CATALOG[*]})" >&2; exit 1; }
 done
+
+settle() {
+  if [[ -n "$WATCH" ]]; then watch_settle_time "$1"; else settle_time "$1"; fi
+}
 
 log() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
@@ -109,12 +175,15 @@ json() { xcrun simctl list "$1" -j; }
 HELPERS="$(mktemp -d)"
 UDID=""
 ROTATED=""
+UNFOLDED=""
+HINGE=""
 SHUTDOWN_AFTER="${SHUTDOWN:-}"
 cleanup() {
   trap '' TERM INT   # a second stop signal mustn't cut the cleanup short
   if [[ -n "$ROTATED" ]]; then rotate portrait || true; fi
+  if [[ -n "$UNFOLDED" ]]; then fold closed || true; fi
   if [[ -n "$UDID" ]]; then
-    xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+    xcrun simctl terminate "$UDID" "$LAUNCH_ID" 2>/dev/null || true
     if [[ -n "$SHUTDOWN_AFTER" ]]; then xcrun simctl shutdown "$UDID" 2>/dev/null || true; fi
   fi
   rm -rf "$HELPERS"
@@ -148,25 +217,95 @@ rotate() {
   sleep 2   # the rotation animates
 }
 
+# Folds or unfolds the iPhone Duo ("closed" shows the outer display, "flat" the inner one).
+# Xcode has no command for this, so it uses duo-hinge (app-manager/tools/duo-hinge.m), which
+# sends the Simulator the same message Device Hub's fold controls do. It's built with clang
+# the first time. DUO_HINGE can point at another build of it.
+fold() {
+  if [[ -z "$HINGE" ]]; then
+    if [[ -n "${DUO_HINGE:-}" ]]; then
+      HINGE="$DUO_HINGE"
+    else
+      local source="$ROOT/../app-manager/tools/duo-hinge.m"
+      local cache="$HOME/Library/Caches/HearthShip"
+      HINGE="$cache/duo-hinge"
+      if [[ ! -f "$source" ]]; then
+        echo "Can't fold the iPhone Duo: $source is missing." >&2
+        HINGE=""
+        return 1
+      fi
+      if [[ ! -x "$HINGE" || "$source" -nt "$HINGE" ]]; then
+        mkdir -p "$cache"
+        if ! clang -fobjc-arc -framework Foundation -o "$HINGE" "$source" >&2; then
+          echo "Can't fold the iPhone Duo: duo-hinge didn't build." >&2
+          HINGE=""
+          return 1
+        fi
+      fi
+    fi
+  fi
+  if ! "$HINGE" -d "$UDID" "$1" >/dev/null; then
+    echo "Couldn't set the iPhone Duo's hinge ($1)." >&2
+    return 1
+  fi
+  if [[ "$1" == closed ]]; then UNFOLDED=""; else UNFOLDED=1; fi
+  sleep 3   # the fold animates, and the app moves to the other display
+}
+
+# One capture of the screen into $1. On the iPhone Duo, $2 picks the display: "inner" (the
+# big one, shown when unfolded) or the outer one by default.
+shot() {
+  local file="$1" display="${2:-}"
+  if [[ "$display" == inner ]]; then
+    xcrun simctl io "$UDID" screenshot --type=png --display=primary-1 "$file" >/dev/null 2>&1 ||
+      xcrun simctl io "$UDID" screenshot --type=png --display=3 "$file" >/dev/null 2>&1
+  else
+    xcrun simctl io "$UDID" screenshot --type=png "$file" >/dev/null 2>&1
+  fi
+}
+
+# Saves the screen to $1 once it has stopped changing: captures a second apart until two
+# match, so a page still sliding in, a sheet still rising or a photo still fading in isn't
+# caught halfway. Gives up after STILL_MAX seconds (something on screen keeps moving) and
+# keeps the last capture.
+capture_still() {
+  local file="$1" display="${2:-}" previous="$HELPERS/still-a.png" next="$HELPERS/still-b.png" waited=0
+  rm -f "$previous" "$next"
+  shot "$previous" "$display" || true
+  while (( waited < STILL_MAX )); do
+    sleep 1
+    waited=$((waited + 1))
+    shot "$next" "$display" || continue
+    if [[ -s "$previous" ]] && cmp -s "$previous" "$next"; then break; fi
+    mv -f "$next" "$previous"
+  done
+  [[ -s "$previous" ]] || return 1
+  mv -f "$previous" "$file"
+  rm -f "$next"
+  if (( waited >= STILL_MAX )); then echo "  (still moving after ${STILL_MAX}s; kept the last capture)"; fi
+  return 0
+}
+
 cat > "$HELPERS/pick.py" <<'PY'
 import json, os, plistlib, re, sys
 
-# Picks the Simulator runtime and model. Every installed iOS runtime is considered, newest first,
-# because a runtime made for one new device (an iOS x.1 built only for a new model) may support
-# nothing else. Choice: DEVICE_TYPE if given; otherwise a model with the 6.9-inch App Store screen
-# (1320 x 2868) or the biggest tall iPhone screen, when Xcode reports sizes; otherwise the
-# highest-numbered Pro Max.
+# Picks the Simulator runtime and model. Every installed runtime for the platform is considered,
+# newest first, because a runtime made for one new device (an iOS x.1 built only for a new
+# model) may support nothing else. Choice: DEVICE_TYPE if given; otherwise a model with the
+# 6.9-inch App Store screen (1320 x 2868) or the biggest tall iPhone screen, when Xcode reports
+# sizes; otherwise the highest-numbered Pro Max.
+platform = os.environ.get("PLATFORM") or "iOS"
 runtimes_text, types_text = sys.stdin.read().split("<<SPLIT>>")
-runtimes = [r for r in json.loads(runtimes_text)["runtimes"] if r.get("platform") == "iOS" and r.get("isAvailable")]
+runtimes = [r for r in json.loads(runtimes_text)["runtimes"] if r.get("platform") == platform and r.get("isAvailable")]
 if not runtimes:
-    print("ERROR\tNo iOS Simulator runtime is installed. Add one in Xcode > Settings > Components.")
+    print("ERROR\tNo " + platform + " Simulator runtime is installed. Add one in Xcode > Settings > Components.")
     sys.exit()
 runtimes.sort(key=lambda r: [int(p) for p in re.findall(r"\d+", r.get("version", "0"))], reverse=True)
 listed = {t["identifier"]: t for t in json.loads(types_text)["devicetypes"]}
 
 
 def models(runtime, kind="iPhone"):
-    # kind="" matches every model (DEVICE_TYPE may name an iPad).
+    # kind="" matches every model (DEVICE_TYPE may name an iPad or a watch).
     supported = runtime.get("supportedDeviceTypes")
     if supported is None:
         return [t for t in listed.values() if kind in t.get("name", "")]
@@ -226,11 +365,11 @@ else:
     lines = []
     for runtime in runtimes:
         names = ", ".join(sorted({t["name"] for t in models(runtime, "" if os.environ.get("DEVICE_TYPE") else "iPhone")})) or "none"
-        lines.append("  iOS " + runtime.get("version", "?") + ": " + names)
+        lines.append("  " + platform + " " + runtime.get("version", "?") + ": " + names)
     wanted = os.environ.get("DEVICE_TYPE")
     print("ERROR\t" + ((wanted + " isn't available") if wanted else "No regular iPhone model found")
           + " in your installed Simulator runtimes:\n" + "\n".join(lines)
-          + "\nAdd an iOS runtime in Xcode > Settings > Components, or pass DEVICE_TYPE=\"<one of these>\".")
+          + "\nAdd a " + platform + " runtime in Xcode > Settings > Components, or pass DEVICE_TYPE=\"<one of these>\".")
 PY
 
 cat > "$HELPERS/udid.py" <<'PY'
@@ -239,8 +378,18 @@ devices = json.load(sys.stdin)["devices"].get(os.environ["RUNTIME"], [])
 print(next((d["udid"] for d in devices if d["name"] == os.environ["SIM"] and d.get("isAvailable")), ""))
 PY
 
+cat > "$HELPERS/image_url.py" <<'PY'
+import json, sys
+try:
+    print(json.load(sys.stdin).get("imageUrl") or "")
+except Exception:
+    pass
+PY
+
 # The runtime and model to run on (see pick.py above).
-PICK="$( (json runtimes; echo; echo '<<SPLIT>>'; json devicetypes) | DEVICE_TYPE="${DEVICE_TYPE:-}" /usr/bin/python3 "$HELPERS/pick.py")"
+PLATFORM="iOS"
+[[ -n "$WATCH" ]] && PLATFORM="watchOS"
+PICK="$( (json runtimes; echo; echo '<<SPLIT>>'; json devicetypes) | PLATFORM="$PLATFORM" DEVICE_TYPE="${DEVICE_TYPE:-}" /usr/bin/python3 "$HELPERS/pick.py")"
 if [[ "$PICK" != OK$'\t'* ]]; then echo "${PICK#*$'\t'}" >&2; exit 1; fi
 PICK="${PICK#OK$'\t'}"
 RUNTIME="${PICK%%$'\t'*}"
@@ -252,6 +401,8 @@ DEVICE_NAME="${DEVICE_NAME%%$'\t'*}"
 echo "Using $DEVICE_NAME ($DEVICE_SIZE) on ${RUNTIME##*.}"
 event device "$DEVICE_NAME" "$DEVICE_SIZE"
 SIM="$SIM_NAME ($DEVICE_NAME)"
+DUO=""
+[[ "$DEVICE_NAME" == *"iPhone Duo"* ]] && DUO=1
 
 UDID="$(json devices | SIM="$SIM" RUNTIME="$RUNTIME" /usr/bin/python3 "$HELPERS/udid.py")"
 if [[ -z "$UDID" ]]; then
@@ -274,13 +425,17 @@ if [[ -z "${SKIP_BUILD:-}" || ! -d "$APP" ]]; then
     echo "or share it: Product › Scheme › Manage Schemes…, then tick Shared for $SCHEME." >&2
     exit 1
   fi
+  # The iPhone app (with its watch app inside). For a watch there's no iPhone Simulator to
+  # build for, so it's built for any one.
+  destination="platform=iOS Simulator,id=$UDID"
+  [[ -n "$WATCH" ]] && destination="generic/platform=iOS Simulator"
   log "Building $APP_NAME (Debug, Simulator)"
   event phase building
   xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -configuration Debug \
-    -destination "platform=iOS Simulator,id=$UDID" \
+    -destination "$destination" \
     -derivedDataPath "$DERIVED" \
     -quiet \
     build
@@ -288,73 +443,170 @@ fi
 
 log "Installing"
 event phase installing
-xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-xcrun simctl install "$UDID" "$APP"
-
-# The status bar Apple uses in its own screenshots.
-xcrun simctl status_bar "$UDID" override \
-  --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
-  --cellularMode active --cellularBars 4 --operatorName "" \
-  --batteryState charged --batteryLevel 100
+xcrun simctl terminate "$UDID" "$LAUNCH_ID" 2>/dev/null || true
+if [[ -n "$WATCH" ]]; then
+  WATCH_APP="$APP/Watch/$WATCH_PRODUCT"
+  [[ -d "$WATCH_APP" ]] || WATCH_APP="$DERIVED/Build/Products/Debug-watchsimulator/$WATCH_PRODUCT"
+  if [[ ! -d "$WATCH_APP" ]]; then
+    echo "The watch app wasn't built ($WATCH_PRODUCT isn't inside $PRODUCT). Run without SKIP_BUILD." >&2
+    exit 1
+  fi
+  xcrun simctl install "$UDID" "$WATCH_APP"
+  # The watch shows only the time.
+  xcrun simctl status_bar "$UDID" override --time "9:41" 2>/dev/null || true
+else
+  xcrun simctl install "$UDID" "$APP"
+  # The status bar Apple uses in its own screenshots.
+  xcrun simctl status_bar "$UDID" override \
+    --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+    --cellularMode active --cellularBars 4 --operatorName "" \
+    --batteryState charged --batteryLevel 100
+fi
 
 # The text size: the one asked for, or the standard one (in case an earlier run changed it).
-xcrun simctl ui "$UDID" content_size "${TEXT_SIZE:-large}"
+xcrun simctl ui "$UDID" content_size "${TEXT_SIZE:-large}" 2>/dev/null || [[ -n "$WATCH" ]]
+
+# MARK: Recipe photos
+
+# Real photos for the demo recipes (apps with a PHOTOS list): each comes from a published
+# recipe in production, through the Hearth API's public preview endpoint, is cached in
+# build/screenshots/photos and is copied into the app's Documents/ScreenshotPhotos, where
+# screenshot mode looks for it. PHOTOS_OFF=1 keeps the drawn art; PHOTOS_REFRESH=1 fetches
+# every photo again.
+if [[ -n "$PHOTOS" && -f "$PHOTOS" && -z "$WATCH" && -z "${PHOTOS_OFF:-}" ]]; then
+  log "Fetching recipe photos"
+  event phase photos
+  cache="$DERIVED/photos"
+  mkdir -p "$cache"
+  container="$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" data)"
+  photos_dir="$container/Documents/ScreenshotPhotos"
+  rm -rf "$photos_dir"
+  mkdir -p "$photos_dir"
+  found=0
+  while read -r demo recipe _; do
+    [[ -z "$demo" || "$demo" == \#* || -z "$recipe" ]] && continue
+    cached="$(ls "$cache/$demo".* 2>/dev/null | head -n 1 || true)"
+    if [[ -z "$cached" || -n "${PHOTOS_REFRESH:-}" ]]; then
+      url="$(curl -fsS --max-time 15 "$PHOTO_API/v1/bigtable/recipes/$recipe/og" 2>/dev/null | /usr/bin/python3 "$HELPERS/image_url.py" || true)"
+      if [[ -n "$url" ]]; then
+        ext="$(echo "${url%%\?*}" | sed -E 's/.*\.([A-Za-z0-9]+)$/\1/' | tr '[:upper:]' '[:lower:]')"
+        case "$ext" in jpg|jpeg|png|webp|heic) ;; *) ext="jpg" ;; esac
+        if curl -fsSL --max-time 30 "$url" -o "$cache/$demo.download" 2>/dev/null; then
+          rm -f "$cache/$demo.jpg" "$cache/$demo.jpeg" "$cache/$demo.png" "$cache/$demo.webp" "$cache/$demo.heic"
+          mv -f "$cache/$demo.download" "$cache/$demo.$ext"
+          # Big enough for the largest card; keeps the app from decoding huge originals.
+          sips -Z 1400 "$cache/$demo.$ext" >/dev/null 2>&1 || true
+          cached="$cache/$demo.$ext"
+        else
+          rm -f "$cache/$demo.download"
+        fi
+      fi
+    fi
+    if [[ -n "$cached" && -f "$cached" ]]; then
+      cp "$cached" "$photos_dir/"
+      found=$((found + 1))
+    else
+      echo "  No photo for $demo (recipe $recipe); it keeps its drawn art."
+    fi
+  done < "$PHOTOS"
+  echo "  $found recipe photos ready"
+fi
 
 # A warm-up launch. The first launch after installing is the slowest (cold caches, the
 # splash screen stays up longer), and the first screenshot used to catch the splash still
 # fading out, tinted in the app's color.
 log "Warming up"
 event phase warming
-xcrun simctl launch "$UDID" "$BUNDLE_ID" "$MODE_ARGUMENT" "$SCREEN_ARGUMENT" "${SCREENS[0]}" >/dev/null 2>&1 || true
-sleep "${WARMUP:-8}"
-xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+xcrun simctl launch "$UDID" "$LAUNCH_ID" "$LAUNCH_MODE" "$LAUNCH_SCREEN" "${SCREENS[0]}" >/dev/null 2>&1 || true
+sleep "$WARMUP"
+xcrun simctl terminate "$UDID" "$LAUNCH_ID" 2>/dev/null || true
 
 # MARK: Capture
 
 device_dir="$(echo "$DEVICE_NAME" | tr ' ' '-')"
 if [[ -n "$WEB" ]]; then WEB="$(mkdir -p "$WEB" && cd "$WEB" && pwd)"; fi
 
-for orientation in $ORIENTATIONS; do
-  if [[ "$orientation" == landscape && "$DEVICE_NAME" == iPhone* ]]; then
-    echo "Skipping landscape on $DEVICE_NAME: $APP_NAME runs in portrait on iPhone."
-    event skipped landscape "$DEVICE_NAME"
-    continue
-  fi
-  rotate "$orientation"
+# What each pass captures: the orientations asked for, or on the iPhone Duo its two
+# displays (outer folded, inner unfolded), in portrait.
+if [[ -n "$DUO" ]]; then
+  PASSES="outer inner"
+  [[ " $ORIENTATIONS " == *" portrait "* ]] || PASSES=""
+  [[ -n "$PASSES" ]] || { echo "The iPhone Duo is captured in portrait. Add portrait to ORIENTATIONS."; event skipped landscape "$DEVICE_NAME"; }
+else
+  PASSES="$ORIENTATIONS"
+fi
+
+for pass in $PASSES; do
+  orientation="$pass"
+  display=""
+  folder="$OUT/$device_dir"
   suffix=""
-  [[ "$orientation" == landscape ]] && suffix="-landscape"
+  case "$pass" in
+    landscape)
+      if [[ -n "$WATCH" || "$DEVICE_NAME" == iPhone* ]]; then
+        echo "Skipping landscape on $DEVICE_NAME: $APP_NAME runs in portrait there."
+        event skipped landscape "$DEVICE_NAME"
+        continue
+      fi
+      rotate landscape
+      suffix="-landscape"
+      ;;
+    portrait)
+      rotate portrait
+      ;;
+    outer)
+      fold closed || echo "  (couldn't confirm the iPhone Duo is folded; capturing the outer display anyway)"
+      folder="$OUT/$device_dir-Outer"
+      ;;
+    inner)
+      if ! fold flat; then
+        echo "Skipping the iPhone Duo's inner display: it couldn't be unfolded."
+        event skipped inner "$DEVICE_NAME"
+        continue
+      fi
+      display="inner"
+      folder="$OUT/$device_dir-Inner"
+      ;;
+  esac
 
   for appearance in $APPEARANCES; do
     log "Capturing ($appearance, $orientation)"
     event phase capturing "$appearance" "$orientation"
-    xcrun simctl ui "$UDID" appearance "$appearance"
-    dir="$OUT/$device_dir/$appearance$suffix${TEXT_SIZE:+-$TEXT_SIZE}"
+    [[ -n "$WATCH" ]] || xcrun simctl ui "$UDID" appearance "$appearance"
+    dir="$folder/$appearance$suffix${TEXT_SIZE:+-$TEXT_SIZE}"
     mkdir -p "$dir"
-    first=1   # the first launch after a rotation or appearance change gets extra time
+    first=1   # the first launch after a rotation, fold or appearance change gets extra time
 
     for screen in "${SCREENS[@]}"; do
       number=0
-      for i in "${!ALL_SCREENS[@]}"; do [[ "${ALL_SCREENS[$i]}" == "$screen" ]] && number=$((i + 1)); done
+      for i in "${!CATALOG[@]}"; do [[ "${CATALOG[$i]}" == "$screen" ]] && number=$((i + 1)); done
       file="$dir/$(printf '%02d' "$number")-$screen.png"
 
-      xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-      xcrun simctl launch "$UDID" "$BUNDLE_ID" "$MODE_ARGUMENT" "$SCREEN_ARGUMENT" "$screen" >/dev/null
-      sleep "$(settle_time "$screen")"
-      if [[ -n "$first" ]]; then sleep "${FIRST_EXTRA:-2}"; first=""; fi
-      xcrun simctl io "$UDID" screenshot --type=png "$file" >/dev/null 2>&1
+      xcrun simctl terminate "$UDID" "$LAUNCH_ID" 2>/dev/null || true
+      xcrun simctl launch "$UDID" "$LAUNCH_ID" "$LAUNCH_MODE" "$LAUNCH_SCREEN" "$screen" >/dev/null
+      sleep "$(settle "$screen")"
+      if [[ -n "$first" ]]; then sleep "$FIRST_EXTRA"; first=""; fi
+      # A pause after the app opens its page, then wait for the screen to stop moving.
+      sleep "$PAGE_PAUSE"
+      if ! capture_still "$file" "$display"; then
+        echo "Couldn't capture $screen." >&2
+        exit 1
+      fi
 
-      if [[ "$orientation" == landscape ]]; then
-        width="$(sips -g pixelWidth "$file" | awk '/pixelWidth/ { print $2 }')"
-        height="$(sips -g pixelHeight "$file" | awk '/pixelHeight/ { print $2 }')"
-        if [[ -n "$width" && -n "$height" && "$height" -gt "$width" ]]; then
+      width="$(sips -g pixelWidth "$file" | awk '/pixelWidth/ { print $2 }')"
+      height="$(sips -g pixelHeight "$file" | awk '/pixelHeight/ { print $2 }')"
+      if [[ -n "$width" && -n "$height" ]]; then
+        if [[ "$orientation" == landscape && "$height" -gt "$width" ]]; then
           sips --rotate "$LANDSCAPE_ROTATION" "$file" >/dev/null
+        elif [[ "$orientation" == inner && "$width" -gt "$height" ]]; then
+          sips --rotate "$DUO_INNER_ROTATION" "$file" >/dev/null
         fi
       fi
       echo "  $screen  →  ${file#$ROOT/}"
       event saved "$screen" "$appearance" "$orientation" "$file"
 
-      # Website copies come from the iPhone in portrait, at the standard text size.
-      if [[ -n "$TEXT_SIZE" || "$orientation" != portrait || "$DEVICE_NAME" != iPhone* ]]; then
+      # Website copies come from a regular iPhone in portrait, at the standard text size.
+      if [[ -n "$TEXT_SIZE" || "$orientation" != portrait || "$DEVICE_NAME" != iPhone* || -n "$DUO" ]]; then
         :
       elif [[ -n "$WEB" && "$appearance" == "light" ]]; then
         sips --resampleWidth "$WEB_WIDTH" "$file" --out "$WEB/$screen.png" >/dev/null
@@ -365,13 +617,14 @@ for orientation in $ORIENTATIONS; do
   done
 done
 rotate portrait || true
+if [[ -n "$UNFOLDED" ]]; then fold closed || true; fi
 
-xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-xcrun simctl status_bar "$UDID" clear || true
-xcrun simctl ui "$UDID" content_size large || true
+xcrun simctl terminate "$UDID" "$LAUNCH_ID" 2>/dev/null || true
+xcrun simctl status_bar "$UDID" clear 2>/dev/null || true
+xcrun simctl ui "$UDID" content_size large 2>/dev/null || true
 
-event done "$OUT/$device_dir"
+event done "$OUT"
 log "Done"
-echo "Full size:  ${OUT#$ROOT/}/$device_dir/"
+echo "Full size:  ${OUT#$ROOT/}/"
 [[ -n "$WEB" ]] && echo "Website:    $WEB/"
 exit 0

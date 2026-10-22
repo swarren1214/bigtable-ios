@@ -283,8 +283,15 @@ struct RecipePhoto: View {
                     .resizable()
                     .scaledToFill()
             } else if ScreenshotMode.isOn, let url, let art = ScreenshotArt(url: url) {
-                // Screenshot mode (Debug): demo recipes are drawn here, not downloaded.
+                // Screenshot mode (Debug): demo recipes without a photo are drawn here.
                 art
+            } else if ScreenshotMode.isOn, let url, let link = URL(string: url), link.isFileURL,
+                      let image = UIImage(contentsOfFile: link.path(percentEncoded: false)) {
+                // Screenshot mode: a real recipe photo the script put on the device, shown at
+                // once (AsyncImage would flash its placeholder first).
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
             } else if let url, let link = URL(string: url) {
                 AsyncImage(url: link) { phase in
                     if let image = phase.image {

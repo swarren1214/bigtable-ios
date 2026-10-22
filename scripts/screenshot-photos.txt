@@ -1,0 +1,31 @@
+# Real photos for the screenshot demo recipes (scripts/screenshots.sh).
+#
+# Each line: a demo recipe's id (BigTable/App/ScreenshotMode.swift), then the id of a published
+# recipe on BigTable in production whose photo stands in for it. The script asks the production
+# Hearth API (GET /v1/bigtable/recipes/<id>/og, public) for each photo and caches it in
+# build/screenshots/photos. A demo recipe left out, or whose recipe can't be fetched, keeps its
+# drawn art. Change a line to try another photo; PHOTOS_REFRESH=1 fetches them all again.
+#
+# demo recipe   production recipe                       (its title, for reference)
+r-lasagna       32aedc54-5da6-42fa-87e0-ddbc3b33199b    # Vegan Lasagna
+r-chicken       80d8db72-91a1-42d1-9c88-49b045f6365d    # Honey Balsamic Chicken with Crispy Broccoli & Potatoes
+r-greenbeans    be17068a-eddb-4a24-8363-e40185e49068    # Syrian Green Beans with Olive Oil
+r-chili         0431c8b1-ebff-48ed-9e37-00e8a787f085    # Fiery Habañero Chili
+r-oats          f4700669-2809-4a19-b4cd-4b3a9604b347    # Jamaican Cornmeal Porridge
+r-pinwheels     8a4c8f3e-b053-4860-b877-5ea66fe7b061    # Shawarma chuck roast wrap
+r-frittata      26fe39a5-d809-4403-9ff6-41cfe3a4c095    # Chorizo, potato & cheese omelette
+r-rolls         72e8570f-db43-4af2-8afe-e96f7baa29e0    # Cinnamon buns
+r-pancakes      1df5ff33-f7e6-4740-882f-cb9e37205a21    # Pancakes
+r-cookies       7f672de9-aa2b-4e79-a6f4-f95dd742a81a    # High-Protein Gluten-Free Chocolate Chip Cookies
+r-sliders       e6b15882-fe3c-48b4-b7e7-6cf8ed589920    # BBQ Pork Sloppy Joes
+r-fajitas       36d711f1-7d97-4b84-b057-2a7090057032    # Chickpea Fajitas
+r-soup          e8336c79-bb3a-4cdf-8cf0-e110d04014b0    # Slow Cooker Chicken Fajita Soup
+r-bowls         10eee061-d196-49e0-8091-023b43ddb085    # Greek Chicken Bowls
+r-enchiladas    a460c2b1-a40a-45ca-944c-c1576a3213af    # Chicken Enchiladas Verde
+r-salmon        80a28ecb-6d82-484a-918f-b21af8989d1c    # Honey Teriyaki Salmon
+r-meatballs     78202dbe-2fec-4ca0-a424-36838b237737    # Lamb & apricot meatballs
+r-tortellini    49405027-8930-4f0f-a43b-9abb1c543356    # Creamy Chicken & Zucchini Pasta
+r-curry         8db61c28-7704-4f10-88a9-1e1281dd64ac    # Kidney Bean Curry
+r-stirfry       63d4f1a8-9077-4f41-a7c6-c7114df4e81f    # Beef and Broccoli Stir-Fry
+r-cobbler       7f4b75a2-76b9-4f3e-8996-7bb308f8b7f0    # Peach & Blueberry Grunt
+r-muffins       200db759-b191-4da8-acb0-479e0f8c7078    # Rock Cakes

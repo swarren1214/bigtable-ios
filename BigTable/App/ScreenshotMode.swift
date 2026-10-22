@@ -479,6 +479,25 @@ nonisolated final class ScreenshotBackend: @unchecked Sendable {
 
 // MARK: - Demo content
 
+/// Real recipe photos for the demo library. scripts/screenshots.sh fetches published recipes'
+/// photos from the production Hearth API (scripts/screenshot-photos.txt says which recipe
+/// stands in for which demo recipe) and copies them into the app's
+/// Documents/ScreenshotPhotos/<demo recipe id>.<ext>. A demo recipe without one keeps its
+/// drawn `ScreenshotArt`.
+nonisolated enum ScreenshotPhotos {
+    /// File URLs (as strings), by demo recipe id.
+    static let byRecipe: [String: String] = {
+        guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return [:] }
+        let folder = documents.appending(path: "ScreenshotPhotos", directoryHint: .isDirectory)
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        var found: [String: String] = [:]
+        for file in files where !file.lastPathComponent.hasPrefix(".") {
+            found[file.deletingPathExtension().lastPathComponent] = file.absoluteString
+        }
+        return found
+    }()
+}
+
 /// A recipe in the demo library.
 nonisolated struct DemoRecipe: Sendable {
     var id: String
@@ -502,7 +521,8 @@ nonisolated struct DemoRecipe: Sendable {
     var steps: [String]
 
     var isMine: Bool { creator == nil }
-    var imageURL: String { "demo-art:\(art)" }
+    /// A real recipe photo when the script supplied one (see `ScreenshotPhotos`), else drawn art.
+    var imageURL: String { ScreenshotPhotos.byRecipe[id] ?? "demo-art:\(art)" }
     var versionID: String { "v-\(id)" }
     var versionCount: Int { id == ScreenshotMode.featuredRecipeID ? 2 : 1 }
     var liked: Bool { favorite && !isMine }

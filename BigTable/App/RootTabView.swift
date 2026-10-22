@@ -38,8 +38,12 @@ struct RootTabView: View {
                 }
             }
 
+            // An explicit label, like the other tabs: icon only on iPhone (the default label
+            // adds "Search"), and on iPad an icon in the text color rather than the app's color.
             Tab(value: AppTab.search, role: .search) {
                 NavigationStack { RecipeSearchView() }
+            } label: {
+                tabLabel("Search", "magnifyingglass")
             }
         }
         .tabViewStyle(.sidebarAdaptable)

@@ -282,8 +282,7 @@ struct RecipeEditorView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1...5)
             }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+            .hearthBareRow()
         }
     }
 

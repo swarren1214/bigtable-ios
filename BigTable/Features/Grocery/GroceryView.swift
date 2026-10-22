@@ -140,9 +140,8 @@ struct GroceryView: View {
                     Label("Your household organizer makes the grocery list. You can check items off as you shop.", systemImage: "person.crop.circle.badge.checkmark")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .hearthBareRow()
                 }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
             }
 
             if canEdit {

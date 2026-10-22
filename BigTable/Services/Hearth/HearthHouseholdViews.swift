@@ -11,6 +11,18 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+extension View {
+    /// Content standing on the page's background in a List or Form (a large title, a line of
+    /// help), lined up with the cards' edges rather than inside them. A row is clipped to its
+    /// rounded corners even with a clear background, so text this close to the edge loses the
+    /// corner of its first letter; the padding keeps it clear of the corners.
+    func hearthBareRow() -> some View {
+        padding(.vertical, 10)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+    }
+}
+
 // MARK: - Avatar
 
 struct HearthMemberAvatar: View {
@@ -271,8 +283,7 @@ struct HearthHouseholdView: View {
             }
             .foregroundStyle(.white.opacity(colorScheme == .light ? 0.88 : 1))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+            .hearthBareRow()
         }
         .listSectionSpacing(8)
     }
