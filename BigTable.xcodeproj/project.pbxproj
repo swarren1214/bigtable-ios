@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		7B1A00000000000000000020 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 7B1A00000000000000000022 /* RevenueCat */; };
+		7B1A00000000000000000064 /* BigTableWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7B1A00000000000000000031 /* BigTableWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7B1A00000000000000000065 /* BigTableWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 7B1A00000000000000000030 /* BigTableWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -18,7 +20,46 @@
 			remoteGlobalIDString = 7B1A00000000000000000008;
 			remoteInfo = BigTable;
 		};
+		7B1A00000000000000000060 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7B1A00000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7B1A00000000000000000050;
+			remoteInfo = BigTableWatchWidgets;
+		};
+		7B1A00000000000000000062 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7B1A00000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7B1A00000000000000000040;
+			remoteInfo = BigTableWatch;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		7B1A00000000000000000044 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				7B1A00000000000000000064 /* BigTableWatchWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7B1A00000000000000000066 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				7B1A00000000000000000065 /* BigTableWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		7B1A00000000000000000006 /* BigTable.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BigTable.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -26,6 +67,12 @@
 		7B1A0000000000000000001B /* BigTable.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BigTable.entitlements; sourceTree = "<group>"; };
 		7B1A0000000000000000001C /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		7B1A0000000000000000001D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		7B1A00000000000000000030 /* BigTableWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BigTableWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7B1A00000000000000000031 /* BigTableWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BigTableWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7B1A00000000000000000035 /* BigTableWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BigTableWatch.entitlements; sourceTree = "<group>"; };
+		7B1A00000000000000000036 /* BigTableWatchWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BigTableWatchWidgets.entitlements; sourceTree = "<group>"; };
+		7B1A00000000000000000037 /* BigTableWatchWidgets-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "BigTableWatchWidgets-Info.plist"; sourceTree = "<group>"; };
+		7B1A00000000000000000038 /* BigTableWatch-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "BigTableWatch-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -37,6 +84,21 @@
 		7B1A00000000000000000005 /* BigTableTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = BigTableTests;
+			sourceTree = "<group>";
+		};
+		7B1A00000000000000000032 /* BigTableWatch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BigTableWatch;
+			sourceTree = "<group>";
+		};
+		7B1A00000000000000000033 /* BigTableWatchWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BigTableWatchWidgets;
+			sourceTree = "<group>";
+		};
+		7B1A00000000000000000034 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -57,6 +119,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7B1A00000000000000000042 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7B1A00000000000000000052 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -66,7 +142,14 @@
 				7B1A0000000000000000001C /* README.md */,
 				7B1A0000000000000000001B /* BigTable.entitlements */,
 				7B1A0000000000000000001D /* Info.plist */,
+				7B1A00000000000000000035 /* BigTableWatch.entitlements */,
+				7B1A00000000000000000038 /* BigTableWatch-Info.plist */,
+				7B1A00000000000000000036 /* BigTableWatchWidgets.entitlements */,
+				7B1A00000000000000000037 /* BigTableWatchWidgets-Info.plist */,
 				7B1A00000000000000000004 /* BigTable */,
+				7B1A00000000000000000034 /* Shared */,
+				7B1A00000000000000000032 /* BigTableWatch */,
+				7B1A00000000000000000033 /* BigTableWatchWidgets */,
 				7B1A00000000000000000005 /* BigTableTests */,
 				7B1A00000000000000000003 /* Products */,
 			);
@@ -77,6 +160,8 @@
 			children = (
 				7B1A00000000000000000006 /* BigTable.app */,
 				7B1A00000000000000000007 /* BigTableTests.xctest */,
+				7B1A00000000000000000030 /* BigTableWatch.app */,
+				7B1A00000000000000000031 /* BigTableWatchWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -91,13 +176,16 @@
 				7B1A0000000000000000000A /* Sources */,
 				7B1A0000000000000000000B /* Frameworks */,
 				7B1A0000000000000000000C /* Resources */,
+				7B1A00000000000000000066 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				7B1A00000000000000000063 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				7B1A00000000000000000004 /* BigTable */,
+				7B1A00000000000000000034 /* Shared */,
 			);
 			name = BigTable;
 			packageProductDependencies = (
@@ -130,6 +218,54 @@
 			productReference = 7B1A00000000000000000007 /* BigTableTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		7B1A00000000000000000040 /* BigTableWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7B1A00000000000000000045 /* Build configuration list for PBXNativeTarget "BigTableWatch" */;
+			buildPhases = (
+				7B1A00000000000000000041 /* Sources */,
+				7B1A00000000000000000042 /* Frameworks */,
+				7B1A00000000000000000043 /* Resources */,
+				7B1A00000000000000000044 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7B1A00000000000000000061 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7B1A00000000000000000032 /* BigTableWatch */,
+				7B1A00000000000000000034 /* Shared */,
+			);
+			name = BigTableWatch;
+			packageProductDependencies = (
+			);
+			productName = BigTableWatch;
+			productReference = 7B1A00000000000000000030 /* BigTableWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+		7B1A00000000000000000050 /* BigTableWatchWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7B1A00000000000000000055 /* Build configuration list for PBXNativeTarget "BigTableWatchWidgets" */;
+			buildPhases = (
+				7B1A00000000000000000051 /* Sources */,
+				7B1A00000000000000000052 /* Frameworks */,
+				7B1A00000000000000000053 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7B1A00000000000000000033 /* BigTableWatchWidgets */,
+				7B1A00000000000000000034 /* Shared */,
+			);
+			name = BigTableWatchWidgets;
+			packageProductDependencies = (
+			);
+			productName = BigTableWatchWidgets;
+			productReference = 7B1A00000000000000000031 /* BigTableWatchWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -146,6 +282,12 @@
 					7B1A00000000000000000009 = {
 						CreatedOnToolsVersion = 26.0;
 						TestTargetID = 7B1A00000000000000000008;
+					};
+					7B1A00000000000000000040 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					7B1A00000000000000000050 = {
+						CreatedOnToolsVersion = 26.0;
 					};
 				};
 			};
@@ -168,6 +310,8 @@
 			targets = (
 				7B1A00000000000000000008 /* BigTable */,
 				7B1A00000000000000000009 /* BigTableTests */,
+				7B1A00000000000000000040 /* BigTableWatch */,
+				7B1A00000000000000000050 /* BigTableWatchWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -181,6 +325,20 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		7B1A0000000000000000000F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7B1A00000000000000000043 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7B1A00000000000000000053 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -204,6 +362,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7B1A00000000000000000041 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7B1A00000000000000000051 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -211,6 +383,16 @@
 			isa = PBXTargetDependency;
 			target = 7B1A00000000000000000008 /* BigTable */;
 			targetProxy = 7B1A00000000000000000010 /* PBXContainerItemProxy */;
+		};
+		7B1A00000000000000000061 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7B1A00000000000000000050 /* BigTableWatchWidgets */;
+			targetProxy = 7B1A00000000000000000060 /* PBXContainerItemProxy */;
+		};
+		7B1A00000000000000000063 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7B1A00000000000000000040 /* BigTableWatch */;
+			targetProxy = 7B1A00000000000000000062 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -398,6 +580,134 @@
 			};
 			name = Release;
 		};
+		7B1A00000000000000000046 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = BigTableWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BH8R3BX5WF;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "BigTableWatch-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = BigTable;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.stephenwarren.bigtable;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephenwarren.bigtable.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		7B1A00000000000000000047 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = BigTableWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BH8R3BX5WF;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "BigTableWatch-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = BigTable;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.stephenwarren.bigtable;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephenwarren.bigtable.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
+		7B1A00000000000000000056 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = BigTableWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BH8R3BX5WF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "BigTableWatchWidgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = BigTable;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephenwarren.bigtable.watchkitapp.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		7B1A00000000000000000057 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = BigTableWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BH8R3BX5WF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "BigTableWatchWidgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = BigTable;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stephenwarren.bigtable.watchkitapp.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -424,6 +734,24 @@
 			buildConfigurations = (
 				7B1A00000000000000000019 /* Debug */,
 				7B1A0000000000000000001A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7B1A00000000000000000045 /* Build configuration list for PBXNativeTarget "BigTableWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7B1A00000000000000000046 /* Debug */,
+				7B1A00000000000000000047 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7B1A00000000000000000055 /* Build configuration list for PBXNativeTarget "BigTableWatchWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7B1A00000000000000000056 /* Debug */,
+				7B1A00000000000000000057 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

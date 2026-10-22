@@ -250,6 +250,8 @@ struct AppRoot: View {
             guard !ScreenshotMode.isOn else { return }
             KitchenStore.shared.prepare()
             HearthHouseholdStore.shared.start(app: .bigtable)
+            // The Apple Watch app: tonight's meal, cooking steps and the grocery list.
+            WatchBridge.shared.start()
             // Onboarded before the family's kitchen and iCloud remembered it: say so now, so
             // the family's other devices skip onboarding and keep this device's shopping choice.
             if UserDefaults.standard.bool(forKey: BigTableOnboarding.doneKey) {
@@ -299,6 +301,8 @@ struct AppRoot: View {
             if phase == .active {
                 Task { await AuthClient.shared.followSharedSession() }
                 HearthPhotoCache.shared.refreshIfChanged()
+                // A new day means new meals on the watch.
+                WatchBridge.shared.pushSoon()
                 Task { await KitchenSharing.update() }
             } else {
                 KitchenStore.shared.persistNow()
