@@ -25,8 +25,7 @@ struct PantryView: View {
         let receipts = { _ = hearthTick; return kitchen.pendingReceipts() }()
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                HeaderTitle("Pantry")
-                GrocerySidePicker(side: $side)
+                GroceryTabHeader(side: $side)
                 if let first = receipts.first {
                     receiptCard(first)
                 }
@@ -48,13 +47,17 @@ struct PantryView: View {
         .colorHeader("Pantry")
         .refreshable { await kitchen.syncNow() }
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Group {
-                    Button("Tell the Pantry", systemImage: "mic") { showVoice = true }
-                    Button("Quick Check", systemImage: "checklist") { showCheck = true }
-                    Button("Add", systemImage: "plus") { showAdd = true }
+            // One menu on the left, like the List side's, so the profile photo stays at the far right.
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    Button("Tell the Pantry…", menuIcon: "mic") { showVoice = true }
+                    Button("Quick Check…", menuIcon: "checklist") { showCheck = true }
+                    Button("Add Item…", menuIcon: "plus") { showAdd = true }
+                } label: {
+                    Image(systemName: "ellipsis")
                 }
-                // White over the color header.
+                .accessibilityLabel("Pantry options")
+                // White over the color header, like the other toolbar buttons.
                 .tint(.white)
             }
         }

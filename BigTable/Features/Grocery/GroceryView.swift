@@ -44,11 +44,10 @@ struct GroceryView: View {
 
     private var listSide: some View {
         content
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Grocery")
-            .navigationBarTitleDisplayMode(.large)
+            // The app's color header and large white title, like the other tabs (and the Pantry side).
+            .colorHeader("Grocery")
             .toolbar { toolbarContent }
-            .bigTableToolbar(overHeader: false)
+            .bigTableToolbar()
             .task(id: householdKey) { await store.load() }
             .refreshable {
                 await store.flush()
@@ -101,7 +100,7 @@ struct GroceryView: View {
         if !store.hasLoaded, let error = store.loadError {
             ScrollView {
                 VStack(spacing: 16) {
-                    GrocerySidePicker(side: $side)
+                    GroceryTabHeader(side: $side)
                     RetryCard(message: error) { Task { await store.load() } }
                 }
                 .padding(16)
@@ -109,7 +108,7 @@ struct GroceryView: View {
         } else if !store.hasLoaded {
             ScrollView {
                 VStack(spacing: 16) {
-                    GrocerySidePicker(side: $side)
+                    GroceryTabHeader(side: $side)
                     LoadingCard(title: "Loading your list…")
                 }
                 .padding(16)
@@ -122,7 +121,7 @@ struct GroceryView: View {
     private var list: some View {
         List {
             Section {
-                GrocerySidePicker(side: $side)
+                GroceryTabHeader(side: $side)
             }
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
@@ -175,6 +174,11 @@ struct GroceryView: View {
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(16)
+        // Let the color header show through; colorHeader draws the gray below it.
+        .scrollContentBackground(.hidden)
+        // Start the title where the Pantry side's does (4 pt under the bar), not at the list's
+        // default first-section gap, so the title doesn't jump when switching sides.
+        .contentMargins(.top, 4, for: .scrollContent)
         .scrollDismissesKeyboard(.interactively)
         .frame(maxWidth: BigTableScreen<EmptyView>.readableWidth)
         .frame(maxWidth: .infinity)
@@ -385,6 +389,8 @@ struct GroceryView: View {
                 Image(systemName: "ellipsis")
             }
             .accessibilityLabel("Grocery list options")
+            // White over the color header, like the other toolbar buttons.
+            .tint(.white)
         }
     }
 
@@ -602,6 +608,19 @@ struct GroceryHeaderCard: View {
 
 /// What you need (the list) or what you have (the pantry). It sits at the top of each side's
 /// content, under the large title, and scrolls with the page.
+/// The top of both sides of the Grocery tab: the large white title over the color header
+/// ("Grocery" or "Pantry") and the List/Pantry switch, with the same spacing on each side.
+struct GroceryTabHeader: View {
+    @Binding var side: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HeaderTitle(side == "pantry" ? "Pantry" : "Grocery")
+            GrocerySidePicker(side: $side)
+        }
+    }
+}
+
 struct GrocerySidePicker: View {
     @Binding var side: String
 
@@ -611,6 +630,5 @@ struct GrocerySidePicker: View {
             Text("Pantry").tag("pantry")
         }
         .pickerStyle(.segmented)
-        .controlSize(.large)
     }
 }
