@@ -24,6 +24,8 @@ struct GroceryView: View {
     @FocusState private var addFieldFocused: Bool
     /// List or Pantry, remembered.
     @AppStorage("grocery.side") private var side = "list"
+    /// iPhone Duo: open wide, the week shows beside the list; closed, Add Item leads the rail.
+    @Environment(\.hearthDuoPose) private var pose
 
     private var isPro: Bool { model.hasPro }
     private var canEdit: Bool { model.isOrganizer }
@@ -43,7 +45,7 @@ struct GroceryView: View {
     }
 
     private var listSide: some View {
-        content
+        layout
             // The app's color header and large white title, like the other tabs (and the Pantry side).
             .colorHeader("Grocery")
             .toolbar { toolbarContent }
@@ -94,6 +96,20 @@ struct GroceryView: View {
     static let generateFeature = HearthPaywallFeature("AI grocery lists", detail: "Built from the plan, sorted by aisle, with amounts and a cost estimate.", symbol: "wand.and.stars")
 
     // MARK: - Content
+
+    /// The list, with the week beside it when an iPhone Duo is open wide.
+    @ViewBuilder
+    private var layout: some View {
+        if pose == .openWide {
+            HearthFoldSplit(axes: .horizontal) {
+                content
+            } secondary: {
+                GroceryWeekPane()
+            }
+        } else {
+            content
+        }
+    }
 
     @ViewBuilder
     private var content: some View {
@@ -204,7 +220,8 @@ struct GroceryView: View {
         let full = store.sections.first { $0.name == section.name } ?? section
         let color = GroceryAisleStyle.color(section.name)
         Section {
-            ForEach(section.items) { item in
+            // Checked items sink to the bottom of their aisle, so what's left is on top.
+            ForEach(section.items.filter { !store.isChecked($0) } + section.items.filter { store.isChecked($0) }) { item in
                 GroceryItemRow(item: item, isChecked: store.isChecked(item), color: color) {
                     store.toggle(item)
                 }
@@ -357,6 +374,21 @@ struct GroceryView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        // iPhone Duo: Add Item is the rail's first action (so it never overflows), where the
+        // thumb already is on the outer display. Elsewhere the add row at the top does it.
+        if canEdit, pose != .standard {
+            ToolbarItem(placement: .topBarLeading) {
+                Group {
+                    Button {
+                        addFieldFocused = true
+                    } label: {
+                        Label("Add Item", systemImage: "plus")
+                    }
+                }
+                // White over the color header, like the other toolbar buttons.
+                .tint(.white)
+            }
+        }
         ToolbarItem(placement: .topBarLeading) {
             Menu {
                 if canGenerate {
@@ -386,7 +418,8 @@ struct GroceryView: View {
                     Button("New Section…", menuIcon: "folder.badge.plus") { showNewSection = true }
                 }
             } label: {
-                Image(systemName: "ellipsis")
+                // A title and a symbol, for the iPhone Duo's rail and the overflow menu.
+                Label("List Options", systemImage: "ellipsis")
             }
             .accessibilityLabel("Grocery list options")
             // White over the color header, like the other toolbar buttons.

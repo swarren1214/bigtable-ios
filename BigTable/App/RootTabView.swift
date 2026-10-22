@@ -72,7 +72,7 @@ struct RootTabView: View {
 }
 
 extension View {
-    /// The toolbar every tab shares: Ask BigTable (✨), the notifications bell (with the unread
+    /// The toolbar every tab shares: BigTable AI (✨), the notifications bell (with the unread
     /// count) and the profile avatar. White over the color header; pass `overHeader: false` on
     /// a screen without one.
     func bigTableToolbar(overHeader: Bool = true) -> some View {
@@ -85,17 +85,23 @@ private struct BigTableToolbar: ViewModifier {
     @Environment(AppModel.self) private var model
     var overHeader = true
 
+    /// Who can plan with AI (kids can't).
+    private var canPlan: Bool { model.canUseAIPlan && model.canManagePlan }
+
     func body(content: Content) -> some View {
         content.toolbar {
-            // Ask BigTable runs on the device's built-in AI, so it only shows where that's on.
-            if AskEngine.isAvailable {
+            // BigTable AI, the app's one AI button: Plan the Week and Ask BigTable in one sheet.
+            // Ask runs on the device's built-in AI; where that's off, ✨ opens the planner
+            // straight away. Hidden for those who can do neither.
+            if AskEngine.isAvailable || canPlan {
                 ToolbarItem(placement: .topBarTrailing) {
+                    // Every item has a title and a symbol, so the iPhone Duo's rail and the
+                    // overflow menu can show it (the bar shows the symbol).
                     Button {
-                        router.present(.ask)
+                        router.present(AskEngine.isAvailable ? .ask : .aiPlan)
                     } label: {
-                        Image(systemName: "sparkles")
+                        Label("BigTable AI", systemImage: "sparkles")
                     }
-                    .accessibilityLabel("Ask BigTable")
                     .tint(overHeader ? .white : nil)
                 }
             }
@@ -105,7 +111,7 @@ private struct BigTableToolbar: ViewModifier {
                     Button {
                         router.present(.notifications)
                     } label: {
-                        Image(systemName: model.unreadCount > 0 ? "bell.badge" : "bell")
+                        Label("Notifications", systemImage: model.unreadCount > 0 ? "bell.badge" : "bell")
                     }
                     .badge(model.unreadCount)
                     .accessibilityLabel(model.unreadCount > 0 ? "Notifications, \(model.unreadCount) unread" : "Notifications")

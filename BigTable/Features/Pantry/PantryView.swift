@@ -54,7 +54,8 @@ struct PantryView: View {
                     Button("Quick Check…", menuIcon: "checklist") { showCheck = true }
                     Button("Add Item…", menuIcon: "plus") { showAdd = true }
                 } label: {
-                    Image(systemName: "ellipsis")
+                    // A title and a symbol, for the iPhone Duo's rail and the overflow menu.
+                    Label("Pantry Options", systemImage: "ellipsis")
                 }
                 .accessibilityLabel("Pantry options")
                 // White over the color header, like the other toolbar buttons.

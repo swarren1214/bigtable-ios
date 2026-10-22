@@ -56,6 +56,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        // Cook Mode's kitchen timer (CookSession) is local, not an inbox notification: just open the app.
+        guard response.notification.request.identifier != "bigtable.cook-timer" else { return }
         await MainActor.run { AppRouter.shared.present(.notifications) }
     }
 }
@@ -95,7 +97,7 @@ enum AppSheet: Identifiable, Hashable {
     case aiPlan
     case recipe(id: String, versionID: String?)
     case publicProfile(id: String)
-    /// Ask BigTable (the ✨ button).
+    /// BigTable AI (the ✨ button): Plan the Week and Ask BigTable.
     case ask
 
     var id: String {
@@ -215,6 +217,9 @@ struct AppRoot: View {
         }
         .tint(accent)
         .environment(\.accent, accent)
+        // iPhone Duo: reads the pose (closed, open, Book, Laptop) for the whole window, outside
+        // the tab view, and passes it down as `\.hearthDuoPose` (HearthDuo.swift).
+        .hearthDuoPose()
         // Profile › Appearance (HearthProfile.swift). BigTable shows Profile from its own sheet
         // rather than `.hearthProfile { }`, so it applies it here.
         .hearthAppearance()

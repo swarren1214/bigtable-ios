@@ -71,6 +71,19 @@ struct RecipeDetailView: View {
     @State private var shareItem: RecipeShareItem?
     @State private var likePulse = 0
     @State private var reporting: ReportTarget?
+    /// The ingredients card's width, for one column or two.
+    @State private var ingredientsWidth: CGFloat = 0
+    /// Cook Mode, full screen, from Start Cooking.
+    @State private var showsCookMode = false
+    /// In Laptop, the whole recipe instead of Cook Mode (the toolbar switches back and forth).
+    @State private var showsRecipeWhileCooking = false
+    /// The recipe being cooked (one for the app, so folding or closing the phone keeps the step).
+    @State private var cook = CookSession.shared
+    /// iPhone Duo: Book shows the recipe as a two-page spread, Laptop turns it into Cook Mode.
+    @Environment(\.hearthDuoPose) private var pose
+    /// Showing (not under another tab or a pushed screen), so Laptop only starts cooking the
+    /// recipe the person is looking at.
+    @State private var isOnScreen = false
 
     private let api = BigTableAPI.shared
     private var library: RecipeLibrary { .shared }
@@ -99,6 +112,34 @@ struct RecipeDetailView: View {
             }
         }
         .onChange(of: library.revision) { Task { await load() } }
+        // Set down partly folded (Laptop), the recipe becomes Cook Mode.
+        .onChange(of: pose, initial: true) { _, _ in
+            showsRecipeWhileCooking = false
+            cookIfSetDown()
+        }
+        .onChange(of: detail?.id) { _, _ in cookIfSetDown() }
+        // The servings stepper rescales Cook Mode's amounts too.
+        .onChange(of: servings) { _, _ in syncCookAmounts() }
+        .onChange(of: scaleEnabled) { _, _ in syncCookAmounts() }
+        .onChange(of: amountStyle) { _, _ in syncCookAmounts() }
+        // One full-screen cover for both (two on the same view don't present reliably):
+        // Cook Mode from Start Cooking, or the Across the Kitchen board from this page (the
+        // toolbar, or Cook Mode shown in place in Laptop). Full-screen Cook Mode presents its own.
+        .fullScreenCover(item: cookCover) { cover in
+            switch cover {
+            case .cookMode:
+                CookModeView()
+                    .tint(accent)
+                    .environment(\.accent, accent)
+            case .board:
+                CookGlanceBoard()
+                    .environment(\.accent, accent)
+            }
+        }
+        // Not on onAppear: coming back from full-screen Cook Mode after Done Cooking must not
+        // start it again. The recipe loads after this, and its id change starts it.
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
         .sheet(isPresented: $showAddToPlan) {
             if let detail { RecipeAddToPlanSheet(recipe: detail) }
         }
@@ -154,40 +195,35 @@ struct RecipeDetailView: View {
 
     @ViewBuilder
     private func content(_ detail: RecipeDetail) -> some View {
-        let owned = RecipeFormat.isOwned(createdByProfileId: detail.createdByProfileId, sourceName: detail.sourceName)
-        ScrollView {
+        if showsCookModeInPage(detail) {
+            // Laptop: the step on the upright half, its ingredients, timer and Back and Next on
+            // the flat half (CookModeView.swift).
+            // The board is presented by this page (cookCover), so it stays up when the pose changes.
+            CookModeContent(presentsBoard: false)
+        } else if pose == .book {
+            // Book: a cookbook spread. What you need on the left page, what to do on the right,
+            // two equal pages so nothing sits in the fold.
+            HearthFoldSplit(axes: .horizontal) {
+                page { needSections(detail) }
+            } secondary: {
+                page { doSections(detail) }
+            }
+        } else {
+            // Every other pose: the whole recipe on one page, ingredients (two columns when
+            // there's room) and then the steps.
+            page {
+                needSections(detail)
+                doSections(detail)
+            }
+        }
+    }
+
+    /// One scrolling page of the recipe, at a readable width.
+    private func page<Content: View>(@ViewBuilder _ sections: () -> Content) -> some View {
+        let pageContent = sections()
+        return ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Color.clear
-                    .aspectRatio(4 / 3, contentMode: .fit)
-                    .overlay { RecipePhoto(url: detail.imageUrl, cornerRadius: 22, symbolSize: 48) }
-                    .clipShape(.rect(cornerRadius: 22, style: .continuous))
-
-                header(detail, owned: owned)
-
-                if detail.hasUpdateAvailable == true, let current = detail.currentVersionId {
-                    updateCard(current)
-                }
-
-                if detail.status == .removed, owned, AppConfig.publishingEnabled {
-                    removedCard(detail)
-                }
-
-                if let creatorID = detail.createdByProfileId, !owned, AppConfig.socialEnabled {
-                    creatorRow(detail, creatorID: creatorID)
-                }
-
-                actions(detail, owned: owned)
-
-                if let text = detail.description?.recipeTrimmed, !text.isEmpty {
-                    Text(text)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-
-                servingsCard(detail)
-                ingredientsSection(detail)
-                stepsSection(detail)
-                attribution(detail)
+                pageContent
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -196,6 +232,67 @@ struct RecipeDetailView: View {
             .frame(maxWidth: .infinity)
         }
         .refreshable { await load() }
+    }
+
+    /// What you need: the photo, what it is, what you can do with it, servings and ingredients.
+    @ViewBuilder
+    private func needSections(_ detail: RecipeDetail) -> some View {
+        let owned = RecipeFormat.isOwned(createdByProfileId: detail.createdByProfileId, sourceName: detail.sourceName)
+        Color.clear
+            .aspectRatio(4 / 3, contentMode: .fit)
+            .overlay { RecipePhoto(url: detail.imageUrl, cornerRadius: 22, symbolSize: 48) }
+            .clipShape(.rect(cornerRadius: 22, style: .continuous))
+
+        header(detail, owned: owned)
+
+        if detail.hasUpdateAvailable == true, let current = detail.currentVersionId {
+            updateCard(current)
+        }
+
+        if detail.status == .removed, owned, AppConfig.publishingEnabled {
+            removedCard(detail)
+        }
+
+        if let creatorID = detail.createdByProfileId, !owned, AppConfig.socialEnabled {
+            creatorRow(detail, creatorID: creatorID)
+        }
+
+        actions(detail, owned: owned)
+
+        if let text = detail.description?.recipeTrimmed, !text.isEmpty {
+            Text(text)
+                .font(.body)
+                .foregroundStyle(.secondary)
+        }
+
+        servingsCard(detail)
+        ingredientsSection(detail)
+    }
+
+    /// What to do: Start Cooking, the steps, and where the recipe came from.
+    @ViewBuilder
+    private func doSections(_ detail: RecipeDetail) -> some View {
+        startCookingButton(detail)
+        stepsSection(detail)
+        attribution(detail)
+    }
+
+    @ViewBuilder
+    private func startCookingButton(_ detail: RecipeDetail) -> some View {
+        if hasSteps(detail) {
+            Button {
+                startCooking(detail)
+                showsCookMode = true
+            } label: {
+                Label(cook.recipeID == detail.id ? "Back to Cooking" : "Start Cooking", systemImage: "frying.pan")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 30)
+            }
+            .buttonStyle(.glass)
+            .controlSize(.large)
+            // A text button: the text color, not the app's (AGENT.md).
+            .tint(.primary)
+        }
     }
 
     private func header(_ detail: RecipeDetail, owned: Bool) -> some View {
@@ -411,28 +508,47 @@ struct RecipeDetailView: View {
                         .foregroundStyle(.secondary)
                         .padding(16)
                 } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(detail.ingredients.enumerated()), id: \.element.id) { index, ingredient in
-                            let parts = ingredientParts(ingredient, base: detail.baseServings)
-                            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                Text(parts.quantity)
-                                    .font(.body.weight(.semibold))
-                                    .monospacedDigit()
-                                    .frame(minWidth: 70, alignment: .leading)
-                                Text(parts.name)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // Two even columns when the card is wide (the inner display, iPad), one on
+                    // a phone-width page. Read down the first column, then the second.
+                    let columns = ingredientsWidth >= 520 ? 2 : 1
+                    let rows = Array(detail.ingredients.enumerated())
+                    let perColumn = (rows.count + columns - 1) / columns
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(0..<columns, id: \.self) { column in
+                            let slice = Array(rows.dropFirst(column * perColumn).prefix(perColumn))
+                            VStack(spacing: 0) {
+                                ForEach(slice, id: \.element.id) { index, ingredient in
+                                    ingredientRow(ingredient, base: detail.baseServings)
+                                    if index != slice.last?.offset {
+                                        Divider().padding(.leading, 16)
+                                    }
+                                }
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 11)
-                            .accessibilityElement(children: .combine)
-                            if index < detail.ingredients.count - 1 {
-                                Divider().padding(.leading, 16)
+                            .frame(maxWidth: .infinity, alignment: .top)
+                            if column < columns - 1 {
+                                Divider()
                             }
                         }
                     }
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { ingredientsWidth = $0 }
         }
+    }
+
+    private func ingredientRow(_ ingredient: RecipeIngredient, base: Double) -> some View {
+        let parts = ingredientParts(ingredient, base: base)
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(parts.quantity)
+                .font(.body.weight(.semibold))
+                .monospacedDigit()
+                .frame(minWidth: 70, alignment: .leading)
+            Text(parts.name)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -493,6 +609,29 @@ struct RecipeDetailView: View {
                 SheetCancelButton("Close") { dismiss() }
             }
         }
+        // Laptop, cooking this recipe: switch between Cook Mode and the whole recipe.
+        if let detail, pose == .laptop, cook.recipeID == detail.id, !showsCookMode {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    withAnimation(.smooth) { showsRecipeWhileCooking.toggle() }
+                } label: {
+                    Label(showsRecipeWhileCooking ? "Cook Mode" : "Whole Recipe", systemImage: showsRecipeWhileCooking ? "frying.pan" : "book.pages")
+                }
+                // Not a confirm button: the text color, not the app's (AGENT.md).
+                .tint(.primary)
+            }
+        }
+        // Cooking this recipe but not in Cook Mode (the phone was closed or opened flat): the
+        // Across the Kitchen board (Tent) is still a tap away. Cook Mode has its own button.
+        if let detail, cook.recipeID == detail.id, !showsCookMode, !showsCookModeInPage(detail) {
+            ToolbarItem(placement: .primaryAction) {
+                HearthGlanceBoardButton(title: "Across the Kitchen", systemImage: "timer") {
+                    cook.showsBoard = true
+                }
+                // Not a confirm button: the text color, not the app's (AGENT.md).
+                .tint(.primary)
+            }
+        }
         if let detail, RecipeFormat.isOwned(createdByProfileId: detail.createdByProfileId, sourceName: detail.sourceName) {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -550,27 +689,59 @@ struct RecipeDetailView: View {
     /// The amount (scaled when scaling is on) with its measurement, and the name. Ingredients
     /// imported as one line ("2 cups flour") with no amount are read the way the Expo app did.
     private func ingredientParts(_ ingredient: RecipeIngredient, base: Double) -> (quantity: String, name: String) {
-        var amount = ingredient.amount
-        var measurement = ingredient.measurementType
-        var name = ingredient.name
-        if amount == nil {
-            let parsed = Ingredients.parseLine(ingredient.name)
-            if let parsedAmount = parsed.amount {
-                amount = parsedAmount
-                measurement = measurement ?? parsed.measurementType
-                name = parsed.name.isEmpty ? ingredient.name : parsed.name
+        RecipeAmounts.parts(ingredient, base: base, servings: servings, scaleEnabled: scaleEnabled, style: amountStyle)
+    }
+
+    // MARK: Cooking
+
+    private func hasSteps(_ detail: RecipeDetail) -> Bool {
+        detail.instructions.contains { !RecipeFormat.stripStepNumber($0).isEmpty }
+    }
+
+    /// Starts Cook Mode for this recipe (or picks up at the step it was on), with the amounts
+    /// chosen here.
+    private func startCooking(_ detail: RecipeDetail) {
+        cook.start(detail, servings: servings, scaleEnabled: scaleEnabled, amountStyle: amountStyle)
+    }
+
+    /// Laptop (partly folded, set down): the recipe becomes Cook Mode, unless another recipe is
+    /// cooking (its step and timer are kept; Start Cooking switches).
+    private func cookIfSetDown() {
+        guard pose == .laptop, isOnScreen, let detail, hasSteps(detail) else { return }
+        if cook.recipeID == nil || cook.recipeID == detail.id {
+            startCooking(detail)
+        }
+    }
+
+    /// What this page shows full screen: Cook Mode, or the Across the Kitchen board for this
+    /// recipe (full-screen Cook Mode presents the board itself).
+    private var cookCover: Binding<RecipeCookCover?> {
+        Binding(
+            get: {
+                if showsCookMode { return .cookMode }
+                guard let detail, cook.showsBoard, cook.recipeID == detail.id else { return nil }
+                return .board
+            },
+            set: { cover in
+                guard cover == nil else { return }
+                if showsCookMode {
+                    showsCookMode = false
+                } else {
+                    cook.showsBoard = false
+                }
             }
-        }
-        let factor = scaleEnabled && base > 0 ? Double(servings) / base : 1
-        let quantity: String
-        if let amount {
-            let scaled = amount * factor
-            quantity = amountStyle == .fraction ? Ingredients.displayAmount(scaled) : Ingredients.formatAmount(scaled)
-        } else {
-            quantity = ""
-        }
-        let unit = Ingredients.shortLabel(measurement)
-        return ([quantity, unit].filter { !$0.isEmpty }.joined(separator: " "), name)
+        )
+    }
+
+    /// Laptop, cooking this recipe: the page is Cook Mode (unless the whole recipe was asked
+    /// for, or Start Cooking's full-screen Cook Mode is already up).
+    private func showsCookModeInPage(_ detail: RecipeDetail) -> Bool {
+        pose == .laptop && cook.recipeID == detail.id && !showsCookMode && !showsRecipeWhileCooking
+    }
+
+    private func syncCookAmounts() {
+        guard let detail else { return }
+        cook.updateAmounts(recipeID: detail.id, servings: servings, scaleEnabled: scaleEnabled, amountStyle: amountStyle)
     }
 
     // MARK: Loading
@@ -759,6 +930,12 @@ struct RecipeDetailView: View {
     private func isPresented<T>(_ value: Binding<T?>) -> Binding<Bool> {
         Binding(get: { value.wrappedValue != nil }, set: { if !$0 { value.wrappedValue = nil } })
     }
+}
+
+/// The recipe page's full-screen cover: Cook Mode or the Across the Kitchen board.
+nonisolated enum RecipeCookCover: String, Identifiable, Sendable {
+    case cookMode, board
+    var id: String { rawValue }
 }
 
 /// The system share sheet, for a recipe's link.

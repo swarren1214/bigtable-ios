@@ -14,6 +14,28 @@ screen and in Split View, Slide Over and Stage Manager windows, and portrait and
 - Check the smallest iPhone, the largest iPhone, an unfolded or split screen, and iPad before
   calling a screen done. Larger Dynamic Type sizes must not clip or overlap.
 
+## iPhone Duo
+
+The shared Duo layer is `Services/Hearth/HearthDuo.swift` (canonical copy in ~/Developer/hearthkit).
+Design: the "Hearth on iPhone Duo" canvas. This app's Duo features are described in `DUO.md`.
+
+- One layout that grows with the space: compact on the outer display, regular inside. A pose gets
+  its own mode only where the way people hold the device changes the job.
+- `.hearthDuoPose()` sits on the scene root, and on the root of any `.fullScreenCover` whose content
+  reads `\.hearthDuoPose` (a cover takes the presenter out of the window).
+- Use standard toolbars and tab views so the system moves bars to the trailing rail. Every toolbar
+  item that isn't text-only is a `Label` with a title and a symbol; Back/Close first
+  (`.cancellationAction`), then the prominent action. Controls for a leading pane stay above it.
+- Nothing in the fold: two related views go in `HearthFoldSplit` (or a NavigationSplitView); "read up
+  top, tap below" screens use `HearthFoldOverlay`; grids use an even number of columns
+  (`HearthEvenColumns`). Never put an arrangement inside a List, ScrollView or split view.
+- No layout from `UIScreen` bounds, `userInterfaceIdiom` or fixed phone widths: use size classes and
+  the container's size.
+- Same functions in every pose, and state follows the hand: keep state above pose-specific views so
+  opening, closing or folding never loses it.
+- Tent boards (`HearthGlanceBoard`) open from a toolbar button; the system can't detect Tent.
+- Duo APIs need iOS 27.1 and Xcode 27.1; HearthDuo wraps them in `#available` with iOS 26 fallbacks.
+
 ## Liquid Glass menus with icons
 
 - Every menu item's icon must be the same **color** as its text: label-colored text gets a

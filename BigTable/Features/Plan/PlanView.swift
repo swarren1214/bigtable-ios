@@ -20,6 +20,9 @@ struct PlanView: View {
     @State private var selectedDay: DayOfWeek = PlanDates.day(for: .now)
     @State private var sheet: PlanSheet?
     @State private var pendingSwitch: PlanSheet?
+    /// The recipes beside the week when the iPhone Duo is open wide (PlanWeekWide.swift).
+    @State private var shelf = RecipeStore(collection: .all, pageSize: 20)
+    @Environment(\.hearthDuoPose) private var pose
 
     /// Asks for an App Store rating after this many meals are marked cooked.
     private static let reviewAfterCooked = 3
@@ -31,42 +34,7 @@ struct PlanView: View {
     private var canManage: Bool { model.canManagePlan }
 
     var body: some View {
-        BigTableScreen(title: "Plan") {
-            // BigTable Plus or Hearth+ couldn't renew: update the payment method (shows nothing
-            // otherwise).
-            HearthBillingBanner()
-
-            if !canManage {
-                Label("View only. \(organizerName) manages this plan.", systemImage: "eye")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-            }
-
-            PlanWeekStrip(
-                weekStart: weekStart,
-                selectedDay: $selectedDay,
-                planner: planner,
-                onShiftWeek: { delta in
-                    router.weekStart = ISODay.adding(days: 7 * delta, to: weekStart)
-                },
-                onToday: {
-                    router.weekStart = PlanDates.currentWeekStart
-                    selectedDay = PlanDates.day(for: .now)
-                }
-            )
-            .hearthTourTarget(BigTableTour.plan)
-
-            if let planner {
-                dayContent(planner)
-            } else if let error = store.loadErrors[weekStart] {
-                RetryCard(message: error) {
-                    Task { await store.load(weekStart, force: true) }
-                }
-            } else {
-                LoadingCard(title: "Loading the plan…")
-            }
-        }
+        layout
         .refreshable {
             await KitchenStore.shared.syncNow()
             await store.load(weekStart, force: true)
@@ -93,23 +61,119 @@ struct PlanView: View {
         }
         .errorAlert($store.actionError, title: "Couldn't update the plan")
         .toolbar {
-            if canManage, model.canUseAIPlan {
+            // Plan with AI is in BigTable AI now: the ✨ in the shared toolbar (RootTabView).
+            // Open wide: Add Meal on the rail, for the day shown on the week pane.
+            if pose == .openWide, canManage, !isPastDay {
                 ToolbarItem(placement: .topBarLeading) {
                     Group {
                         Button {
-                            router.present(.aiPlan)
+                            request(.recipePicker(PlanSlotRef(weekStart: weekStart, day: selectedDay, slot: .dinner), .entree))
                         } label: {
-                            Image(systemName: "sparkles")
+                            Label("Add Meal", systemImage: "plus")
                         }
-                        .accessibilityLabel("Plan with AI")
                     }
-                    // White over the color header.
                     .tint(.white)
                 }
             }
         }
         .sensoryFeedback(.success, trigger: cookedCount)
         .bigTableToolbar()
+    }
+
+    // MARK: Layout
+
+    /// One column of the plan everywhere, except on an iPhone Duo open wide (the inner display
+    /// in landscape): there, recipes on the leading pane and the week on the trailing pane.
+    @ViewBuilder
+    private var layout: some View {
+        if pose == .openWide {
+            HearthFoldSplit(axes: .horizontal) {
+                PlanRecipeShelf(store: shelf, weekStart: weekStart, canPlan: canManage && !isPastWeek) { recipe, day in
+                    addDinner(recipe, on: day)
+                }
+                // The same color header as the week pane (the shelf's title is white).
+                .background(alignment: .top) { HeaderGradient() }
+                .background(Color(.systemGroupedBackground))
+            } secondary: {
+                BigTableScreen(title: "Plan") {
+                    planSections(showsNights: true)
+                }
+            }
+        } else {
+            BigTableScreen(title: "Plan") {
+                planSections(showsNights: false)
+            }
+        }
+    }
+
+    private var isPastWeek: Bool { ISODay.adding(days: 6, to: weekStart) < PlanDates.todayISO }
+
+    @ViewBuilder
+    private func planSections(showsNights: Bool) -> some View {
+        // BigTable Plus or Hearth+ couldn't renew: update the payment method (shows nothing
+        // otherwise).
+        HearthBillingBanner()
+
+        if !canManage {
+            Label("View only. \(organizerName) manages this plan.", systemImage: "eye")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+        }
+
+        PlanWeekStrip(
+            weekStart: weekStart,
+            selectedDay: $selectedDay,
+            planner: planner,
+            onShiftWeek: { delta in
+                router.weekStart = ISODay.adding(days: 7 * delta, to: weekStart)
+            },
+            onToday: {
+                router.weekStart = PlanDates.currentWeekStart
+                selectedDay = PlanDates.day(for: .now)
+            }
+        )
+        .hearthTourTarget(BigTableTour.plan)
+
+        // Open wide: the week's nights, where recipes from the shelf are dropped.
+        if showsNights, let planner {
+            PlanNightsCard(
+                weekStart: weekStart,
+                planner: planner,
+                canManage: canManage,
+                selectedDay: $selectedDay,
+                onDrop: { id, day in dropRecipe(id, on: day) }
+            )
+        }
+
+        if let planner {
+            dayContent(planner)
+        } else if let error = store.loadErrors[weekStart] {
+            RetryCard(message: error) {
+                Task { await store.load(weekStart, force: true) }
+            }
+        } else {
+            LoadingCard(title: "Loading the plan…")
+        }
+    }
+
+    /// A recipe dragged from the shelf onto a night: planned as that night's dinner.
+    private func dropRecipe(_ id: String, on day: DayOfWeek) -> Bool {
+        guard let recipe = shelf.recipes.first(where: { $0.id == id }) else { return false }
+        addDinner(recipe, on: day)
+        return true
+    }
+
+    private func addDinner(_ recipe: RecipeSummary, on day: DayOfWeek) {
+        guard canManage else { return }
+        let ref = PlanSlotRef(weekStart: weekStart, day: day, slot: .dinner)
+        // A night out is replaced only after asking (as the recipe picker does).
+        guard store.slot(ref).dineOut == nil else {
+            store.actionError = "\(ref.title.capitalized) is planned as Dine Out. Open the day to change it."
+            return
+        }
+        withAnimation(.snappy) { selectedDay = day }
+        Task { await store.addRecipe(recipe, role: .entree, to: ref) }
     }
 
     private var organizerName: String {

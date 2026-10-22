@@ -16,7 +16,12 @@ struct AIPlanView: View {
     @State private var showsPreview = false
     @FocusState private var promptFocused: Bool
 
-    init() {
+    /// Opened inside BigTable AI (the ✨ sheet) rather than as its own sheet: no navigation
+    /// stack or Close of its own (Back returns to Ask), and finishing closes the whole sheet.
+    private let embedded: Bool
+
+    init(embedded: Bool = false) {
+        self.embedded = embedded
         _store = State(initialValue: AIPlanStore(weekStart: AppRouter.shared.weekStart))
     }
 
@@ -27,39 +32,11 @@ struct AIPlanView: View {
     private var isUsedUp: Bool { usage.map { !$0.canMakeRequest } ?? false }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if !model.isSignedIn {
-                    SignInPrompt(reason: .aiPlan)
-                } else if model.canUseAIPlan && model.canManagePlan {
-                    form
-                } else {
-                    notAllowed
-                }
-            }
-            .navigationTitle("Plan with AI")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    SheetCancelButton("Close") { dismiss() }
-                        .disabled(store.phase.isBusy)
-                }
-            }
-            .navigationDestination(isPresented: $showsPreview) {
-                AIPlanPreviewView(store: store, onApplied: { dismiss() }, onRegenerate: { Task { await generate() } })
-            }
-            .task(id: model.isSignedIn) { await model.refreshUsage() }
-            .task(id: "\(store.startISO)|\(store.endISO)") { await store.loadBaselines() }
-            .task {
-                // Screenshot mode (Debug): a filled-in request, and for -Screen aipreview, its preview.
-                guard ScreenshotMode.isOn else { return }
-                store.prompt = "Soccer Tuesday and Thursday, so quick dinners. Something cozy on Sunday."
-                store.quickTags = ["busy_weekdays", "under_30"]
-                store.overwriteExisting = false
-                if ScreenshotMode.screen == .aipreview {
-                    try? await Task.sleep(for: .milliseconds(600))
-                    await generate()
-                }
+        Group {
+            if embedded {
+                content
+            } else {
+                NavigationStack { content }
             }
         }
         .overlay {
@@ -72,6 +49,54 @@ struct AIPlanView: View {
         .errorAlert($store.error, title: "Couldn't plan your meals")
         .interactiveDismissDisabled(store.phase.isBusy)
         .hearthPaywall(isPresented: $store.showsPaywall, feature: Self.paywallFeature)
+    }
+
+    /// Done: the plan was added. Closes the planner, or all of BigTable AI around it.
+    private func finish() {
+        if embedded {
+            AppRouter.shared.sheet = nil
+        } else {
+            dismiss()
+        }
+    }
+
+    private var content: some View {
+        Group {
+            if !model.isSignedIn {
+                SignInPrompt(reason: .aiPlan)
+            } else if model.canUseAIPlan && model.canManagePlan {
+                form
+            } else {
+                notAllowed
+            }
+        }
+        .navigationTitle(embedded ? "Plan the Week" : "Plan with AI")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(store.phase.isBusy)
+        .toolbar {
+            if !embedded {
+                ToolbarItem(placement: .cancellationAction) {
+                    SheetCancelButton("Close") { dismiss() }
+                        .disabled(store.phase.isBusy)
+                }
+            }
+        }
+        .navigationDestination(isPresented: $showsPreview) {
+            AIPlanPreviewView(store: store, onApplied: { finish() }, onRegenerate: { Task { await generate() } })
+        }
+        .task(id: model.isSignedIn) { await model.refreshUsage() }
+        .task(id: "\(store.startISO)|\(store.endISO)") { await store.loadBaselines() }
+        .task {
+            // Screenshot mode (Debug): a filled-in request, and for -Screen aipreview, its preview.
+            guard ScreenshotMode.isOn else { return }
+            store.prompt = "Soccer Tuesday and Thursday, so quick dinners. Something cozy on Sunday."
+            store.quickTags = ["busy_weekdays", "under_30"]
+            store.overwriteExisting = false
+            if ScreenshotMode.screen == .aipreview {
+                try? await Task.sleep(for: .milliseconds(600))
+                await generate()
+            }
+        }
     }
 
     static let paywallFeature = HearthPaywallFeature(

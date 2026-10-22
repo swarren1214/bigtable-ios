@@ -169,7 +169,14 @@ struct RecipeGrid: View {
     var onCardAppear: (RecipeSummary) -> Void = { _ in }
     @State private var errorMessage: String?
 
-    private let columns = [GridItem(.adaptive(minimum: 158, maximum: 300), spacing: 12, alignment: .top)]
+    /// The grid's width. Columns come in even numbers (2 on a phone, 4 or 6 wider), so on a
+    /// partly folded iPhone Duo the fold falls between cards, never through one.
+    @State private var width: CGFloat = 0
+
+    private var columns: [GridItem] {
+        let count = HearthEvenColumns.count(for: width, minimumCellWidth: 158)
+        return Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: count)
+    }
 
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
@@ -185,6 +192,7 @@ struct RecipeGrid: View {
                 .onAppear { onCardAppear(recipe) }
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .errorAlert($errorMessage, title: "Couldn't update favorites")
     }
 }

@@ -35,7 +35,7 @@ struct PantryCheckView: View {
                 ToolbarItem(placement: .cancellationAction) { SheetCancelButton("Close") { dismiss() } }
                 if !done, !cards.isEmpty {
                     // Skip isn't a confirm button: the text color, not the app's (AGENT.md).
-                    ToolbarItem(placement: .primaryAction) { Button("Skip") { withAnimation(.snappy) { index += 1 } }.tint(.primary) }
+                    ToolbarItem(placement: .primaryAction) { Button("Skip", systemImage: "forward") { withAnimation(.snappy) { index += 1 } }.tint(.primary) }
                 }
             }
         }

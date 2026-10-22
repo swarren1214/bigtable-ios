@@ -27,7 +27,11 @@ struct PublicProfileView: View {
     @State private var notice: PublicProfileNotice?
     @State private var reporting: ReportTarget?
 
-    private let columns = [GridItem(.adaptive(minimum: 160), spacing: 14)]
+    /// The recipe grid's width, for an even number of columns (so a fold falls between them).
+    @State private var gridWidth: CGFloat = 0
+    private var columns: [GridItem] {
+        HearthEvenColumns.flexible(HearthEvenColumns.count(for: gridWidth, minimumCellWidth: 160), spacing: 14)
+    }
 
     private var isMe: Bool { profileID == model.userID }
 
@@ -188,6 +192,7 @@ struct PublicProfileView: View {
                     .buttonStyle(.plain)
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
         }
     }
 
@@ -229,7 +234,7 @@ struct PublicProfileView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "ellipsis")
+                    Label("More", systemImage: "ellipsis")
                 }
                 .accessibilityLabel("More")
                 // Not a confirm button: the text color, not the app's (AGENT.md).

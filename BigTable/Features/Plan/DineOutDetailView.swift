@@ -48,7 +48,7 @@ struct PlanDineOutDetailView: View {
                                 Label { Text("Remove Dine Out") } icon: { Image.menuIcon("trash", role: .destructive) }
                             }
                         } label: {
-                            Image(systemName: "ellipsis")
+                            Label("More", systemImage: "ellipsis")
                         }
                         .accessibilityLabel("More")
                         // Not a confirm button: the text color, not the app's (AGENT.md).

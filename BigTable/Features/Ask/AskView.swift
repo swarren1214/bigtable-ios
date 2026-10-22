@@ -1,12 +1,15 @@
 import SwiftUI
 import UIKit
 
-/// Ask BigTable, from the ✨ button at the top of every tab: questions about the plan, recipes
-/// and the grocery list, answered by Apple's on-device model. It can also change things: put a
-/// meal on the plan, add to the list, check things off. Each change shows as a card with Undo.
-/// Type, tap a suggestion, or tap the mic to talk hands free.
+/// BigTable AI, from the ✨ button at the top of every tab (the app's one AI button): Plan the
+/// Week (the AI meal planner, opened in this sheet) on top, then Ask BigTable: questions about
+/// the plan, recipes and the grocery list, answered by Apple's on-device model. Ask can also
+/// change things: put a meal on the plan, add to the list, check things off. Each change shows
+/// as a card with Undo. Type, tap a suggestion, or tap the mic to talk hands free.
 struct AskView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
+    @State private var showsPlanner = false
     @Environment(\.accent) private var accent
     @State private var engine = AskEngine.shared
     @State private var draft = ""
@@ -19,42 +22,60 @@ struct AskView: View {
 
     private var isAvailable: Bool { engine.availability == .available }
 
+    /// Who can plan with AI (kids can't, as in the planner).
+    private var canPlan: Bool { model.canUseAIPlan && model.canManagePlan }
+
+    /// Whether Ask just put a meal on the plan: then offer the rest of the week.
+    private var lastPlannedAMeal: Bool {
+        guard !engine.isThinking, let last = engine.messages.last else { return false }
+        return last.actions.contains { if case .plan = $0.kind { true } else { false } }
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        if engine.messages.isEmpty {
-                            welcome
+        NavigationStack {
+            VStack(spacing: 0) {
+                header
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 14) {
+                            if engine.messages.isEmpty {
+                                welcome
+                            }
+                            ForEach(engine.messages) { message in
+                                AskMessageRow(message: message, engine: engine)
+                                    .id(message.id)
+                            }
+                            if engine.isThinking {
+                                AskThinkingRow()
+                                    .id("thinking")
+                            }
+                            if canPlan, lastPlannedAMeal {
+                                PlanHandOffCard { showsPlanner = true }
+                            }
                         }
-                        ForEach(engine.messages) { message in
-                            AskMessageRow(message: message, engine: engine)
-                                .id(message.id)
-                        }
-                        if engine.isThinking {
-                            AskThinkingRow()
-                                .id("thinking")
-                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                        .padding(.bottom, 16)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 6)
-                    .padding(.bottom, 16)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .onChange(of: engine.messages.count) {
-                    if let last = engine.messages.last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onChange(of: engine.messages.count) {
+                        if let last = engine.messages.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
+                        refreshSuggestions()
                     }
-                    refreshSuggestions()
+                    .onChange(of: engine.isThinking) { _, thinking in
+                        if thinking { withAnimation { proxy.scrollTo("thinking", anchor: .bottom) } }
+                    }
                 }
-                .onChange(of: engine.isThinking) { _, thinking in
-                    if thinking { withAnimation { proxy.scrollTo("thinking", anchor: .bottom) } }
-                }
+                composer
             }
-            composer
+            .background(Color(.systemGroupedBackground))
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showsPlanner) {
+                AIPlanView(embedded: true)
+            }
         }
-        .background(Color(.systemGroupedBackground))
         .presentationDragIndicator(.visible)
         .fullScreenCover(isPresented: $showsVoice) {
             AskVoiceView {
@@ -105,7 +126,7 @@ struct AskView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Text("Ask BigTable")
+                Text("BigTable AI")
                     .font(.headline)
             }
             .accessibilityElement(children: .combine)
@@ -134,7 +155,20 @@ struct AskView: View {
     // MARK: Welcome
 
     private var welcome: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if canPlan {
+                PlanTheWeekCard { showsPlanner = true }
+            }
+            askIntro
+        }
+        .padding(.top, 4)
+    }
+
+    private var askIntro: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text("Ask BigTable")
+                .font(.title3.bold())
+                .accessibilityAddTraits(.isHeader)
             Text("Ask about meals or the list.")
                 .font(.title2.bold())
             Text("What’s planned, what to make, what’s still needed. BigTable can also put a meal on the plan, add to the grocery list or check things off, and every change can be undone.")
@@ -149,7 +183,6 @@ struct AskView: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AskStyle.cardBackground, in: .rect(cornerRadius: 24, style: .continuous))
-        .padding(.top, 4)
     }
 
     // MARK: Composer
