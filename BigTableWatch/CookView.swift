@@ -41,7 +41,10 @@ struct CookView: View {
                     } label: {
                         Image(systemName: "chevron.right")
                     }
-                    .buttonStyle(.borderedProminent)
+                    // Tinted glass with a white symbol: the bar's own button shape, in the
+                    // app's color (not a filled button drawn inside the bar's glass).
+                    .buttonStyle(.glassProminent)
+                    .tint(WatchTheme.accent)
                     .accessibilityLabel("Next step")
                 } else {
                     Button {
@@ -49,7 +52,8 @@ struct CookView: View {
                     } label: {
                         Image(systemName: "checkmark")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
+                    .tint(WatchTheme.accent)
                     .accessibilityLabel("Done cooking")
                 }
             }
@@ -57,10 +61,15 @@ struct CookView: View {
         .navigationDestination(isPresented: $showsTimer) { TimerView() }
     }
 
+    /// "2. In a large bowl…" → "In a large bowl…": the page already says which step it is.
+    static func withoutNumber(_ text: String) -> String {
+        text.replacingOccurrences(of: #"^\s*(step\s*)?\d+\s*[.):-]\s*"#, with: "", options: [.regularExpression, .caseInsensitive])
+    }
+
     /// What the timer is for: the step's first word when it's a verb-like word ("Simmer",
     /// "Bake"), otherwise "Step 5".
     static func label(for step: WatchStep, number: Int) -> String {
-        let first = step.text.split(separator: " ").first.map { String($0).trimmingCharacters(in: .punctuationCharacters) } ?? ""
+        let first = withoutNumber(step.text).split(separator: " ").first.map { String($0).trimmingCharacters(in: .punctuationCharacters) } ?? ""
         if first.count >= 3, first.count <= 12, first.allSatisfy(\.isLetter) {
             return first.prefix(1).uppercased() + first.dropFirst().lowercased()
         }
@@ -88,7 +97,7 @@ private struct StepPage: View {
                     }
                 }
                 .accessibilityHidden(true)
-                Text(step.text)
+                Text(CookView.withoutNumber(step.text))
                     .font(.title3.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
             }

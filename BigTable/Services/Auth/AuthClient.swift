@@ -106,7 +106,7 @@ actor AuthClient {
         var local = store.load()
         let shared = HearthAccounts.session()
         // Signed out in another app since BigTable last ran: follow it.
-        if shared == nil, let id = local?.user.id,
+        if shared == nil, HearthAccounts.sessionIsGone, let id = local?.user.id,
            UserDefaults.standard.string(forKey: Self.sharedUserIDKey) == id {
             store.delete()
             UserDefaults.standard.removeObject(forKey: Self.sharedUserIDKey)
@@ -167,7 +167,7 @@ actor AuthClient {
             // Another app signed in as someone else (or out) while this was on its way: follow
             // it, never write the old account back over theirs.
             let shared = HearthAccounts.session()
-            if !ScreenshotMode.isOn, (shared.map { $0.userID != fresh.user.id } ?? (sharedUserID == fresh.user.id)) {
+            if !ScreenshotMode.isOn, (shared.map { $0.userID != fresh.user.id } ?? (sharedUserID == fresh.user.id && HearthAccounts.sessionIsGone)) {
                 set(fresh, share: false)
                 Task { await self.followSharedSession() }
                 return fresh
@@ -275,7 +275,8 @@ actor AuthClient {
         }
         guard let shared else {
             // Gone from the shared sign-in after BigTable saw it there: signed out elsewhere.
-            if sharedUserID == current.user.id {
+            // (Only when it's really gone, not when the Keychain can't be read just now.)
+            if sharedUserID == current.user.id, HearthAccounts.sessionIsGone {
                 sharedUserID = nil
                 set(nil)
             }

@@ -6,7 +6,9 @@ import Foundation
 // The phone owns the data (the kitchen in iCloud). It sends a fresh `WatchSnapshot` whenever the
 // plan or the grocery list changes (WatchConnectivity's application context: only the newest one
 // is delivered). The watch sends small messages back: a grocery check-off (queued, so it arrives
-// even when the phone is away) and what was said to Tell the Pantry (live, with a reply).
+// even when the phone is away) and what was said to Tell the Pantry. The phone answers that
+// at once ("received"), then sends what it changed as a queued message of its own, so the
+// result still arrives if the watch app was in the background while the phone worked.
 
 /// Everything the watch shows: the next meals with their steps, and the current grocery list.
 nonisolated struct WatchSnapshot: Codable, Hashable, Sendable {
@@ -108,11 +110,16 @@ nonisolated enum WatchKeys {
     static let refresh = "refresh"
     static let check = "check"
     static let pantry = "pantry"
+    // From the phone: Tell the Pantry got there, and later what it changed.
+    static let received = "received"
+    static let pantryResult = "pantryResult"
     // Fields.
     static let itemID = "itemID"
     static let listID = "listID"
     static let checked = "checked"
     static let text = "text"
+    /// Ties a Tell the Pantry request to its result.
+    static let requestID = "requestID"
     static let lines = "lines"
     static let error = "error"
 }

@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import WatchConnectivity
+import WatchKit
 import WidgetKit
 import os
 
@@ -52,33 +53,78 @@ final class WatchStore: NSObject {
 
     // MARK: - Tell the Pantry
 
-    enum PantryError: LocalizedError {
-        case phoneAway
-        case failed
+    /// What was last said to Tell the Pantry, and how it's going.
+    struct PantryRequest: Equatable {
+        enum Status: Equatable {
+            /// On its way to the phone.
+            case sending
+            /// The phone has it and is putting it away.
+            case working
+            /// Sent, but the result isn't back yet (the phone is away or slow). It still shows
+            /// up here when it comes.
+            case waiting
+            case done([WatchPantryLine])
+            case failed(String)
+        }
 
-        var errorDescription: String? {
-            switch self {
-            case .phoneAway: "Your iPhone needs to be nearby to update the pantry."
-            case .failed: "The pantry couldn't be updated. Try again."
-            }
+        var id: String
+        var text: String
+        var status: Status
+    }
+
+    private(set) var pantryRequest: PantryRequest?
+
+    /// Sends what was said to the phone, which updates the pantry and sends back what changed.
+    /// The phone answers "received" at once and the result separately, so the result arrives
+    /// even if this app was in the background meanwhile; and the wait never runs forever.
+    func tellPantry(_ text: String) {
+        let id = UUID().uuidString
+        pantryRequest = PantryRequest(id: id, text: text, status: .sending)
+        let session = WCSession.default
+        guard session.activationState == .activated else {
+            pantryRequest?.status = .failed("Open BigTable on your iPhone, then try again.")
+            return
+        }
+        let message: [String: Any] = [WatchKeys.kind: WatchKeys.pantry, WatchKeys.text: text, WatchKeys.requestID: id]
+        if session.isReachable {
+            session.sendMessage(message, replyHandler: { _ in
+                Task { @MainActor in WatchStore.shared.update(id, to: .working, from: [.sending]) }
+            }, errorHandler: { _ in
+                // Not sure it got there: queue it too (the phone does each request only once).
+                WCSession.default.transferUserInfo(message)
+                Task { @MainActor in WatchStore.shared.update(id, to: .waiting, from: [.sending, .working]) }
+            })
+        } else {
+            // Queued: the phone puts it away when it's next around.
+            session.transferUserInfo(message)
+            pantryRequest?.status = .waiting
+        }
+        // Never spin for good.
+        Task {
+            try? await Task.sleep(for: .seconds(25))
+            update(id, to: .waiting, from: [.sending, .working])
         }
     }
 
-    /// Sends what was said to the phone, which updates the pantry and says what changed.
-    func tellPantry(_ text: String) async throws -> [WatchPantryLine] {
-        guard WCSession.default.activationState == .activated, WCSession.default.isReachable else { throw PantryError.phoneAway }
-        let message: [String: Any] = [WatchKeys.kind: WatchKeys.pantry, WatchKeys.text: text]
-        let reply: [String: Any] = try await withCheckedThrowingContinuation { continuation in
-            WCSession.default.sendMessage(message, replyHandler: { reply in
-                nonisolated(unsafe) let reply = reply
-                continuation.resume(returning: reply)
-            }, errorHandler: { error in
-                continuation.resume(throwing: error)
-            })
-        }
-        guard let data = reply[WatchKeys.lines] as? Data,
-              let lines = try? JSONDecoder().decode([WatchPantryLine].self, from: data) else { throw PantryError.failed }
-        return lines
+    func clearPantryRequest() {
+        pantryRequest = nil
+    }
+
+    /// Moves a request along, if it's still the current one (and, given `from`, only from those).
+    private func update(_ id: String, to status: PantryRequest.Status, from: [PantryRequest.Status]? = nil) {
+        guard let current = pantryRequest, current.id == id else { return }
+        if let from, !from.contains(current.status) { return }
+        pantryRequest?.status = status
+    }
+
+    /// What the phone changed, for the request it answers.
+    private func receivePantryResult(_ info: [String: Any]) {
+        guard let id = info[WatchKeys.requestID] as? String,
+              let data = info[WatchKeys.lines] as? Data,
+              let lines = try? JSONDecoder().decode([WatchPantryLine].self, from: data) else { return }
+        guard pantryRequest?.id == id else { return }
+        update(id, to: .done(lines))
+        WKInterfaceDevice.current().play(.success)
     }
 
     // MARK: - Saving
@@ -112,6 +158,18 @@ extension WatchStore: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         guard let data = applicationContext[WatchKeys.snapshot] as? Data else { return }
         Task { @MainActor in self.receive(data) }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        guard message[WatchKeys.kind] as? String == WatchKeys.pantryResult else { return }
+        nonisolated(unsafe) let message = message
+        Task { @MainActor in self.receivePantryResult(message) }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        guard userInfo[WatchKeys.kind] as? String == WatchKeys.pantryResult else { return }
+        nonisolated(unsafe) let userInfo = userInfo
+        Task { @MainActor in self.receivePantryResult(userInfo) }
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {

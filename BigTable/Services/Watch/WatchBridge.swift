@@ -141,11 +141,8 @@ final class WatchBridge: NSObject {
             }
             return [:]
         case WatchKeys.pantry:
-            guard let text = message[WatchKeys.text] as? String,
-                  !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [:] }
-            let lines = await tellPantry(text)
-            let data = (try? JSONEncoder().encode(lines)) ?? Data()
-            return [WatchKeys.lines: data]
+            await pantryRequest(message)
+            return [:]
         case WatchKeys.refresh:
             lastSent = nil
             await push()
@@ -153,6 +150,41 @@ final class WatchBridge: NSObject {
         default:
             return [:]
         }
+    }
+
+    /// Tell the Pantry from the watch, once per request (it can come both live and queued when
+    /// the watch wasn't sure the live one got here). The result goes back as its own message:
+    /// live when the watch is reachable, otherwise queued, so it arrives even if the watch app
+    /// was in the background while this ran.
+    private func pantryRequest(_ message: [String: Any]) async {
+        guard let text = message[WatchKeys.text] as? String,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let requestID = message[WatchKeys.requestID] as? String ?? UUID().uuidString
+        guard !handledPantryRequests.contains(requestID) else { return }
+        handledPantryRequests.append(requestID)
+        if handledPantryRequests.count > 20 { handledPantryRequests.removeFirst(handledPantryRequests.count - 20) }
+
+        let lines = await tellPantry(text)
+        let result: [String: Any] = [
+            WatchKeys.kind: WatchKeys.pantryResult,
+            WatchKeys.requestID: requestID,
+            WatchKeys.lines: (try? JSONEncoder().encode(lines)) ?? Data(),
+        ]
+        guard let session, session.activationState == .activated else { return }
+        if session.isReachable {
+            session.sendMessage(result, replyHandler: nil) { _ in
+                // Didn't get there live: queue it instead.
+                session.transferUserInfo(result)
+            }
+        } else {
+            session.transferUserInfo(result)
+        }
+    }
+
+    /// The Tell the Pantry requests already done, newest last.
+    private var handledPantryRequests: [String] {
+        get { UserDefaults.standard.stringArray(forKey: "watch.pantryRequests") ?? [] }
+        set { UserDefaults.standard.set(newValue, forKey: "watch.pantryRequests") }
     }
 
     /// Tell the Pantry from the watch: the same parsing as the iPhone's, with the usual place
@@ -201,11 +233,15 @@ extension WatchBridge: WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        // Tell the Pantry can take a while (the on-device model): say it got here now, and send
+        // the result separately (pantryRequest), rather than holding the watch's reply open.
+        let isPantry = message[WatchKeys.kind] as? String == WatchKeys.pantry
+        if isPantry { replyHandler([WatchKeys.kind: WatchKeys.received]) }
         nonisolated(unsafe) let message = message
         nonisolated(unsafe) let reply = replyHandler
         Task { @MainActor in
             let response = await self.handle(message)
-            reply(response)
+            if !isPantry { reply(response) }
         }
     }
 
