@@ -95,6 +95,7 @@ struct PantryContainersView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Say how full", systemImage: "mic") { showVoice = true }
+                    .tint(.primary)
             }
         }
         .fullScreenCover(isPresented: $showVoice) { PantryVoiceView() }

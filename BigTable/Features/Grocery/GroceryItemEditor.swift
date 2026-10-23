@@ -66,7 +66,7 @@ struct GroceryItemEditor: View {
                 }
 
                 Section {
-                    Button("Delete Item", systemImage: "trash", role: .destructive) {
+                    Button("Delete Item", menuIcon: "trash", role: .destructive) {
                         confirmDelete = true
                     }
                 }

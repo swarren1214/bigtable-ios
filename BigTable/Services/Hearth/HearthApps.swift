@@ -79,11 +79,13 @@ nonisolated struct HearthAppInfo: Sendable {
         case .caloma: caloma
         case .hearken: hearken
         case .trove: trove
+        case .ember: ember
         }
     }
 
     /// The apps in the order the family is always shown. Trove joins the page once it has a
     /// public TestFlight (add it here and give it a `.testFlight` link).
+    /// Ember joins the same way once it has a public TestFlight.
     static let order: [HearthApp] = [.bigtable, .suffice, .sated, .caloma, .hearken]
 
     // MARK: Together
@@ -281,6 +283,27 @@ nonisolated struct HearthAppInfo: Sendable {
         availability: .testFlight(URL(string: "https://hearthapps.com")!),
         symbol: "archivebox",
         colorHex: 0x38C2E9, inkHex: 0x0F7A9C, liteHex: 0x6FD6F2
+    )
+
+    private static let ember = HearthAppInfo(
+        app: .ember,
+        category: "Voice assistant",
+        tagline: "Ask your household anything, out loud.",
+        headline: "Everything your Hearth apps know, one question away.",
+        blurb: "Ember answers from your meal plan, budget, family calendar and study plan, on your iPhone or straight from your Apple Watch. It thinks on your device first, and anything that does go to the cloud carries no names and nothing that identifies you.",
+        features: [
+            Feature(symbol: "waveform", title: "Just talk", detail: "Tap the orb and ask, or hold it while you speak. Ember answers out loud in a natural voice."),
+            Feature(symbol: "square.stack.3d.up", title: "Knows your Hearth", detail: "Dinner, groceries, the budget, chores and the calendar, all in one answer."),
+            Feature(symbol: "applewatch", title: "On your wrist", detail: "Ask from Apple Watch, with or without your iPhone nearby."),
+            Feature(symbol: "lock.shield", title: "Private by design", detail: "On device first. The cloud never learns who you are."),
+        ],
+        platforms: "iPhone · Apple Watch",
+        note: "Coming soon.",
+        scheme: "ember",
+        // Not on TestFlight yet: the page doesn't list Ember (see `order`).
+        availability: .testFlight(URL(string: "https://hearthapps.com")!),
+        symbol: "flame",
+        colorHex: 0xEE5A1C, inkHex: 0xC2410C, liteHex: 0xFF9A5C
     )
 }
 

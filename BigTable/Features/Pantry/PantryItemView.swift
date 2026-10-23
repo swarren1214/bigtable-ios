@@ -141,9 +141,9 @@ struct PantryItemView: View {
             }
 
             Section {
-                Button("Fix the Amount", systemImage: "pencil") { showFix = true }
+                Button("Fix the Amount", menuIcon: "pencil") { showFix = true }
                     .tint(.primary)
-                Button("Remove from Pantry", systemImage: "trash", role: .destructive) { confirmRemove = true }
+                Button("Remove from Pantry", menuIcon: "trash", role: .destructive) { confirmRemove = true }
             }
         }
         .navigationTitle(item.name)

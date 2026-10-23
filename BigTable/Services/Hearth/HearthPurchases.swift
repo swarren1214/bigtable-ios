@@ -45,6 +45,7 @@ nonisolated enum HearthEntitlement {
         case .caloma: "caloma_plus"
         case .hearken: "hearken_plus"
         case .trove: "trove_plus"
+        case .ember: "ember_plus"
         }
     }
 }

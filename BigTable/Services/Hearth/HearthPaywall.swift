@@ -43,6 +43,7 @@ nonisolated enum HearthPlanCopy {
         case .caloma: "Wall display, Home Control and Home Care"
         case .hearken: "Listen, study groups and every game"
         case .trove: "Unlimited assets and the emergency packet"
+        case .ember: "Cloud help for harder questions, from iPhone and Apple Watch"
         }
     }
 
@@ -55,6 +56,7 @@ nonisolated enum HearthPlanCopy {
         case .caloma: ["The family wall display on iPad", "Home Control and Home Care", "The Pencil whiteboard"]
         case .hearken: ["Listen to any chapter", "Study groups and every game mode", "Import your own books and PDFs"]
         case .trove: ["Unlimited homes, vehicles and other assets", "The emergency packet for someone you trust", "Custom reminder times for every document"]
+        case .ember: ["Cloud help for planning and harder questions", "Ask from Apple Watch without your iPhone", "De-identified: the cloud never learns who you are"]
         }
     }
 

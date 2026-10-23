@@ -273,6 +273,7 @@ struct HearthHouseholdOnboarding: View {
         case .caloma: "Chores, rewards and the family calendar, for each person in it."
         case .hearken: "Your reading stays yours, and Caloma can show whose reading is whose on the family calendar."
         case .trove: "Keep each person’s passport, license and birth certificate together, and share the family’s papers with the other adults."
+        case .ember: "Ember knows who’s who, so “the kids” and “my wife” mean the right people in every answer."
         }
     }
 

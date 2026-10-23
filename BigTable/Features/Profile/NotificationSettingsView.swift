@@ -126,7 +126,8 @@ struct NotificationSettingsView: View {
         } else {
             pushDisabled = true
             pushOn = false
-            UIApplication.shared.unregisterForRemoteNotifications()
+            // The server stops sending BigTable's notifications. The device stays registered:
+            // CloudKit's silent pushes keep the family's kitchen up to date.
             await ProfilePush.disableServerTokens()
         }
     }

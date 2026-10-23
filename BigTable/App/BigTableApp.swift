@@ -25,17 +25,33 @@ struct BigTableApp: App {
                 .environment(router)
                 .environment(model)
                 .task { await model.start() }
-                .onOpenURL { url in router.open(url) }
+                // Household invitations (HearthInviteLink) open the join sheet.
+                .onOpenURL { url in
+                    if HearthInviteLink.open(url) { return }
+                    router.open(url)
+                }
         }
         .commands { BigTableCommands(router: router) }
     }
 }
 
-/// Push notifications: registers the device token with the API.
+/// Push notifications: registers the device token with the API, and hears CloudKit's silent
+/// pushes when the family's kitchen or household changes.
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // Always, whatever the notification setting: CloudKit's silent pushes are how this
+        // device hears that someone else changed the kitchen, and they need no permission.
+        // Whether BigTable's own notifications reach this device is the API token's business
+        // (`didRegisterForRemoteNotificationsWithDeviceToken`).
+        if !ScreenshotMode.isOn { application.registerForRemoteNotifications() }
         return true
+    }
+
+    /// CloudKit's silent push: someone changed the kitchen or the household.
+    nonisolated func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        await HearthHouseholdStore.shared.catchUp()
+        return .newData
     }
 
     /// Household invitations (iCloud) arrive through the scene delegate.
@@ -47,7 +63,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        Task { try? await BigTableAPI.shared.registerPushToken(token, enabled: true) }
+        Task {
+            // BigTable's own notifications only when they're on and allowed (registering
+            // happens at every launch now, for CloudKit's pushes).
+            guard AppConfig.pushEnabled, !UserDefaults.standard.bool(forKey: SettingsKey.pushDisabled) else { return }
+            let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            guard status == .authorized || status == .provisional || status == .ephemeral else { return }
+            try? await BigTableAPI.shared.registerPushToken(token, enabled: true)
+        }
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
