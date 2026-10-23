@@ -22,7 +22,7 @@
 #                                     Any Simulator model works, iPads included.
 #   DEVICE_TYPE="iPhone Duo"          The foldable: captures its outer display (folded) and its inner
 #                                     display (unfolded), in <device>-Outer and <device>-Inner folders.
-#                                     Folding uses app-manager/tools/duo-hinge.m (built with clang).
+#                                     Folding uses hearth-ship/tools/duo-hinge.m (built with clang).
 #   DEVICE_TYPE="Apple Watch Ultra 3 (49mm)"
 #                                     An Apple Watch: captures the watch app's screens (watchOS is
 #                                     always dark). Screen names given are the watch app's.
@@ -218,7 +218,7 @@ rotate() {
 }
 
 # Folds or unfolds the iPhone Duo ("closed" shows the outer display, "flat" the inner one).
-# Xcode has no command for this, so it uses duo-hinge (app-manager/tools/duo-hinge.m), which
+# Xcode has no command for this, so it uses duo-hinge (hearth-ship/tools/duo-hinge.m), which
 # sends the Simulator the same message Device Hub's fold controls do. It's built with clang
 # the first time. DUO_HINGE can point at another build of it.
 fold() {
@@ -226,7 +226,7 @@ fold() {
     if [[ -n "${DUO_HINGE:-}" ]]; then
       HINGE="$DUO_HINGE"
     else
-      local source="$ROOT/../app-manager/tools/duo-hinge.m"
+      local source="$ROOT/../hearth-ship/tools/duo-hinge.m"
       local cache="$HOME/Library/Caches/HearthShip"
       HINGE="$cache/duo-hinge"
       if [[ ! -f "$source" ]]; then

@@ -288,6 +288,10 @@ struct HearthPaywall: View {
         ScrollView {
             VStack(spacing: 0) {
                 topBar
+                // A household member who's signed out: their organizer's plan, before any price.
+                HearthHouseholdPlanSignIn()
+                    .foregroundStyle(isHearth ? Ember.text : .white)
+                    .padding(.top, 8)
                 if isHearth { hearthHeader } else { appHeader }
                 if let feature { featureChip(feature) }
                 if !isUpgrade { segment }
@@ -1220,6 +1224,9 @@ struct HearthLockedCard: View {
                 VStack(alignment: .leading, spacing: 10) { buttons }
             }
             .padding(.top, 4)
+            HearthHouseholdPlanSignIn()
+                .foregroundStyle(Ember.text)
+                .padding(.top, 6)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1258,6 +1265,44 @@ struct HearthLockedCard: View {
                 .foregroundStyle(Ember.text)
                 .background(.white.opacity(0.1), in: .capsule)
                 .buttonStyle(.plain)
+        }
+    }
+}
+
+/// For someone in another person's household who isn't signed in to a Hearth account: the
+/// organizer's Hearth+ is shared with accounts (the Hearth API), so this is the way to it. Shown
+/// on the paywall and on locked cards, before any price, and only where the app can sign in.
+struct HearthHouseholdPlanSignIn: View {
+    @State private var store = HearthPurchases.shared
+    @State private var household = HearthHouseholdStore.shared
+
+    /// In someone else's household, signed out, and this app can sign in.
+    static var applies: Bool {
+        HearthHouseholdStore.shared.isMember && !HearthPurchases.shared.isSignedIn && HearthPurchases.shared.signInButton != nil
+    }
+
+    var body: some View {
+        if Self.applies, let signInButton = store.signInButton {
+            VStack(alignment: .leading, spacing: 10) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Part of \(household.ownerName.map { "\($0)'s" } ?? "your") household?")
+                            .font(.subheadline.weight(.semibold))
+                        Text("If they have Hearth+, sign in with Apple and it's yours too, in every Hearth app. No need to buy it again.")
+                            .font(.footnote)
+                            .opacity(0.8)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } icon: {
+                    Image(systemName: "person.2.fill")
+                }
+                signInButton()
+                    .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
+                    .clipShape(.capsule)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white.opacity(0.12), in: .rect(cornerRadius: 22))
         }
     }
 }

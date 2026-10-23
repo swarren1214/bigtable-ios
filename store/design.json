@@ -1,0 +1,473 @@
+{
+  "accentHex" : "#E0503A",
+  "ascAppID" : "6772788255",
+  "ascAppName" : "BigTable",
+  "inkHex" : "#B93A26",
+  "listings" : {
+    "en-US" : {
+      "description" : "Feeding a large family is a full-time job. BigTable makes the hardest part — deciding what to cook — take about 10 seconds.\n\nBigTable is an AI-powered meal planner built specifically for large families. Plan the week, cook it and shop for it, with every recipe scaled to everyone at your table.\n\nNo more staring at the fridge at 5pm. No more googling \"easy dinner for 9 people.\" No more wasted groceries because you planned for Tuesday but forgot what you bought.\n\n== WHAT BIGTABLE DOES ==\n\n- Plan My Week: tell it what you want, preview the changes, then add a full week of meals to your plan\n- Ask BigTable: \"What's for dinner Thursday?\" or \"Add milk to the list,\" typed or spoken\n- Create recipes from a quick description, a link, or a photo of a cookbook page\n- Change any recipe with AI: \"dairy-free and enough for 12\"\n- Scale every recipe to your exact headcount — no mental math\n- Cook Mode walks you through one step at a time, with that step's ingredients and timer\n- Build a grocery list from your plan, sorted by store section, with warehouse-size amounts\n- The pantry keeps track of what you have and adds what will run out before your next shop\n- Plan and shop together: invite another parent into your household\n- Connect with other cooks, see their recipes, and get inspiration for your next meal\n- Your grocery list, pantry and cook timers on Apple Watch\n\n== BUILT FOR REAL LARGE FAMILIES ==\n\nMost meal planning apps are built for couples or small households. BigTable was built from the ground up for families of 6, 8, 10 or more. It understands bulk cooking, picky eaters, and the reality of feeding a crowd on a real budget.\n\nIf you're a large family, or part of a faith community where big family dinners are just Tuesday — BigTable was made for you.\n\nDownload now, start planning your week, and let us know what you think.\n\nBigTable. Everyone gets a seat.\n\n——————\n\nTerms of Use:\nhttps:\/\/www.bigtableapp.com\/terms\n\nPrivacy Policy:\nhttps:\/\/www.bigtableapp.com\/privacy",
+      "keywords" : "meal planner,large family,family dinner,meal prep,grocery list,LDS,Utah,menu,pantry,AI recipes",
+      "marketingURL" : "https:\/\/hearthapps.com\/#bigtable",
+      "name" : "BigTable",
+      "promotionalText" : "BigTable 2.0 is rebuilt from the ground up for iPhone and iPad. Plan the week with AI, cook step by step, and let the pantry tell you what's running low before you shop.",
+      "subtitle" : "AI meal planner for families",
+      "supportURL" : "https:\/\/hearthapps.com\/support\/",
+      "whatsNew" : "BigTable 2.0 is a brand-new app, rebuilt for iPhone and iPad with Apple's new design.\n\n• Ask BigTable: ask about your plan, recipes or list, or have it make changes, typed or spoken.\n• Pantry: keeps track of what you have and adds what will run out before your next shop.\n• Cook Mode: one big step at a time, with that step's ingredients and timer.\n• Apple Watch: your grocery list, pantry and cook timers on your wrist.\n\nBigTable is now part of Hearth, our family of apps for running a home.\n\n• One Hearth account works across BigTable, Suffice, Sated, Caloma and Hearken.\n• Hearth+ unlocks the paid features in every Hearth app with one plan.\n• Report a shared recipe or cook that doesn't belong.\n• Delete your account any time from your profile.\n• A new launch animation, plus fixes and polish throughout.\n\nYour account, household, recipes and subscription all carry over. Just sign in."
+    }
+  },
+  "live" : {
+    "en-US" : {
+      "description" : "Feeding a large family is a full-time job. BigTable makes the hardest part — deciding what to cook — take about 10 seconds.\n\nBigTable is an AI-powered meal planner built specifically for large families. Plan the week, cook it and shop for it, with every recipe scaled to everyone at your table.\n\nNo more staring at the fridge at 5pm. No more googling \"easy dinner for 9 people.\" No more wasted groceries because you planned for Tuesday but forgot what you bought.\n\n== WHAT BIGTABLE DOES ==\n\n- Plan My Week: tell it what you want, preview the changes, then add a full week of meals to your plan\n- Ask BigTable: \"What's for dinner Thursday?\" or \"Add milk to the list,\" typed or spoken\n- Create recipes from a quick description, a link, or a photo of a cookbook page\n- Change any recipe with AI: \"dairy-free and enough for 12\"\n- Scale every recipe to your exact headcount — no mental math\n- Cook Mode walks you through one step at a time, with that step's ingredients and timer\n- Build a grocery list from your plan, sorted by store section, with warehouse-size amounts\n- The pantry keeps track of what you have and adds what will run out before your next shop\n- Plan and shop together: invite another parent into your household\n- Connect with other cooks, see their recipes, and get inspiration for your next meal\n- Your grocery list, pantry and cook timers on Apple Watch\n\n== BUILT FOR REAL LARGE FAMILIES ==\n\nMost meal planning apps are built for couples or small households. BigTable was built from the ground up for families of 6, 8, 10 or more. It understands bulk cooking, picky eaters, and the reality of feeding a crowd on a real budget.\n\nIf you're a large family, or part of a faith community where big family dinners are just Tuesday — BigTable was made for you.\n\nDownload now, start planning your week, and let us know what you think.\n\nBigTable. Everyone gets a seat.\n\n——————\n\nTerms of Use:\nhttps:\/\/www.bigtableapp.com\/terms\n\nPrivacy Policy:\nhttps:\/\/www.bigtableapp.com\/privacy",
+      "keywords" : "meal planner,large family,family dinner,meal prep,grocery list,LDS,Utah,menu,pantry,AI recipes",
+      "marketingURL" : "https:\/\/hearthapps.com\/#bigtable",
+      "name" : "BigTable",
+      "promotionalText" : "BigTable 2.0 is rebuilt from the ground up for iPhone and iPad. Plan the week with AI, cook step by step, and let the pantry tell you what's running low before you shop.",
+      "subtitle" : "AI meal planner for families",
+      "supportURL" : "https:\/\/hearthapps.com\/support\/",
+      "whatsNew" : "BigTable 2.0 is a brand-new app, rebuilt for iPhone and iPad with Apple's new design.\n\n• Ask BigTable: ask about your plan, recipes or list, or have it make changes, typed or spoken.\n• Pantry: keeps track of what you have and adds what will run out before your next shop.\n• Cook Mode: one big step at a time, with that step's ingredients and timer.\n• Apple Watch: your grocery list, pantry and cook timers on your wrist.\n\nBigTable is now part of Hearth, our family of apps for running a home.\n\n• One Hearth account works across BigTable, Suffice, Sated, Caloma and Hearken.\n• Hearth+ unlocks the paid features in every Hearth app with one plan.\n• Report a shared recipe or cook that doesn't belong.\n• Delete your account any time from your profile.\n• A new launch animation, plus fixes and polish throughout.\n\nYour account, household, recipes and subscription all carry over. Just sign in."
+    }
+  },
+  "liveLoaded" : 814485560.272399,
+  "locale" : "en-US",
+  "sets" : {
+    "duoInner" : {
+      "captures" : [
+
+      ],
+      "devices" : [
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "D39FBA78-5A44-4D47-9E4D-C7CEDA73DF41",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "builtin-duoInner",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 303.5,
+          "y" : 960
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "BAC6D72B-2F25-4D25-8FE4-1B9A56462903",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "builtin-duoInner",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 2310.5,
+          "y" : 820
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "8D39F2D8-7BF6-4748-9FDF-70431C6EB2EA",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "builtin-duoInner",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 4317.5,
+          "y" : 820
+        }
+      ],
+      "frames" : [
+        {
+          "id" : "C3EFED82-56B2-4D95-BBFB-8D8881528E4D",
+          "line1" : "Feed the whole crew.",
+          "line2" : "Skip the 5 p.m. panic.",
+          "look" : "accent",
+          "showIcon" : true,
+          "subhead" : "Plan the week’s meals, then shop the list together."
+        },
+        {
+          "id" : "6B0F55F7-62B2-47C3-9078-6AEF891894AE",
+          "line1" : "A grocery list",
+          "line2" : "that writes itself.",
+          "look" : "tint",
+          "showIcon" : false,
+          "subhead" : "Every planned meal, sorted by aisle."
+        },
+        {
+          "id" : "82BFD3F7-5656-434A-9BAD-AB336AE78326",
+          "line1" : "Cook from anyone.",
+          "line2" : "Share your own.",
+          "look" : "accent",
+          "showIcon" : false,
+          "subhead" : "Recipes from families like yours."
+        }
+      ],
+      "layerGroups" : [
+
+      ],
+      "linked" : [
+        false,
+        false
+      ],
+      "publish" : false
+    },
+    "duoOuter" : {
+      "captures" : [
+
+      ],
+      "devices" : [
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "F77A069C-9770-41AE-A2BB-C0062BB5B3BC",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "builtin-duoOuter",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 319,
+          "y" : 720
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "AD9DDFB4-CF55-4E44-A50D-07ABF25922A1",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "builtin-duoOuter",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 1717,
+          "y" : 600
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "5405D579-4368-47B3-A4C4-2D58D0F3DD75",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "builtin-duoOuter",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 3115,
+          "y" : 600
+        }
+      ],
+      "frames" : [
+        {
+          "id" : "3BEF1794-4679-464C-B440-74F0A3CB4283",
+          "line1" : "Feed the whole crew.",
+          "line2" : "Skip the 5 p.m. panic.",
+          "look" : "accent",
+          "showIcon" : true,
+          "subhead" : "Plan the week’s meals, then shop the list together."
+        },
+        {
+          "id" : "09B38A6E-461C-4F7D-AC38-3015896D09D7",
+          "line1" : "A grocery list",
+          "line2" : "that writes itself.",
+          "look" : "tint",
+          "showIcon" : false,
+          "subhead" : "Every planned meal, sorted by aisle."
+        },
+        {
+          "id" : "F3B6CC00-3682-4CB7-B861-76BE7B6CD80F",
+          "line1" : "Cook from anyone.",
+          "line2" : "Share your own.",
+          "look" : "accent",
+          "showIcon" : false,
+          "subhead" : "Recipes from families like yours."
+        }
+      ],
+      "layerGroups" : [
+
+      ],
+      "linked" : [
+        false,
+        false
+      ],
+      "publish" : false
+    },
+    "ipad" : {
+      "captures" : [
+
+      ],
+      "devices" : [
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPad-Air-13-inch-(M4)\/dark\/01-plan.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "6A71276B-8714-4403-AA08-A63B697ED45C",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "builtin-ipad",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 302,
+          "y" : 900
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPad-Air-13-inch-(M4)\/dark\/02-recipes.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "D8972C76-8A54-460E-AFBA-C5B6167EC152",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "builtin-ipad",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 2366,
+          "y" : 760
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPad-Air-13-inch-(M4)\/dark\/03-recipe.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "AA981630-5C01-4B07-A285-135B92B4228C",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "builtin-ipad",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 4430,
+          "y" : 760
+        }
+      ],
+      "frames" : [
+        {
+          "id" : "B35855CD-1B32-4B3D-943A-44D73A68C70D",
+          "line1" : "Feed the whole crew.",
+          "line2" : "Skip the 5 p.m. panic.",
+          "look" : "accent",
+          "showIcon" : true,
+          "subhead" : "Plan the week’s meals, then shop the list together."
+        },
+        {
+          "id" : "A5E636A7-0C42-45A8-A1D8-1C845480BCB7",
+          "line1" : "A grocery list",
+          "line2" : "that writes itself.",
+          "look" : "tint",
+          "showIcon" : false,
+          "subhead" : "Every planned meal, sorted by aisle."
+        },
+        {
+          "id" : "51F1E4BD-0B78-4763-B765-FD2886E3311F",
+          "line1" : "Cook from anyone.",
+          "line2" : "Share your own.",
+          "look" : "accent",
+          "showIcon" : false,
+          "subhead" : "Recipes from families like yours."
+        }
+      ],
+      "layerGroups" : [
+
+      ],
+      "linked" : [
+        false,
+        false
+      ],
+      "publish" : true
+    },
+    "iphone" : {
+      "captures" : [
+
+      ],
+      "devices" : [
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/02-recipes.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "1426DCC5-EC4D-42C6-870D-9893F4B6ACDD",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-5d6e7770",
+          "rotation" : 0,
+          "scale" : 2.143757835389903,
+          "shadow" : true,
+          "x" : 724,
+          "y" : 876
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/03-recipe.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "3BF2D0A9-FAE8-4C34-9F9F-4C9208F205C8",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-5d6e7770",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 2778,
+          "y" : 740
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/04-grocery.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "5E49E1C2-688D-4496-9A13-63BC39E96A89",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-5d6e7770",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 4098,
+          "y" : 740
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/01-plan.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "8E540E91-2C0C-4D46-9D3D-FF6ED5A2E182",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-1c1cce0e",
+          "rotation" : 0,
+          "scale" : 1.4981237632037405,
+          "shadow" : true,
+          "x" : 160,
+          "y" : 703
+        }
+      ],
+      "frames" : [
+        {
+          "id" : "7945D02F-AC0E-46AE-8AAD-8D9B09EE2150",
+          "line1" : "Feed the whole crew.",
+          "line2" : "Skip the 5 p.m. panic.",
+          "look" : "accent",
+          "showIcon" : true,
+          "subhead" : "Plan the week’s meals, then shop the list together."
+        },
+        {
+          "id" : "C541F87E-8C73-42FF-A582-807721F67621",
+          "line1" : "A grocery list",
+          "line2" : "that writes itself.",
+          "look" : "tint",
+          "showIcon" : false,
+          "subhead" : "Every planned meal, sorted by aisle."
+        },
+        {
+          "id" : "F9B4344E-9A85-48E3-BC4B-0B8CA4CC6009",
+          "line1" : "Cook from anyone.",
+          "line2" : "Share your own.",
+          "look" : "accent",
+          "showIcon" : false,
+          "subhead" : "Recipes from families like yours."
+        },
+        {
+          "id" : "BFA9A7EA-C3A4-4151-BAC9-62E33B1B60E5",
+          "line1" : "A week of dinners,",
+          "line2" : "planned in one tap.",
+          "look" : "tint",
+          "showIcon" : false,
+          "subhead" : "Tell it what you like. It does the rest."
+        }
+      ],
+      "layerGroups" : [
+
+      ],
+      "linked" : [
+        true,
+        false,
+        false
+      ],
+      "publish" : true
+    },
+    "watch" : {
+      "captures" : [
+
+      ],
+      "devices" : [
+
+      ],
+      "frames" : [
+
+      ],
+      "layerGroups" : [
+
+      ],
+      "linked" : [
+
+      ],
+      "publish" : false
+    }
+  },
+  "tintHex" : "#FCEEEA"
+}
