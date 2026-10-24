@@ -30,6 +30,174 @@
   "liveLoaded" : 814485560.272399,
   "locale" : "en-US",
   "sets" : {
+    "artHeader" : {
+      "captures" : [
+
+      ],
+      "devices" : [
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/04-grocery.png",
+          "flipped" : false,
+          "groupID" : "EF6630B8-77B4-4FA3-B4A5-1BCB4D83817E",
+          "hidden" : false,
+          "id" : "5A160799-93AE-4722-AA9C-F41F417A711B",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-f6bcd037",
+          "rotation" : 0,
+          "scale" : 1.5868051020127742,
+          "shadow" : true,
+          "x" : 1606,
+          "y" : 341
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/03-recipe.png",
+          "flipped" : false,
+          "groupID" : "EF6630B8-77B4-4FA3-B4A5-1BCB4D83817E",
+          "hidden" : false,
+          "id" : "C68EA0DF-54C7-464C-ACA8-E206DC66C15F",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-f6bcd037",
+          "rotation" : 0,
+          "scale" : 1.8014096265771122,
+          "shadow" : true,
+          "x" : 2517,
+          "y" : 462
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/01-plan.png",
+          "flipped" : false,
+          "groupID" : "EF6630B8-77B4-4FA3-B4A5-1BCB4D83817E",
+          "hidden" : false,
+          "id" : "E3E20005-0B73-4E1E-9078-6EF4CFD437C6",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-f6bcd037",
+          "rotation" : 0,
+          "scale" : 1.8901497118467723,
+          "shadow" : true,
+          "x" : 2067,
+          "y" : 25
+        }
+      ],
+      "frames" : [
+        {
+          "id" : "E2A38323-EC8B-4262-8514-7F589EC32289",
+          "line1" : "Feed the whole crew.",
+          "line2" : "Skip the 5 p.m. panic.",
+          "look" : "accent",
+          "showIcon" : false,
+          "subhead" : ""
+        }
+      ],
+      "layerGroups" : [
+        {
+          "id" : "EF6630B8-77B4-4FA3-B4A5-1BCB4D83817E",
+          "name" : "Group 1"
+        }
+      ],
+      "linked" : [
+
+      ],
+      "publish" : true
+    },
+    "artSearch" : {
+      "captures" : [
+
+      ],
+      "devices" : [
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/04-grocery.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "3896E90C-1299-42D8-AD45-84CAA2AD81A7",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-f6bcd037",
+          "rotation" : 0,
+          "scale" : 1.9270638416783026,
+          "shadow" : true,
+          "x" : 1596.4314803244897,
+          "y" : 581.9999999999999
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/03-recipe.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "6EDD2198-05EE-4E6B-8E30-BA373915546A",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-f6bcd037",
+          "rotation" : 0,
+          "scale" : 1.9855162474480224,
+          "shadow" : true,
+          "x" : 2790,
+          "y" : 829
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/01-plan.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "F2B87B26-2801-42BE-8A28-EFB18B14A6DE",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-f6bcd037",
+          "rotation" : 0,
+          "scale" : 2.15,
+          "shadow" : true,
+          "x" : 2240,
+          "y" : 170
+        }
+      ],
+      "frames" : [
+        {
+          "id" : "2C855BDE-8277-40E8-BCAE-DFD41E541DC8",
+          "line1" : "Feed the whole crew.",
+          "line2" : "Skip the 5 p.m. panic.",
+          "look" : "tint",
+          "showIcon" : true,
+          "subhead" : "Plan the week’s meals, then shop the list together."
+        }
+      ],
+      "layerGroups" : [
+
+      ],
+      "linked" : [
+
+      ],
+      "publish" : true
+    },
     "duoInner" : {
       "captures" : [
 
@@ -136,7 +304,7 @@
         {
           "aspect" : 1,
           "baseWidth" : 0,
-          "capture" : "screenshots\/iPhone-Duo-Inner\/dark\/08-cook.png",
+          "capture" : "screenshots\/iPhone-Duo-Inner\/dark\/02-recipes.png",
           "flipped" : false,
           "hidden" : false,
           "id" : "F77A069C-9770-41AE-A2BB-C0062BB5B3BC",
@@ -147,15 +315,15 @@
           "opacity" : 1,
           "renderID" : "render-13c1dea3",
           "rotation" : 0,
-          "scale" : 1,
+          "scale" : 1.977205539639103,
           "shadow" : true,
-          "x" : 319,
-          "y" : 931.4962233920805
+          "x" : 140,
+          "y" : 639
         },
         {
           "aspect" : 1,
           "baseWidth" : 0,
-          "capture" : "",
+          "capture" : "screenshots\/iPhone-Duo-Outer\/dark\/01-plan.png",
           "flipped" : false,
           "hidden" : false,
           "id" : "AD9DDFB4-CF55-4E44-A50D-07ABF25922A1",
@@ -164,17 +332,17 @@
           "locked" : false,
           "name" : "",
           "opacity" : 1,
-          "renderID" : "builtin-duoOuter",
+          "renderID" : "render-f7e3c805",
           "rotation" : 0,
           "scale" : 1,
           "shadow" : true,
-          "x" : 1717,
-          "y" : 600
+          "x" : 1857,
+          "y" : 544
         },
         {
           "aspect" : 1,
           "baseWidth" : 0,
-          "capture" : "",
+          "capture" : "screenshots\/iPhone-Duo-Outer\/dark\/08-cook.png",
           "flipped" : false,
           "hidden" : false,
           "id" : "5405D579-4368-47B3-A4C4-2D58D0F3DD75",
@@ -183,12 +351,12 @@
           "locked" : false,
           "name" : "",
           "opacity" : 1,
-          "renderID" : "builtin-duoOuter",
+          "renderID" : "render-f7e3c805",
           "rotation" : 0,
-          "scale" : 1,
+          "scale" : 1.2512193589706353,
           "shadow" : true,
-          "x" : 3115,
-          "y" : 600
+          "x" : 3020,
+          "y" : 520
         }
       ],
       "frames" : [
@@ -210,9 +378,9 @@
         },
         {
           "id" : "F3B6CC00-3682-4CB7-B861-76BE7B6CD80F",
-          "line1" : "Cook from anyone.",
+          "line1" : "Find new recipes.",
           "line2" : "Share your own.",
-          "look" : "accent",
+          "look" : "tint",
           "showIcon" : false,
           "subhead" : "Recipes from families like yours."
         }
@@ -221,7 +389,7 @@
 
       ],
       "linked" : [
-        false,
+        true,
         false
       ],
       "publish" : false
@@ -245,34 +413,15 @@
           "opacity" : 1,
           "renderID" : "render-d9393411",
           "rotation" : 0,
-          "scale" : 1.278136391931914,
+          "scale" : 1.329356931626691,
           "shadow" : true,
-          "x" : 247,
-          "y" : 794
+          "x" : 419,
+          "y" : 765
         },
         {
           "aspect" : 1,
           "baseWidth" : 0,
-          "capture" : "screenshots\/iPad-Air-13-inch-(M4)\/dark\/02-recipes.png",
-          "flipped" : false,
-          "hidden" : false,
-          "id" : "D8972C76-8A54-460E-AFBA-C5B6167EC152",
-          "imagePath" : "",
-          "kind" : "device",
-          "locked" : false,
-          "name" : "",
-          "opacity" : 1,
-          "renderID" : "builtin-ipad",
-          "rotation" : 0,
-          "scale" : 1,
-          "shadow" : true,
-          "x" : 2366,
-          "y" : 760
-        },
-        {
-          "aspect" : 1,
-          "baseWidth" : 0,
-          "capture" : "screenshots\/iPad-Air-13-inch-(M4)\/dark\/03-recipe.png",
+          "capture" : "screenshots\/iPad-Pro-13-inch-(M5)\/dark\/08-cook.png",
           "flipped" : false,
           "hidden" : false,
           "id" : "AA981630-5C01-4B07-A285-135B92B4228C",
@@ -281,12 +430,31 @@
           "locked" : false,
           "name" : "",
           "opacity" : 1,
-          "renderID" : "builtin-ipad",
+          "renderID" : "render-261559ba",
           "rotation" : 0,
-          "scale" : 1,
+          "scale" : 1.3029918214678682,
           "shadow" : true,
-          "x" : 4430,
-          "y" : 765
+          "x" : 4209,
+          "y" : 610
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPad-Pro-13-inch-(M5)\/dark\/04-grocery.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "74A54ADD-3E3D-43BA-8771-E8E65A1F2774",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-d9393411",
+          "rotation" : 0,
+          "scale" : 1.4471402955943038,
+          "shadow" : true,
+          "x" : 1876,
+          "y" : 608
         }
       ],
       "frames" : [
@@ -308,7 +476,7 @@
         },
         {
           "id" : "51F1E4BD-0B78-4763-B765-FD2886E3311F",
-          "line1" : "Cook from anyone.",
+          "line1" : "Find new recipes.",
           "line2" : "Share your own.",
           "look" : "tint",
           "showIcon" : false,
@@ -425,7 +593,7 @@
         },
         {
           "id" : "F9B4344E-9A85-48E3-BC4B-0B8CA4CC6009",
-          "line1" : "Cook from anyone.",
+          "line1" : "Find new recipes.",
           "line2" : "Share your own.",
           "look" : "tint",
           "showIcon" : false,
