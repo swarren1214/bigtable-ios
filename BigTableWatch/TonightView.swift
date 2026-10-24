@@ -8,7 +8,7 @@ struct TonightView: View {
 
     var body: some View {
         let snapshot = store.snapshot
-        let meal = snapshot.nextMeal()
+        let meal = snapshot.nextMeal(now: ScreenshotMode.isOn ? ScreenshotMode.clock : .now)
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if timer.isActive {

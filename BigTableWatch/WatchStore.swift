@@ -13,7 +13,9 @@ import os
 final class WatchStore: NSObject {
     static let shared = WatchStore()
 
-    private(set) var snapshot: WatchSnapshot = WatchShared.loadSnapshot() ?? .empty
+    private(set) var snapshot: WatchSnapshot = ScreenshotMode.isOn
+        ? ScreenshotMode.snapshot()
+        : (WatchShared.loadSnapshot() ?? .empty)
     /// Whether the phone has ever sent anything.
     var hasData: Bool { snapshot.generatedAt != .distantPast }
     var isReachable = false
@@ -22,7 +24,7 @@ final class WatchStore: NSObject {
     @ObservationIgnored private var started = false
 
     func start() {
-        guard !started, WCSession.isSupported() else { return }
+        guard !started, !ScreenshotMode.isOn, WCSession.isSupported() else { return }
         started = true
         WCSession.default.delegate = self
         WCSession.default.activate()
@@ -72,7 +74,7 @@ final class WatchStore: NSObject {
         var status: Status
     }
 
-    private(set) var pantryRequest: PantryRequest?
+    private(set) var pantryRequest: PantryRequest? = ScreenshotMode.pantryRequest
 
     /// Sends what was said to the phone, which updates the pantry and sends back what changed.
     /// The phone answers "received" at once and the result separately, so the result arrives
@@ -139,6 +141,7 @@ final class WatchStore: NSObject {
     }
 
     private func save() {
+        guard !ScreenshotMode.isOn else { return }   // the demo stays in memory
         WatchShared.save(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
     }

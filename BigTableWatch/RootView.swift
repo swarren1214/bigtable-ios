@@ -5,18 +5,28 @@ struct RootView: View {
     enum Page: Hashable { case tonight, grocery, pantry }
 
     @Environment(WatchStore.self) private var store
-    @State private var page: Page = .tonight
+    @State private var page: Page = ScreenshotMode.page
+    @State private var showsCook = false
 
     var body: some View {
         TabView(selection: $page) {
-            NavigationStack { TonightView() }
-                .tag(Page.tonight)
+            NavigationStack {
+                TonightView()
+                    .navigationDestination(isPresented: $showsCook) { CookView(recipe: ScreenshotMode.fajitas) }
+            }
+            .tag(Page.tonight)
             NavigationStack { GroceryListView() }
                 .tag(Page.grocery)
             NavigationStack { PantryView() }
                 .tag(Page.pantry)
         }
         .tabViewStyle(.verticalPage)
+        .task {
+            // Screenshot mode's cooking screen: open the recipe once Tonight is up.
+            guard ScreenshotMode.screen == .cook else { return }
+            try? await Task.sleep(for: .seconds(1))
+            showsCook = true
+        }
         // The complications open the page they show.
         .onOpenURL { url in
             switch url.host() {

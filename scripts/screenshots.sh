@@ -32,6 +32,8 @@
 #                                     portrait only) and saved in <appearance>-landscape folders. It turns the Simulator
 #                                     through its Device menu, which needs Accessibility access.
 #   SHUTDOWN=1                        Shut the Simulator down when done.
+#   KEEP_SIMULATOR=1                  Keep this run's Simulator. Otherwise it's deleted when the run ends,
+#                                     along with any leftover "<App> Screenshots" Simulators that are shut down.
 #   WARMUP=12                         Seconds the warm-up launch gets before capturing starts.
 #   FIRST_EXTRA=4                     Extra seconds for the first screen after an appearance change,
 #                                     a rotation or a fold.
@@ -83,11 +85,12 @@ settle_time() {
 
 # The Apple Watch app ("" when there isn't one): its bundle id, its product (inside
 # $PRODUCT/Watch), and its screens in order, opened with -Screenshots -Screen <name>.
-WATCH_BUNDLE_ID=""
-WATCH_PRODUCT=""
-WATCH_SCREENS=()
+WATCH_BUNDLE_ID="com.stephenwarren.bigtable.watchkitapp"
+WATCH_PRODUCT="BigTableWatch.app"
+WATCH_SCREENS=(tonight cook grocery pantry)
 watch_settle_time() {
   case "$1" in
+    cook) echo 6 ;;                                     # pushed onto Tonight
     *) echo 4 ;;
   esac
 }
@@ -184,7 +187,18 @@ cleanup() {
   if [[ -n "$UNFOLDED" ]]; then fold closed || true; fi
   if [[ -n "$UDID" ]]; then
     xcrun simctl terminate "$UDID" "$LAUNCH_ID" 2>/dev/null || true
-    if [[ -n "$SHUTDOWN_AFTER" ]]; then xcrun simctl shutdown "$UDID" 2>/dev/null || true; fi
+    if [[ -z "${KEEP_SIMULATOR:-}" ]]; then
+      xcrun simctl shutdown "$UDID" 2>/dev/null || true
+      xcrun simctl delete "$UDID" 2>/dev/null || true
+    elif [[ -n "$SHUTDOWN_AFTER" ]]; then
+      xcrun simctl shutdown "$UDID" 2>/dev/null || true
+    fi
+  fi
+  # Leftovers from older runs: this app's screenshot Simulators that are shut down (so not in use).
+  if [[ -z "${KEEP_SIMULATOR:-}" && -f "$HELPERS/stale.py" ]]; then
+    for stale in $(xcrun simctl list devices -j 2>/dev/null | SIM_NAME="$SIM_NAME" /usr/bin/python3 "$HELPERS/stale.py"); do
+      xcrun simctl delete "$stale" 2>/dev/null || true
+    done
   fi
   rm -rf "$HELPERS"
 }
@@ -379,6 +393,15 @@ else:
     print("ERROR\t" + ((wanted + " isn't available") if wanted else "No regular iPhone model found")
           + " in your installed Simulator runtimes:\n" + "\n".join(lines)
           + "\nAdd a " + platform + " runtime in Xcode > Settings > Components, or pass DEVICE_TYPE=\"<one of these>\".")
+PY
+
+cat > "$HELPERS/stale.py" <<'PY'
+import json, os, sys
+prefix = os.environ["SIM_NAME"] + " ("
+for devices in json.load(sys.stdin)["devices"].values():
+    for d in devices:
+        if d["name"].startswith(prefix) and (d.get("state") == "Shutdown" or not d.get("isAvailable", True)):
+            print(d["udid"])
 PY
 
 cat > "$HELPERS/udid.py" <<'PY'

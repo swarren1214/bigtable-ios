@@ -7,7 +7,7 @@ struct CookView: View {
 
     @Environment(CookTimer.self) private var timer
     @Environment(\.dismiss) private var dismiss
-    @State private var index: Int? = 0
+    @State private var index: Int? = ScreenshotMode.cookStep
     @State private var showsTimer = false
 
     var body: some View {
