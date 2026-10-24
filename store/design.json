@@ -136,7 +136,7 @@
         {
           "aspect" : 1,
           "baseWidth" : 0,
-          "capture" : "",
+          "capture" : "screenshots\/iPhone-Duo-Inner\/dark\/08-cook.png",
           "flipped" : false,
           "hidden" : false,
           "id" : "F77A069C-9770-41AE-A2BB-C0062BB5B3BC",
@@ -145,12 +145,12 @@
           "locked" : false,
           "name" : "",
           "opacity" : 1,
-          "renderID" : "builtin-duoOuter",
+          "renderID" : "render-13c1dea3",
           "rotation" : 0,
           "scale" : 1,
           "shadow" : true,
           "x" : 319,
-          "y" : 720
+          "y" : 931.4962233920805
         },
         {
           "aspect" : 1,
@@ -234,7 +234,7 @@
         {
           "aspect" : 1,
           "baseWidth" : 0,
-          "capture" : "screenshots\/iPad-Air-13-inch-(M4)\/dark\/01-plan.png",
+          "capture" : "screenshots\/iPad-Pro-13-inch-(M5)\/dark\/01-plan.png",
           "flipped" : false,
           "hidden" : false,
           "id" : "6A71276B-8714-4403-AA08-A63B697ED45C",
@@ -243,12 +243,12 @@
           "locked" : false,
           "name" : "",
           "opacity" : 1,
-          "renderID" : "builtin-ipad",
+          "renderID" : "render-d9393411",
           "rotation" : 0,
-          "scale" : 1,
+          "scale" : 1.278136391931914,
           "shadow" : true,
-          "x" : 302,
-          "y" : 900
+          "x" : 247,
+          "y" : 794
         },
         {
           "aspect" : 1,
@@ -286,7 +286,7 @@
           "scale" : 1,
           "shadow" : true,
           "x" : 4430,
-          "y" : 760
+          "y" : 765
         }
       ],
       "frames" : [
@@ -310,7 +310,7 @@
           "id" : "51F1E4BD-0B78-4763-B765-FD2886E3311F",
           "line1" : "Cook from anyone.",
           "line2" : "Share your own.",
-          "look" : "accent",
+          "look" : "tint",
           "showIcon" : false,
           "subhead" : "Recipes from families like yours."
         }
@@ -319,7 +319,7 @@
 
       ],
       "linked" : [
-        false,
+        true,
         false
       ],
       "publish" : true
@@ -332,7 +332,7 @@
         {
           "aspect" : 1,
           "baseWidth" : 0,
-          "capture" : "screenshots\/iPhone-18-Pro\/dark\/02-recipes.png",
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/04-grocery.png",
           "flipped" : false,
           "hidden" : false,
           "id" : "1426DCC5-EC4D-42C6-870D-9893F4B6ACDD",
@@ -341,50 +341,12 @@
           "locked" : false,
           "name" : "",
           "opacity" : 1,
-          "renderID" : "render-5d6e7770",
+          "renderID" : "render-f6bcd037",
           "rotation" : 0,
-          "scale" : 2.143757835389903,
+          "scale" : 1.85,
           "shadow" : true,
-          "x" : 724,
-          "y" : 876
-        },
-        {
-          "aspect" : 1,
-          "baseWidth" : 0,
-          "capture" : "screenshots\/iPhone-18-Pro\/dark\/03-recipe.png",
-          "flipped" : false,
-          "hidden" : false,
-          "id" : "3BF2D0A9-FAE8-4C34-9F9F-4C9208F205C8",
-          "imagePath" : "",
-          "kind" : "device",
-          "locked" : false,
-          "name" : "",
-          "opacity" : 1,
-          "renderID" : "render-5d6e7770",
-          "rotation" : 0,
-          "scale" : 1,
-          "shadow" : true,
-          "x" : 2778,
-          "y" : 740
-        },
-        {
-          "aspect" : 1,
-          "baseWidth" : 0,
-          "capture" : "screenshots\/iPhone-18-Pro\/dark\/04-grocery.png",
-          "flipped" : false,
-          "hidden" : false,
-          "id" : "5E49E1C2-688D-4496-9A13-63BC39E96A89",
-          "imagePath" : "",
-          "kind" : "device",
-          "locked" : false,
-          "name" : "",
-          "opacity" : 1,
-          "renderID" : "render-5d6e7770",
-          "rotation" : 0,
-          "scale" : 1,
-          "shadow" : true,
-          "x" : 4098,
-          "y" : 740
+          "x" : 787,
+          "y" : 746
         },
         {
           "aspect" : 1,
@@ -398,12 +360,50 @@
           "locked" : false,
           "name" : "",
           "opacity" : 1,
-          "renderID" : "render-1c1cce0e",
+          "renderID" : "render-f6bcd037",
           "rotation" : 0,
-          "scale" : 1.4981237632037405,
+          "scale" : 1.85,
           "shadow" : true,
-          "x" : 160,
-          "y" : 703
+          "x" : -188,
+          "y" : 732
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/03-recipe.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "2A320ACE-9A6C-4008-9305-1763D8518ECC",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-041fceb4",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 2778,
+          "y" : 617
+        },
+        {
+          "aspect" : 1,
+          "baseWidth" : 0,
+          "capture" : "screenshots\/iPhone-18-Pro\/dark\/02-recipes.png",
+          "flipped" : false,
+          "hidden" : false,
+          "id" : "03794261-D919-4B7C-9D87-8616E4299008",
+          "imagePath" : "",
+          "kind" : "device",
+          "locked" : false,
+          "name" : "",
+          "opacity" : 1,
+          "renderID" : "render-4d02fad1",
+          "rotation" : 0,
+          "scale" : 1,
+          "shadow" : true,
+          "x" : 4098,
+          "y" : 484
         }
       ],
       "frames" : [
@@ -427,7 +427,7 @@
           "id" : "F9B4344E-9A85-48E3-BC4B-0B8CA4CC6009",
           "line1" : "Cook from anyone.",
           "line2" : "Share your own.",
-          "look" : "accent",
+          "look" : "tint",
           "showIcon" : false,
           "subhead" : "Recipes from families like yours."
         },
