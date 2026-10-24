@@ -73,17 +73,32 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+    // Completion-handler forms: they must be called on the main thread, which an async
+    // delegate method doesn't promise (that crashed Caloma whenever a notification was tapped).
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         Task { @MainActor in await AppModel.shared.refreshUnreadCount() }
-        return [.banner, .badge, .sound]
+        completionHandler([.banner, .badge, .sound])
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         // Cook Mode's kitchen timer (CookSession) is local, not an inbox notification: just open the app.
-        guard response.notification.request.identifier != "bigtable.cook-timer" else { return }
-        await MainActor.run { AppRouter.shared.present(.notifications) }
+        let isTimer = response.notification.request.identifier == "bigtable.cook-timer"
+        let done = MainThreadCompletion<Void> { _ in completionHandler() }
+        DispatchQueue.main.async {
+            defer { done.run(()) }
+            guard !isTimer else { return }
+            MainActor.assumeIsolated { AppRouter.shared.present(.notifications) }
+        }
     }
 }
+
+/// A notification delegate's completion handler, carried to the main queue to be called there.
+private nonisolated final class MainThreadCompletion<Value>: @unchecked Sendable {
+    private let completion: (Value) -> Void
+    init(_ completion: @escaping (Value) -> Void) { self.completion = completion }
+    func run(_ value: Value) { completion(value) }
+}
+
 
 /// Keyboard shortcuts for iPad (hold ⌘ to see them).
 struct BigTableCommands: Commands {

@@ -40,7 +40,7 @@ nonisolated enum HearthPlanCopy {
         case .bigtable: "AI meal plans and grocery lists, recipe scanning"
         case .suffice: "Automatic bank sync, Ask, debt payoff planner"
         case .sated: "Coach, label scanning, restaurant menus"
-        case .caloma: "Wall display, Home Control and Home Care"
+        case .caloma: "Wall display, Home Control, Home Care and intercom calls from anywhere"
         case .hearken: "Listen, study groups and every game"
         case .trove: "Unlimited assets and the emergency packet"
         case .ember: "Cloud help for harder questions, from iPhone and Apple Watch"
@@ -57,6 +57,15 @@ nonisolated enum HearthPlanCopy {
         case .hearken: ["Listen to any chapter", "Study groups and every game mode", "Import your own books and PDFs"]
         case .trove: ["Unlimited homes, vehicles and other assets", "The emergency packet for someone you trust", "Custom reminder times for every document"]
         case .ember: ["Cloud help for planning and harder questions", "Ask from Apple Watch without your iPhone", "De-identified: the cloud never learns who you are"]
+        }
+    }
+
+    /// What only Hearth+ adds to the app (the app's own plan doesn't include it), shown under
+    /// that plan's list so it's clear where it comes from.
+    static func hearthPlusOnly(_ app: HearthApp) -> [String] {
+        switch app {
+        case .caloma: ["Intercom calls from anywhere, over cellular or any Wi-Fi", "Planned meals and daily reading on the family wall"]
+        default: []
         }
     }
 
@@ -691,6 +700,31 @@ struct HearthPaywall: View {
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 22))
+            let extras = HearthPlanCopy.hearthPlusOnly(app)
+            if !extras.isEmpty {
+                Text("Only with Hearth+")
+                    .font(.footnote.weight(.semibold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 20)
+                    .padding(.bottom, 8)
+                    .padding(.horizontal, 4)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(extras, id: \.self) { extra in
+                        HStack(spacing: 12) {
+                            Image(systemName: "plus")
+                                .font(.body.weight(.bold))
+                                .foregroundStyle(.secondary)
+                            Text(extra)
+                        }
+                        .frame(minHeight: 44)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 22))
+            }
             Button { kind = .hearthPlus } label: {
                 HStack(spacing: 12) {
                     HStack(spacing: -6) {
